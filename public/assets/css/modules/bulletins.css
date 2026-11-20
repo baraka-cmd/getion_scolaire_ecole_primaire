@@ -1,0 +1,2774 @@
+/* ============================================================
+   Fichier : public/assets/css/modules/bulletins.css
+   Rôle    : Styles du bulletin scolaire officiel congolais (EPST/RDC)
+   Système : Bulletin avec 6 périodes, 3 examens, 3 trimestres, total annuel
+   Version : 3.0 — Grille complète Max/OBT
+   ============================================================ */
+
+/* ============================================================
+   1. SÉLECTEURS
+   ============================================================ */
+.bulletin-selectors {
+    margin-bottom: 24px;
+}
+
+.bulletin-selector-card {
+    background-color: var(--color-white);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.bulletin-selector-header {
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-bottom: 1px solid var(--border-color-light);
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-dark);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bulletin-selector-header i {
+    color: var(--color-primary);
+}
+
+.bulletin-selector-body {
+    padding: 20px;
+}
+
+.bulletin-selector-form .form-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.bulletin-selector-form .form-group {
+    flex: 1;
+    min-width: 200px;
+    margin-bottom: 0;
+}
+
+.bulletin-selector-form .form-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+    color: var(--color-gray-600);
+}
+
+.bulletin-selector-form .form-label i {
+    color: var(--color-primary);
+    font-size: 0.75rem;
+}
+
+.bulletin-selector-form .form-control {
+    width: 100%;
+    padding: 10px 14px;
+    font-family: var(--font-primary);
+    font-size: 0.84rem;
+    color: var(--color-dark);
+    background-color: var(--color-gray-50);
+    border: 1.5px solid var(--border-color);
+    border-radius: 10px;
+    transition: all 0.3s ease;
+}
+
+.bulletin-selector-form .form-control:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(44, 62, 144, 0.08);
+}
+
+/* ============================================================
+   2. DOCUMENT BULLETIN
+   ============================================================ */
+.bulletin-document {
+    background-color: var(--color-white);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+}
+
+/* ============================================================
+   3. EN-TÊTE OFFICIEL RDC
+   ============================================================ */
+.bulletin-rdc-header {
+    padding: 20px 24px;
+    border-bottom: 3px double var(--color-dark);
+    background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
+}
+
+.rdc-pays {
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-dark);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.rdc-ministere {
+    text-align: center;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--color-gray-700);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    line-height: 1.4;
+}
+
+.rdc-id {
+    text-align: right;
+    font-size: 0.65rem;
+    color: var(--color-gray-500);
+    margin-bottom: 8px;
+}
+
+.rdc-ecole {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 0.74rem;
+    color: var(--color-gray-700);
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    background-color: var(--color-gray-50);
+    border-radius: 4px;
+    border: 1px solid var(--border-color-light);
+}
+
+.rdc-ecole-ligne {
+    white-space: nowrap;
+}
+
+.rdc-label {
+    font-weight: 600;
+    color: var(--color-dark);
+}
+
+.rdc-valeur {
+    color: var(--color-gray-700);
+}
+
+.rdc-eleve {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 0.74rem;
+    color: var(--color-gray-700);
+    margin-bottom: 14px;
+    padding: 8px 12px;
+    background-color: var(--color-gray-50);
+    border-radius: 4px;
+    border: 1px solid var(--border-color-light);
+}
+
+.rdc-eleve-ligne {
+    white-space: nowrap;
+}
+
+.rdc-titre-bulletin {
+    text-align: center;
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--color-dark);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin: 10px 0 2px 0;
+    padding-bottom: 8px;
+    position: relative;
+}
+
+.rdc-titre-bulletin::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 2px;
+    background: linear-gradient(90deg, #2c3e90, #f59e0b, #2c3e90);
+    border-radius: 2px;
+}
+
+.rdc-annee-scolaire {
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--color-dark);
+    margin-bottom: 0;
+}
+
+/* ============================================================
+   4. TABLEAU DU BULLETIN
+   ============================================================ */
+.bulletin-table-wrapper {
+    overflow-x: auto;
+    padding: 0;
+}
+
+.bulletin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.62rem;
+    min-width: 1600px;
+}
+
+/* En-têtes principaux */
+.bulletin-table thead th {
+    background-color: var(--color-dark);
+    color: var(--color-white);
+    font-weight: 600;
+    padding: 5px 2px;
+    text-align: center;
+    border: 1px solid #1a274f;
+    font-size: 0.58rem;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.bulletin-table .col-branches {
+    text-align: left;
+    padding-left: 6px;
+    min-width: 140px;
+    max-width: 160px;
+    font-size: 0.62rem;
+}
+
+.bulletin-table .col-trimestre {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.bulletin-table .trimestre-1 {
+    background-color: #1e3a5f;
+}
+
+.bulletin-table .trimestre-2 {
+    background-color: #1a274f;
+}
+
+.bulletin-table .trimestre-3 {
+    background-color: #152040;
+}
+
+.bulletin-table .col-annuel {
+    background-color: #0f172a;
+    font-weight: 700;
+}
+
+/* Sous-en-tête (P1, P2, EX1, T1...) */
+.bulletin-table .sub-header th {
+    background-color: #334155;
+    color: #e2e8f0;
+    font-size: 0.55rem;
+    font-weight: 600;
+    padding: 4px 1px;
+}
+
+/* Colonnes Max et Obt */
+.bulletin-table .col-m {
+    background-color: #f1f5f9;
+    color: var(--color-gray-500);
+    font-size: 0.55rem;
+    width: 28px;
+    min-width: 28px;
+    max-width: 30px;
+}
+
+.bulletin-table .col-o {
+    width: 30px;
+    min-width: 30px;
+    max-width: 32px;
+    font-size: 0.6rem;
+}
+
+.bulletin-table .col-total {
+    background-color: #e8eaf6;
+    font-weight: 700;
+}
+
+/* ============================================================
+   5. LIGNES DU TABLEAU
+   ============================================================ */
+.bulletin-table tbody td {
+    padding: 4px 2px;
+    text-align: center;
+    border: 1px solid var(--border-color-light);
+    vertical-align: middle;
+    font-size: 0.6rem;
+    color: var(--color-gray-700);
+}
+
+.bulletin-table tbody .col-branches {
+    text-align: left;
+    padding-left: 6px;
+    font-size: 0.62rem;
+    font-weight: 500;
+}
+
+/* Ligne groupe */
+.groupe-row {
+    background-color: #e8eaf6;
+}
+
+.groupe-row td {
+    padding: 6px 6px;
+    font-weight: 700;
+    color: var(--color-primary-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.68rem;
+}
+
+/* Ligne sous-matière */
+.sous-matiere-row {
+    transition: background-color 0.2s ease;
+}
+
+.sous-matiere-row:hover {
+    background-color: #f8fafc;
+}
+
+.sous-matiere-row:nth-child(even) {
+    background-color: #fcfdfe;
+}
+
+/* Ligne sous-total */
+.sous-total-row {
+    background-color: #f1f5f9;
+    border-top: 2px solid var(--color-gray-400);
+}
+
+.sous-total-row td {
+    font-weight: 700;
+    color: var(--color-dark);
+}
+
+/* Ligne total général */
+.total-general-row {
+    background-color: var(--color-dark);
+    border-top: 3px solid #000;
+}
+
+.total-general-row td {
+    color: var(--color-white);
+    font-weight: 700;
+    font-size: 0.66rem;
+    padding: 6px 2px;
+}
+
+/* Ligne pourcentage */
+.pourcentage-row {
+    background-color: #fef3c7;
+}
+
+.pourcentage-row td {
+    font-weight: 700;
+    color: #92400e;
+    font-size: 0.62rem;
+    padding: 6px 2px;
+}
+
+/* Ligne mention */
+.mention-row {
+    background-color: #dbeafe;
+}
+
+.mention-row td {
+    font-weight: 700;
+    color: #1e40af;
+    font-size: 0.64rem;
+    padding: 6px 2px;
+}
+
+.mention-value {
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Ligne décision */
+.decision-row {
+    background-color: #f0fdf4;
+}
+
+.decision-row td {
+    font-weight: 700;
+    font-size: 0.66rem;
+    padding: 6px 2px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.decision-value.admis {
+    color: #065f46;
+}
+
+.decision-value.ajourne {
+    color: #991b1b;
+    background-color: #fee2e2;
+}
+
+/* Ligne rang */
+.rang-row {
+    background-color: #f1f5f9;
+}
+
+.rang-row td {
+    font-weight: 600;
+    color: var(--color-gray-700);
+    font-size: 0.62rem;
+    padding: 6px 2px;
+}
+
+/* ============================================================
+   6. SIGNATURES
+   ============================================================ */
+.bulletin-signatures {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 24px;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+.signature-block {
+    flex: 1;
+    min-width: 150px;
+    text-align: center;
+}
+
+.signature-line {
+    width: 100%;
+    border-bottom: 1px solid var(--color-gray-400);
+    margin-bottom: 8px;
+    padding-top: 32px;
+}
+
+.signature-block span {
+    font-size: 0.72rem;
+    color: var(--color-gray-600);
+    font-weight: 500;
+}
+
+/* ============================================================
+   7. BOUTONS D'ACTION
+   ============================================================ */
+.bulletin-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.bulletin-actions .btn {
+    min-width: 160px;
+    justify-content: center;
+    padding: 10px 20px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+/* ============================================================
+   8. ÉTAT VIDE
+   ============================================================ */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    color: var(--color-gray-300);
+    display: block;
+    margin-bottom: 16px;
+}
+
+.empty-state p {
+    font-size: 0.9rem;
+    color: var(--color-gray-500);
+    margin: 0;
+}
+
+/* ============================================================
+   9. OPTIONS D'IMPRESSION
+   ============================================================ */
+.imprimer-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.imprimer-option-card {
+    background-color: var(--color-white);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    padding: 20px 24px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    transition: all 0.3s ease;
+}
+
+.imprimer-option-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-primary-light);
+}
+
+.imprimer-option-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    color: var(--color-white);
+    flex-shrink: 0;
+}
+
+.imprimer-option-icon.blue {
+    background: linear-gradient(135deg, #2c3e90, #3b4fa0);
+}
+
+.imprimer-option-icon.green {
+    background: linear-gradient(135deg, #10b981, #34d399);
+}
+
+.imprimer-option-content {
+    flex: 1;
+}
+
+.imprimer-option-content h5 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-dark);
+    margin: 0 0 4px 0;
+}
+
+.imprimer-option-content p {
+    font-size: 0.78rem;
+    color: var(--color-gray-500);
+    margin: 0 0 12px 0;
+}
+
+.imprimer-option-form .form-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.imprimer-option-form .form-group {
+    flex: 1;
+    min-width: 130px;
+    margin-bottom: 0;
+}
+
+.imprimer-option-form .form-control {
+    width: 100%;
+    padding: 8px 10px;
+    font-family: var(--font-primary);
+    font-size: 0.78rem;
+    border: 1.5px solid var(--border-color);
+    border-radius: 8px;
+}
+
+/* ============================================================
+   10. RESPONSIVE
+   ============================================================ */
+@media (max-width: 1200px) {
+    .bulletin-table {
+        min-width: 1400px;
+        font-size: 0.58rem;
+    }
+}
+
+@media (max-width: 992px) {
+    .imprimer-options {
+        grid-template-columns: 1fr;
+    }
+
+    .bulletin-rdc-header {
+        padding: 14px 16px;
+    }
+
+    .rdc-ecole,
+    .rdc-eleve {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .bulletin-signatures {
+        padding: 16px;
+        gap: 12px;
+    }
+
+    .signature-block {
+        min-width: 120px;
+    }
+
+    .bulletin-actions .btn {
+        min-width: 130px;
+        font-size: 0.76rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .bulletin-table {
+        min-width: 1200px;
+        font-size: 0.55rem;
+    }
+
+    .rdc-titre-bulletin {
+        font-size: 0.85rem;
+    }
+
+    .bulletin-signatures {
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .signature-block {
+        width: 100%;
+        max-width: 250px;
+    }
+
+    .bulletin-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .bulletin-actions .btn {
+        width: 100%;
+        max-width: 300px;
+    }
+}
+
+@media (max-width: 480px) {
+    .bulletin-rdc-header {
+        padding: 10px 12px;
+    }
+
+    .rdc-pays {
+        font-size: 0.7rem;
+    }
+
+    .rdc-ministere {
+        font-size: 0.6rem;
+    }
+
+    .rdc-titre-bulletin {
+        font-size: 0.75rem;
+        letter-spacing: 1px;
+    }
+
+    .imprimer-option-card {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+}
+
+/* ============================================================
+   11. IMPRESSION — Format duplicateur A4 paysage
+   ============================================================ */
+@media print {
+    @page {
+        size: A4 landscape;
+        margin: 6mm;
+    }
+
+    body {
+        background-color: #fff !important;
+        font-size: 7px;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .no-print,
+    .sidebar,
+    .navbar-top,
+    .footer,
+    .breadcrumb,
+    .bulletin-selectors,
+    .bulletin-actions {
+        display: none !important;
+    }
+
+    .main-wrapper {
+        margin-left: 0 !important;
+        padding: 0 !important;
+    }
+
+    .page-content {
+        padding: 0 !important;
+    }
+
+    .bulletin-document {
+        box-shadow: none;
+        border: none;
+        border-radius: 0;
+        max-width: 100%;
+    }
+
+    .bulletin-rdc-header {
+        padding: 6px 0;
+        border-bottom: 2px double #000;
+    }
+
+    .bulletin-table {
+        font-size: 6px;
+        min-width: 100%;
+    }
+
+    .bulletin-table thead th {
+        background-color: #000 !important;
+        color: #fff !important;
+        font-size: 5px;
+        padding: 3px 1px;
+    }
+
+    .bulletin-table .sub-header th {
+        background-color: #333 !important;
+        font-size: 5px;
+    }
+
+    .bulletin-table tbody td {
+        font-size: 5.5px;
+        padding: 2px 1px;
+    }
+
+    .bulletin-table .col-m {
+        font-size: 5px;
+        width: 22px;
+        min-width: 22px;
+    }
+
+    .bulletin-table .col-o {
+        width: 24px;
+        min-width: 24px;
+    }
+
+    .total-general-row td {
+        background-color: #000 !important;
+        color: #fff !important;
+    }
+
+    .pourcentage-row td {
+        background-color: #fef3c7 !important;
+    }
+
+    .mention-row td {
+        background-color: #dbeafe !important;
+    }
+
+    .decision-row td {
+        background-color: #f0fdf4 !important;
+    }
+
+    .bulletin-signatures {
+        padding: 10px 0;
+    }
+
+    .signature-line {
+        border-bottom: 1px solid #000;
+    }
+}
+
+/* ============================================================
+   AJOUTS BULLETINS.CSS — Corrections, animations, finesses UI, responsive
+   ============================================================ */
+
+/* ============================================================
+   1. ANIMATIONS GLOBALES
+   ============================================================ */
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(25px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+    from { opacity: 0; transform: scale(0.92); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-20px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(44, 62, 144, 0.3); }
+    50%      { box-shadow: 0 0 0 10px rgba(44, 62, 144, 0); }
+}
+
+@keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+/* ============================================================
+   2. ANIMATION PROGRESSIVE DES CARTES
+   ============================================================ */
+.bulletin-selector-card {
+    animation: fadeInUp 0.5s ease-out both;
+}
+
+.imprimer-option-card:nth-child(1) { animation: slideInLeft 0.5s ease-out 0.1s both; }
+.imprimer-option-card:nth-child(2) { animation: slideInRight 0.5s ease-out 0.15s both; }
+
+.bulletin-document {
+    animation: fadeInScale 0.5s ease-out 0.2s both;
+}
+
+/* ============================================================
+   3. CORRECTION — SUPPRESSION ESPACE VIDE ENTRE BRANCHES ET PÉRIODES
+   ============================================================ */
+
+/* Empêcher le texte des branches de pousser le tableau */
+.bulletin-table .col-branches {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    min-width: 120px;
+    max-width: 140px;
+}
+
+/* Alignement parfait des cellules */
+.bulletin-table tbody .col-branches {
+    text-align: left;
+    padding-left: 6px;
+    padding-right: 4px;
+    font-size: 0.6rem;
+    font-weight: 500;
+}
+
+/* Correction du colspan pour éviter l'espace vide */
+.bulletin-table .groupe-row td {
+    padding: 6px 4px;
+}
+
+/* Empêcher les sauts de ligne parasites dans les en-têtes */
+.bulletin-table thead th {
+    word-break: keep-all;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Réduire l'espace entre les colonnes M et O */
+.bulletin-table .col-m,
+.bulletin-table .col-o {
+    padding: 2px 1px;
+}
+
+/* Alignement uniforme des sous-en-têtes */
+.bulletin-table .sub-header th {
+    padding: 3px 1px;
+    font-size: 0.54rem;
+}
+
+/* ============================================================
+   4. TABLEAU — SURVOL DES LIGNES DE DONNÉES
+   ============================================================ */
+.sous-matiere-row {
+    transition: background-color 0.25s ease, transform 0.2s ease;
+}
+
+.sous-matiere-row:hover {
+    background-color: #e8eaf6 !important;
+}
+
+.sous-matiere-row:hover .col-branches {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+/* Survol des totaux */
+.sous-total-row:hover {
+    background-color: #dbeafe !important;
+}
+
+/* ============================================================
+   5. EN-TÊTE RDC — EFFET DE SURVOL
+   ============================================================ */
+.bulletin-rdc-header {
+    transition: all 0.3s ease;
+}
+
+.rdc-titre-bulletin::after {
+    transition: width 0.4s ease;
+}
+
+.bulletin-document:hover .rdc-titre-bulletin::after {
+    width: 160px;
+}
+
+/* ============================================================
+   6. SÉLECTEURS — EFFETS DE SURVOL
+   ============================================================ */
+.bulletin-selector-card {
+    transition: all 0.3s ease;
+}
+
+.bulletin-selector-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+.bulletin-selector-form .form-control {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bulletin-selector-form .form-control:hover {
+    border-color: #cbd5e1;
+    background-color: #fafbfc;
+}
+
+.bulletin-selector-form .form-control:focus {
+    border-color: var(--color-primary);
+    background-color: var(--color-white);
+    box-shadow: 0 0 0 3px rgba(44, 62, 144, 0.08);
+    transform: translateY(-1px);
+}
+
+/* ============================================================
+   7. CARTES D'IMPRESSION — EFFETS DE SURVOL
+   ============================================================ */
+.imprimer-option-card {
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.imprimer-option-card::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(44,62,144,0.04) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+}
+
+.imprimer-option-card:hover::after {
+    opacity: 1;
+}
+
+.imprimer-option-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1);
+    border-color: var(--color-primary);
+}
+
+.imprimer-option-icon {
+    transition: all 0.3s ease;
+}
+
+.imprimer-option-card:hover .imprimer-option-icon {
+    transform: rotate(-5deg) scale(1.1);
+}
+
+/* ============================================================
+   8. BOUTONS D'ACTION — EFFETS
+   ============================================================ */
+.bulletin-actions .btn {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bulletin-actions .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(44, 62, 144, 0.3);
+}
+
+.bulletin-actions .btn-primary:active {
+    transform: translateY(0) scale(0.97);
+}
+
+.bulletin-actions .btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
+}
+
+.bulletin-actions .btn-outline-primary:hover {
+    transform: translateY(-2px);
+}
+
+/* ============================================================
+   9. SIGNATURES — EFFET SURVOL
+   ============================================================ */
+.signature-block {
+    transition: all 0.3s ease;
+}
+
+.signature-block:hover .signature-line {
+    border-bottom-color: var(--color-primary);
+    border-bottom-width: 2px;
+}
+
+.signature-block:hover span {
+    color: var(--color-primary);
+}
+
+/* ============================================================
+   10. PAGINATION
+   ============================================================ */
+.pagination-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+    background-color: var(--color-white);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    margin-top: 20px;
+}
+
+.pagination-info {
+    font-size: 0.8rem;
+    color: var(--color-gray-500);
+    font-weight: 500;
+}
+
+.pagination-info strong {
+    color: var(--color-dark);
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pagination a,
+.pagination-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 8px;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    border: 1.5px solid var(--border-color);
+    background: var(--color-white);
+    color: var(--color-gray-600);
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: var(--font-primary);
+    text-decoration: none;
+    user-select: none;
+}
+
+.pagination a:hover,
+.pagination-btn:hover {
+    background: var(--color-primary-lighter);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(44, 62, 144, 0.15);
+}
+
+.pagination a.active,
+.pagination-btn.active {
+    background: var(--color-primary);
+    color: var(--color-white);
+    border-color: var(--color-primary);
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(44, 62, 144, 0.3);
+}
+
+.pagination a.active:hover,
+.pagination-btn.active:hover {
+    background: var(--color-primary-dark);
+    color: var(--color-white);
+}
+
+.pagination a.disabled,
+.pagination-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+    background: var(--color-gray-50);
+}
+
+/* ============================================================
+   11. EMPTY STATE AMÉLIORÉ
+   ============================================================ */
+.empty-state {
+    transition: all 0.3s ease;
+}
+
+.empty-state i {
+    transition: all 0.3s ease;
+}
+
+.empty-state:hover i {
+    transform: scale(1.1);
+    color: var(--color-primary);
+}
+
+/* ============================================================
+   12. SKELETON LOADING
+   ============================================================ */
+.skeleton {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e8ecf2 37%, #f1f5f9 63%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s infinite;
+    border-radius: 8px;
+}
+
+.skeleton-bulletin {
+    height: 400px;
+    border-radius: 8px;
+}
+
+/* ============================================================
+   13. TOAST NOTIFICATION
+   ============================================================ */
+.toast-container {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-radius: 14px;
+    background: var(--color-white);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    min-width: 300px;
+    max-width: 420px;
+    animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--border-color);
+}
+
+.toast-success { border-left: 4px solid #10b981; }
+.toast-error   { border-left: 4px solid #ef4444; }
+.toast-warning { border-left: 4px solid #f59e0b; }
+.toast-info    { border-left: 4px solid #3b82f6; }
+
+.toast-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.toast-success .toast-icon { background: #d1fae5; color: #065f46; }
+.toast-error .toast-icon   { background: #fee2e2; color: #991b1b; }
+.toast-warning .toast-icon { background: #fef3c7; color: #92400e; }
+.toast-info .toast-icon    { background: #dbeafe; color: #1e40af; }
+
+.toast-content {
+    flex: 1;
+    font-size: 0.84rem;
+    font-weight: 500;
+    color: var(--color-dark);
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--color-gray-400);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.toast-close:hover {
+    color: var(--color-dark);
+    background: var(--color-gray-100);
+}
+
+/* ============================================================
+   14. BARRE D'INFO RÉSULTATS
+   ============================================================ */
+.resultats-info-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 14px 20px;
+    border-radius: 14px;
+    margin-bottom: 20px;
+    color: var(--color-white, #ffffff);
+    transition: all 0.3s ease;
+}
+
+.resultats-info-bar:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.resultats-info-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.84rem;
+}
+
+.resultats-info-item i {
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+.resultats-info-item strong {
+    font-weight: 700;
+}
+
+/* ============================================================
+   15. ALERTE RÉSULTATS NON CALCULÉS
+   ============================================================ */
+.resultats-non-calcules {
+    background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+    border: 1px solid #fde68a;
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: all 0.3s ease;
+}
+
+.resultats-non-calcules:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.12);
+}
+
+.resultats-non-calcules-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: var(--color-white, #ffffff);
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+}
+
+.resultats-non-calcules:hover .resultats-non-calcules-icon {
+    transform: rotate(-5deg) scale(1.1);
+}
+
+.resultats-non-calcules h5 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #92400e;
+    margin: 0 0 4px 0;
+}
+
+.resultats-non-calcules p {
+    font-size: 0.82rem;
+    color: #78350f;
+    margin: 0;
+}
+
+/* ============================================================
+   16. POURCENTAGE BADGE
+   ============================================================ */
+.pourcentage-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.pourcentage-badge.success {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.pourcentage-badge.warning {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.pourcentage-badge.danger {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+/* ============================================================
+   17. STATS GRID (RÉUTILISABLE)
+   ============================================================ */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: var(--color-white, #ffffff);
+    border-radius: 16px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border: 1px solid var(--border-color, #e2e8f0);
+    box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.05));
+    transition: all 0.3s ease;
+    cursor: default;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+}
+
+.stat-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: var(--color-white, #ffffff);
+    flex-shrink: 0;
+}
+
+.stat-icon.blue   { background: linear-gradient(135deg, #2c3e90, #4a6cf7); }
+.stat-icon.green  { background: linear-gradient(135deg, #10b981, #34d399); }
+.stat-icon.orange { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+.stat-icon.red    { background: linear-gradient(135deg, #ef4444, #f87171); }
+.stat-icon.cyan   { background: linear-gradient(135deg, #06b6d4, #22d3ee); }
+.stat-icon.purple { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+
+.stat-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.stat-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--color-dark, #0f172a);
+    line-height: 1.2;
+    margin-bottom: 2px;
+}
+
+.stat-label {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--color-gray-500, #64748b);
+    margin-bottom: 4px;
+}
+
+.stat-change {
+    font-size: 0.7rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stat-change.up      { color: #10b981; }
+.stat-change.down    { color: #ef4444; }
+.stat-change.neutral { color: #64748b; }
+
+/* ============================================================
+   18. INFO CARD CUSTOM
+   ============================================================ */
+.info-card-custom {
+    background-color: var(--color-white, #ffffff);
+    border-radius: 20px;
+    border: 1px solid var(--border-color, #e2e8f0);
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.info-card-custom:hover {
+    box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+    transform: translateY(-2px);
+}
+
+.info-card-custom-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 24px;
+    background-color: var(--color-gray-50, #f8fafc);
+    border-bottom: 1px solid var(--border-color-light, #f1f5f9);
+}
+
+.info-card-custom-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.info-card-custom-icon.blue { 
+    background-color: #e8eaf6; 
+    color: #2c3e90; 
+}
+
+.info-card-custom-header h6 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-dark, #0f172a);
+    margin: 0;
+}
+
+.info-card-custom-body {
+    padding: 20px 24px;
+}
+
+/* Liste à puces */
+.info-list {
+    font-size: 0.82rem;
+    color: var(--color-gray-600, #475569);
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    line-height: 1.6;
+}
+
+.info-list li {
+    transition: all 0.25s ease;
+    padding: 6px 10px;
+    border-radius: 8px;
+}
+
+.info-list li:hover {
+    background-color: var(--color-gray-50, #f8fafc);
+    transform: translateX(4px);
+}
+
+.info-list li::marker {
+    color: var(--color-primary, #2c3e90);
+}
+
+.info-list li strong {
+    color: var(--color-dark, #0f172a);
+}
+
+/* ============================================================
+   19. RESPONSIVE DESIGN COMPLET
+   ============================================================ */
+
+/* Large Desktop */
+@media (min-width: 1400px) {
+    .bulletin-table {
+        width: 100% !important;
+        min-width: 0 !important;
+        table-layout: auto;
+    }
+}
+
+/* Standard Desktop */
+@media (max-width: 1399px) {
+    .bulletin-table {
+        width: 100% !important;
+        min-width: 0 !important;
+        table-layout: auto;
+    }
+}
+
+/* Small Desktop / Tablet Landscape */
+@media (max-width: 1200px) {
+    .bulletin-table {
+        width: 100% !important;
+        min-width: 0 !important;
+        font-size: 0.58rem;
+        table-layout: auto;
+    }
+
+    .bulletin-table .col-branches {
+        width: 200px;
+        min-width: 150px;
+        max-width: 220px;
+        font-size: 0.56rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .bulletin-table .col-m,
+    .bulletin-table .col-o {
+        width: 24px;
+        min-width: 24px;
+        text-align: center;
+    }
+
+    .imprimer-options {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+}
+
+/* Tablet Portrait */
+@media (max-width: 992px) {
+    .bulletin-table {
+        width: 100% !important;
+        min-width: 0 !important;
+        font-size: 0.55rem;
+    }
+
+    .bulletin-table .col-branches {
+        width: 180px;
+        min-width: 130px;
+        max-width: 200px;
+        font-size: 0.54rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .bulletin-rdc-header {
+        padding: 14px 16px;
+    }
+
+    .rdc-ecole,
+    .rdc-eleve {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .rdc-ecole-ligne,
+    .rdc-eleve-ligne {
+        white-space: normal;
+    }
+
+    .bulletin-signatures {
+        padding: 16px;
+        gap: 12px;
+    }
+
+    .signature-block {
+        min-width: 120px;
+    }
+
+    .bulletin-actions .btn {
+        min-width: 130px;
+        font-size: 0.76rem;
+    }
+
+    .bulletin-selector-form .form-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .bulletin-selector-form .form-group {
+        min-width: 100%;
+    }
+
+    .resultats-non-calcules {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .stat-card {
+        padding: 16px;
+    }
+
+    .stat-icon {
+        width: 42px;
+        height: 42px;
+        font-size: 1.1rem;
+    }
+
+    .stat-value {
+        font-size: 1.3rem;
+    }
+}
+
+/* Mobile Devices */
+@media (max-width: 768px) {
+    .bulletin-table {
+        width: 100% !important;
+        min-width: 0 !important;
+        font-size: 0.50rem;
+    }
+
+    .bulletin-table .col-branches {
+        width: 150px;
+        min-width: 110px;
+        max-width: 170px;
+        font-size: 0.50rem;
+    }
+
+    .rdc-titre-bulletin {
+        font-size: 0.85rem;
+        letter-spacing: 1px;
+    }
+
+    .rdc-annee-scolaire {
+        font-size: 0.7rem;
+    }
+
+    .bulletin-signatures {
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .signature-block {
+        width: 100%;
+        max-width: 250px;
+    }
+
+    .bulletin-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .bulletin-actions .btn {
+        width: 100%;
+        max-width: 300px;
+    }
+
+    .imprimer-option-card {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .imprimer-option-form .form-row {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .imprimer-option-form .form-group {
+        min-width: 100%;
+    }
+
+    .resultats-info-bar {
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 16px;
+    }
+
+    .info-card-custom-header {
+        padding: 14px 18px;
+    }
+
+    .info-card-custom-body {
+        padding: 16px 18px;
+    }
+
+    .pagination-wrapper {
+        flex-direction: column;
+        align-items: center;
+        padding: 12px 16px;
+    }
+
+    .pagination a,
+    .pagination-btn {
+        min-width: 32px;
+        height: 32px;
+        font-size: 0.75rem;
+    }
+}
+
+/* Small Mobile */
+@media (max-width: 575px) {
+    .bulletin-table {
+        width: 100% !important;
+        min-width: 0 !important;
+        font-size: 0.45rem;
+    }
+
+    .bulletin-rdc-header {
+        padding: 10px 12px;
+    }
+
+    .rdc-pays {
+        font-size: 0.68rem;
+    }
+
+    .rdc-ministere {
+        font-size: 0.58rem;
+    }
+
+    .rdc-titre-bulletin {
+        font-size: 0.72rem;
+        letter-spacing: 0.5px;
+    }
+
+    .rdc-ecole,
+    .rdc-eleve {
+        font-size: 0.65rem;
+        padding: 6px 8px;
+    }
+
+    .bulletin-table .col-branches {
+        width: 120px;
+        min-width: 90px;
+        max-width: 140px;
+        font-size: 0.48rem;
+    }
+
+    .bulletin-table .col-m,
+    .bulletin-table .col-o {
+        width: 18px;
+        min-width: 18px;
+    }
+
+    .bulletin-signatures {
+        padding: 10px;
+        gap: 14px;
+    }
+
+    .signature-block span {
+        font-size: 0.65rem;
+    }
+
+    .bulletin-actions .btn {
+        font-size: 0.7rem;
+        padding: 8px 14px;
+        min-width: auto;
+    }
+
+    .imprimer-option-card {
+        padding: 14px 16px;
+        border-radius: 14px;
+    }
+
+    .imprimer-option-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
+        border-radius: 10px;
+    }
+
+    .imprimer-option-content h5 {
+        font-size: 0.85rem;
+    }
+
+    .imprimer-option-content p {
+        font-size: 0.72rem;
+    }
+
+    .resultats-non-calcules {
+        padding: 14px 16px;
+        border-radius: 14px;
+    }
+
+    .resultats-non-calcules-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
+    }
+
+    .resultats-non-calcules h5 {
+        font-size: 0.85rem;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .stat-card {
+        padding: 14px;
+        border-radius: 14px;
+    }
+
+    .stat-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        font-size: 1rem;
+    }
+
+    .stat-value {
+        font-size: 1.1rem;
+    }
+
+    .stat-label {
+        font-size: 0.7rem;
+    }
+
+    .info-card-custom {
+        border-radius: 14px;
+    }
+
+    .info-card-custom-header {
+        padding: 12px 14px;
+    }
+
+    .info-card-custom-body {
+        padding: 14px;
+    }
+
+    .info-card-custom-icon {
+        width: 34px;
+        height: 34px;
+        font-size: 0.85rem;
+    }
+
+    .info-list {
+        font-size: 0.76rem;
+        gap: 6px;
+    }
+
+    .pagination a,
+    .pagination-btn {
+        min-width: 28px;
+        height: 28px;
+        font-size: 0.7rem;
+        border-radius: 7px;
+    }
+
+    .toast {
+        min-width: auto;
+        max-width: 90vw;
+        padding: 10px 14px;
+        border-radius: 12px;
+    }
+
+    .toast-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 0.85rem;
+    }
+
+    .toast-content {
+        font-size: 0.78rem;
+    }
+}
+
+/* Extra Small Mobile */
+@media (max-width: 374px) {
+    .bulletin-table {
+        width: 100% !important;
+        min-width: 0 !important;
+        font-size: 0.4rem;
+    }
+
+    .bulletin-table .col-branches {
+        width: 100px;
+        min-width: 80px;
+        max-width: 120px;
+    }
+
+    .bulletin-rdc-header {
+        padding: 8px 10px;
+    }
+
+    .rdc-pays {
+        font-size: 0.62rem;
+    }
+
+    .rdc-ministere {
+        font-size: 0.52rem;
+    }
+
+    .bulletin-signatures {
+        gap: 10px;
+    }
+
+    .signature-block {
+        max-width: 200px;
+    }
+
+    .signature-line {
+        padding-top: 24px;
+    }
+
+    .imprimer-option-card {
+        padding: 12px;
+    }
+
+    .stat-card {
+        padding: 12px;
+        gap: 10px;
+    }
+}
+
+/* ============================================================
+   20. STYLE D'IMPRESSION (PRINT MEDIA)
+   ============================================================ */
+@media print {
+    @page {
+        size: A4 landscape;
+        margin: 5mm;
+    }
+
+    body {
+        background: #ffffff !important;
+        font-size: 6px;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .no-print,
+    .sidebar,
+    .navbar-top,
+    .footer,
+    .breadcrumb,
+    .bulletin-selectors,
+    .bulletin-actions,
+    .imprimer-options,
+    .resultats-selectors,
+    .resultats-header-right,
+    .toast-container,
+    .pagination-wrapper,
+    .btn {
+        display: none !important;
+    }
+
+    .main-wrapper {
+        margin-left: 0 !important;
+        padding: 0 !important;
+    }
+
+    .page-content {
+        padding: 0 !important;
+    }
+
+    .bulletin-document {
+        box-shadow: none;
+        border: none;
+        border-radius: 0;
+        max-width: 100%;
+        page-break-after: always;
+    }
+
+    .bulletin-rdc-header {
+        padding: 4px 0;
+        border-bottom: 2px double #000000;
+    }
+
+    .rdc-titre-bulletin::after {
+        display: none;
+    }
+
+    .bulletin-table {
+        font-size: 5.5px;
+        min-width: 100%;
+    }
+
+    .bulletin-table thead th {
+        background-color: #000000 !important;
+        color: #ffffff !important;
+        font-size: 4.5px;
+        padding: 2px 1px;
+    }
+
+    .bulletin-table .sub-header th {
+        background-color: #333333 !important;
+        font-size: 4.5px;
+    }
+
+    .bulletin-table tbody td {
+        font-size: 5px;
+        padding: 1px;
+    }
+
+    .bulletin-table .col-m {
+        font-size: 4.5px;
+        width: 20px;
+        min-width: 20px;
+    }
+
+    .bulletin-table .col-o {
+        width: 22px;
+        min-width: 22px;
+    }
+
+    .bulletin-table .col-branches {
+        font-size: 5px;
+        min-width: 70px;
+        max-width: 80px;
+    }
+
+    .total-general-row td {
+        background-color: #000000 !important;
+        color: #ffffff !important;
+    }
+
+    .pourcentage-row td {
+        background-color: #fef3c7 !important;
+    }
+
+    .mention-row td {
+        background-color: #dbeafe !important;
+    }
+
+    .decision-row td {
+        background-color: #f0fdf4 !important;
+    }
+
+    .groupe-row td {
+        background-color: #e8eaf6 !important;
+    }
+
+    .bulletin-signatures {
+        padding: 8px 0;
+    }
+
+    .signature-line {
+        border-bottom: 1px solid #000000;
+    }
+
+    .signature-block span {
+        font-size: 6px;
+    }
+}
+
+
+
+/* ============================================================
+   Style des bulletins scolaires
+   ============================================================ */
+
+/* Conteneur principal */
+.bulletin-container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px;
+    background-color: #ffffff;
+    font-family: 'Poppins', sans-serif;
+    color: #1e293b;
+}
+
+/* En-tête et Numéro d'ID */
+.bulletin-header-id {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 15px;
+}
+
+.bulletin-id-box {
+    border: 2px solid #000000;
+    padding: 4px 12px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    font-size: 14px;
+}
+
+/* Grille d'informations (École / Élève) */
+.bulletin-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    border: 1px solid #000000;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+}
+
+.bulletin-info-row {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+
+.bulletin-info-row:last-child {
+    margin-bottom: 0;
+}
+
+.bulletin-info-label {
+    font-weight: 600;
+    font-size: 12px;
+    width: 130px;
+    text-transform: uppercase;
+}
+
+.bulletin-info-value {
+    flex: 1;
+    border-bottom: 1px dotted #000000;
+    padding-left: 6px;
+    font-weight: 500;
+}
+
+/* Titre du bulletin */
+.bulletin-banner {
+    text-align: center;
+    border-top: 2px solid #000000;
+    border-bottom: 2px solid #000000;
+    padding: 10px 0;
+    margin: 20px 0;
+    background-color: #f8fafc;
+}
+
+.bulletin-banner h2 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.bulletin-banner h3 {
+    font-size: 13px;
+    font-weight: 500;
+    margin: 4px 0 0 0;
+}
+
+/* Tableau principal des cours et notes */
+.bulletin-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 12px;
+}
+
+.bulletin-table th,
+.bulletin-table td {
+    border: 1px solid #000000;
+    padding: 6px 8px;
+    text-align: center;
+}
+
+.bulletin-table th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.bulletin-table td.text-left {
+    text-align: left;
+    font-weight: 500;
+}
+
+/* Zone des signatures et sceau */
+.bulletin-signatures {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-top: 35px;
+    page-break-inside: avoid;
+}
+
+.signature-card {
+    border: 1px solid #000000;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 8px;
+    text-align: center;
+}
+
+.signature-card-header {
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    border-bottom: 1px solid #000000;
+    padding-bottom: 4px;
+}
+
+.signature-card-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    font-size: 11px;
+    font-style: italic;
+}
+
+.signature-card-footer {
+    font-size: 10px;
+    color: #475569;
+}
+
+/* Format d'impression */
+@media print {
+    body {
+        background: #ffffff;
+    }
+    .bulletin-container {
+        padding: 0;
+        max-width: 100%;
+    }
+}
+
+
+
+/* ============================================================
+   Alignement et dimensions de l'en-tête officiel
+   ============================================================ */
+
+/* Conteneur principal de l'en-tête */
+.rdc-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #000000;
+}
+
+/* Colonnes des images */
+.rdc-flag-col,
+.rdc-coat-col {
+    flex: 0 0 120px; /* Largeur fixe réservée aux logos */
+    text-align: center;
+}
+
+/* Dimensionnement strict du drapeau */
+.rdc-flag {
+    max-width: 110px;
+    height: 70px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+}
+
+/* Dimensionnement strict des armoiries */
+.rdc-coat {
+    max-width: 90px;
+    height: 80px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+}
+
+/* Colonne centrale avec les textes */
+.rdc-title-col {
+    flex: 1;
+    text-align: center;
+    padding: 0 15px;
+}
+
+.rdc-pays {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #000000;
+    margin-bottom: 4px;
+}
+
+.rdc-ministere {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #1e293b;
+    line-height: 1.3;
+}
+
+
+
+/* ============================================================
+   1. GRILLE NUMÉRO D'IDENTIFICATION OFFICIEL (N° ID.)
+   ============================================================ */
+.rdc-id-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.id-label {
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+}
+
+.id-grid {
+    display: flex;
+    gap: 2px;
+}
+
+.id-box {
+    width: 18px;
+    height: 22px;
+    border: 1px solid #000000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    background-color: #ffffff;
+}
+
+/* ============================================================
+   2. INFORMATIONS ÉTABLISSEMENT ET ÉLÈVE
+   ============================================================ */
+.rdc-info-grid {
+    display: flex;
+    justify-content: space-between;
+    gap: 25px;
+    border: 1px solid #000000;
+    padding: 10px 14px;
+    margin-bottom: 15px;
+    background-color: #ffffff;
+}
+
+.rdc-info-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rdc-info-line {
+    display: flex;
+    align-items: flex-end;
+    font-size: 11px;
+    line-height: 1.2;
+}
+
+.rdc-info-line .lbl {
+    font-weight: 700;
+    white-space: nowrap;
+    margin-right: 6px;
+    text-transform: uppercase;
+}
+
+.rdc-info-line .lbl-inline {
+    font-weight: 700;
+    margin-left: 10px;
+    margin-right: 6px;
+    white-space: nowrap;
+}
+
+.rdc-info-line .val.dotted {
+    flex: 1;
+    border-bottom: 1px dotted #000000;
+    padding-left: 4px;
+    font-weight: 500;
+    min-height: 14px;
+}
+
+.rdc-info-line .val-sm {
+    border-bottom: 1px dotted #000000;
+    padding: 0 4px;
+    font-weight: 500;
+    min-width: 25px;
+    text-align: center;
+}
+
+.rdc-info-line .val-code,
+.rdc-info-line .val-perm {
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding-left: 4px;
+}
+
+
+/* ============================================================
+   3. BANDEROLE TITRE & ANNÉE SCOLAIRE
+   ============================================================ */
+.rdc-banner-title {
+    text-align: center;
+    border-top: 2px solid #000000;
+    border-bottom: 2px solid #000000;
+    padding: 6px 0;
+    margin: 15px 0 20px 0;
+    background-color: #f8fafc;
+}
+
+.bulletin-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.bulletin-annee {
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+
+/* ============================================================
+   4. BLOC FOOTER & SIGNATURES
+   ============================================================ */
+.bulletin-footer-official {
+    margin-top: 25px;
+    page-break-inside: avoid;
+}
+
+.signatures-box {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.signature-col {
+    flex: 1;
+    border: 1px solid #000000;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 6px;
+    text-align: center;
+    background-color: #ffffff;
+}
+
+.sig-title {
+    font-weight: 700;
+    font-size: 10px;
+    text-transform: uppercase;
+    border-bottom: 1px solid #000000;
+    padding-bottom: 4px;
+}
+
+.sig-space {
+    flex: 1;
+    min-height: 50px;
+}
+
+.sig-date,
+.sig-name {
+    font-size: 9.5px;
+    font-style: italic;
+    color: #334155;
+}
+
+
+
+
+/* ============================================================
+   CORRECTIONS — Styles manquants pour le bulletin
+   ============================================================ */
+
+/* En-tête RDC — 3 colonnes */
+.rdc-header-top {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin-bottom: 20px !important;
+    padding-bottom: 10px !important;
+    border-bottom: 2px solid #000000 !important;
+}
+
+.rdc-flag-col,
+.rdc-coat-col {
+    flex: 0 0 100px !important;
+    text-align: center !important;
+}
+
+.rdc-flag-col i,
+.rdc-coat-col i {
+    font-size: 2.5rem !important;
+    display: block !important;
+}
+
+.rdc-title-col {
+    flex: 1 !important;
+    text-align: center !important;
+    padding: 0 15px !important;
+}
+
+.rdc-pays {
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    color: #000000 !important;
+    margin-bottom: 4px !important;
+}
+
+.rdc-ministere {
+    font-size: 0.7rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    color: #1e293b !important;
+    line-height: 1.3 !important;
+}
+
+/* Grille N° ID */
+.rdc-id-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    margin-bottom: 12px !important;
+}
+
+.id-label {
+    font-weight: 700 !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 0.5px !important;
+    color: #000000 !important;
+}
+
+.id-grid {
+    display: flex !important;
+    gap: 2px !important;
+}
+
+.id-box {
+    width: 18px !important;
+    height: 22px !important;
+    border: 1px solid #000000 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0.65rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+}
+
+/* Grille info école/élève */
+.rdc-info-grid {
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 25px !important;
+    border: 1px solid #000000 !important;
+    padding: 10px 14px !important;
+    margin-bottom: 15px !important;
+    background-color: #ffffff !important;
+}
+
+.rdc-info-col {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+}
+
+.rdc-info-line {
+    display: flex !important;
+    align-items: flex-end !important;
+    font-size: 0.7rem !important;
+    line-height: 1.2 !important;
+}
+
+.rdc-info-line .lbl {
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+    margin-right: 6px !important;
+    text-transform: uppercase !important;
+    color: #000000 !important;
+}
+
+.rdc-info-line .lbl-inline {
+    font-weight: 700 !important;
+    margin-left: 10px !important;
+    margin-right: 6px !important;
+    white-space: nowrap !important;
+    color: #000000 !important;
+}
+
+.rdc-info-line .val.dotted {
+    flex: 1 !important;
+    border-bottom: 1px dotted #000000 !important;
+    padding-left: 4px !important;
+    font-weight: 500 !important;
+    min-height: 14px !important;
+}
+
+.rdc-info-line .val-sm {
+    border-bottom: 1px dotted #000000 !important;
+    padding: 0 4px !important;
+    font-weight: 500 !important;
+    min-width: 25px !important;
+    text-align: center !important;
+}
+
+.rdc-info-line .val-code,
+.rdc-info-line .val-perm {
+    font-weight: 700 !important;
+    letter-spacing: 1px !important;
+    padding-left: 4px !important;
+    color: #000000 !important;
+}
+
+/* Banderole titre */
+.rdc-banner-title {
+    text-align: center !important;
+    border-top: 2px solid #000000 !important;
+    border-bottom: 2px solid #000000 !important;
+    padding: 6px 0 !important;
+    margin: 15px 0 20px 0 !important;
+    background-color: #f8fafc !important;
+}
+
+.bulletin-title {
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    color: #000000 !important;
+}
+
+.bulletin-annee {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    margin-top: 2px !important;
+    color: #1e293b !important;
+}
+
+/* Signatures */
+.bulletin-footer-official {
+    margin-top: 25px !important;
+}
+
+.signatures-box {
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 15px !important;
+}
+
+.signature-col {
+    flex: 1 !important;
+    border: 1px solid #000000 !important;
+    min-height: 100px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    padding: 6px !important;
+    text-align: center !important;
+    background-color: #ffffff !important;
+}
+
+.sig-title {
+    font-weight: 700 !important;
+    font-size: 0.65rem !important;
+    text-transform: uppercase !important;
+    border-bottom: 1px solid #000000 !important;
+    padding-bottom: 4px !important;
+    color: #000000 !important;
+}
+
+.sig-space {
+    flex: 1 !important;
+    min-height: 50px !important;
+}
+
+.sig-date,
+.sig-name {
+    font-size: 0.6rem !important;
+    font-style: italic !important;
+    color: #334155 !important;
+}
+
+/* Écriture manuscrite — remplacer par Poppins */
+.handwriting {
+    font-family: 'Poppins', sans-serif !important;
+    font-weight: 500 !important;
+}
+
+/* Bordures fortes */
+.border-left-strong {
+    border-left: 2px solid #000000 !important;
+}
+
+.place-row,
+.application-row,
+.conduite-row {
+    background-color: #f1f5f9;
+}
+
+.place-row td,
+.application-row td,
+.conduite-row td {
+    padding: 5px 2px;
+    font-size: 0.6rem;
+    line-height: 1.15;
+}
+
+.bulletin-summary-value {
+    overflow-wrap: anywhere;
+}
+
+.application-row .bulletin-summary-value {
+    text-transform: uppercase;
+}
+
+.conduite-value {
+    height: 22px;
+}
+
+.signature-row td {
+    vertical-align: top;
+}
+
+.signature-quarter-cell {
+    padding: 5px 3px !important;
+}
+
+.signature-quarter-label {
+    margin-bottom: 5px;
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.signature-pair {
+    display: flex;
+    gap: 6px;
+}
+
+.signature-role {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.56rem;
+    text-align: center;
+}
+
+.signature-role .signature-line {
+    display: block;
+    width: 90%;
+    min-height: 13px;
+    margin: 0;
+    padding: 0;
+    border-bottom: 1px solid #64748b;
+}

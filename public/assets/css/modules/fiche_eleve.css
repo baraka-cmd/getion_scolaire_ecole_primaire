@@ -1,0 +1,1265 @@
+/* ============================================================
+   Fichier : public/assets/css/modules/fiche_eleve.css
+   Rôle    : Styles de la fiche détaillée d'un élève
+   ============================================================ */
+
+/* ============================================================
+   1. EN-TÊTE DU PROFIL
+   ============================================================ */
+.eleve-profile-hero {
+    background: linear-gradient(135deg, #2c3e90 0%, #3b4fa0 50%, #1a274f 100%);
+    border-radius: 20px;
+    padding: 32px 36px;
+    color: var(--color-white);
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+}
+
+.eleve-profile-hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 300px;
+    height: 300px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.eleve-profile-hero::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -5%;
+    width: 200px;
+    height: 200px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.profile-avatar-container {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+}
+
+.profile-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 22px;
+    object-fit: cover;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.profile-avatar-placeholder {
+    width: 100px;
+    height: 100px;
+    border-radius: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--color-white);
+    background: rgba(255, 255, 255, 0.12);
+    border: 3px solid rgba(255, 255, 255, 0.3);
+}
+
+.profile-status-dot {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 3px solid #2c3e90;
+    background-color: #10b981;
+}
+
+.profile-status-dot.inactive {
+    background-color: #ef4444;
+}
+
+.profile-info {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    min-width: 0;
+}
+
+.profile-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.3px;
+}
+
+.profile-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 10px;
+}
+
+.profile-meta-item {
+    font-size: 0.82rem;
+    opacity: 0.85;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.profile-meta-item i {
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+.profile-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.profile-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.74rem;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(5px);
+}
+
+.profile-badge i {
+    font-size: 0.65rem;
+}
+
+.profile-badge.success { background: rgba(16, 185, 129, 0.25); border-color: rgba(16, 185, 129, 0.3); }
+.profile-badge.warning { background: rgba(245, 158, 11, 0.25); border-color: rgba(245, 158, 11, 0.3); }
+.profile-badge.danger { background: rgba(239, 68, 68, 0.25); border-color: rgba(239, 68, 68, 0.3); }
+
+.profile-actions {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   2. ONGLETS DE NAVIGATION
+   ============================================================ */
+.profile-tabs {
+    display: flex;
+    gap: 0;
+    background-color: var(--color-white);
+    border-radius: 14px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-xs);
+}
+
+.profile-tab {
+    flex: 1;
+    padding: 14px 20px;
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--color-gray-500);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    border-bottom: 3px solid transparent;
+    background: none;
+    font-family: var(--font-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.profile-tab:hover {
+    color: var(--color-primary);
+    background-color: var(--color-primary-lighter);
+}
+
+.profile-tab.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+    font-weight: 600;
+    background-color: var(--color-primary-lighter);
+}
+
+.profile-tab i {
+    font-size: 0.85rem;
+}
+
+.profile-tab .tab-count {
+    font-size: 0.7rem;
+    background-color: var(--color-gray-200);
+    color: var(--color-gray-500);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.profile-tab.active .tab-count {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+}
+
+/* ============================================================
+   3. PANNEAUX DE CONTENU
+   ============================================================ */
+.profile-panel {
+    display: none;
+    animation: panelFadeIn 0.3s ease;
+}
+
+.profile-panel.active {
+    display: block;
+}
+
+@keyframes panelFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   4. GRILLE D'INFORMATIONS
+   ============================================================ */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+}
+
+.info-card {
+    background-color: var(--color-white);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    padding: 20px 24px;
+    box-shadow: var(--shadow-xs);
+    transition: all 0.3s ease;
+}
+
+.info-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-primary);
+}
+
+.info-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color-light);
+}
+
+.info-card-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.info-card-icon.blue { background-color: #e8eaf6; color: #2c3e90; }
+.info-card-icon.green { background-color: #d1fae5; color: #10b981; }
+.info-card-icon.orange { background-color: #fef3c7; color: #f59e0b; }
+.info-card-icon.red { background-color: #fee2e2; color: #ef4444; }
+.info-card-icon.purple { background-color: #ede9fe; color: #8b5cf6; }
+.info-card-icon.cyan { background-color: #dbeafe; color: #3b82f6; }
+
+.info-card-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-dark);
+}
+
+.info-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 0;
+}
+
+.info-field-label {
+    font-size: 0.7rem;
+    color: var(--color-gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+}
+
+.info-field-value {
+    font-size: 0.85rem;
+    color: var(--color-dark);
+    font-weight: 500;
+}
+
+.info-field-value.empty {
+    color: var(--color-gray-400);
+    font-style: italic;
+}
+
+/* ============================================================
+   5. CARTES PARENTS
+   ============================================================ */
+.parents-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.parent-detail-card {
+    background-color: var(--color-white);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    padding: 22px 24px;
+    box-shadow: var(--shadow-xs);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.parent-detail-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-primary);
+    transform: translateY(-2px);
+}
+
+.parent-detail-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--color-primary);
+    border-radius: 4px 0 0 4px;
+}
+
+.parent-detail-card.principal::before {
+    background: #10b981;
+}
+
+.parent-detail-card.secondaire::before {
+    background: #3b82f6;
+}
+
+.parent-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.parent-card-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-dark);
+}
+
+.parent-card-role {
+    font-size: 0.7rem;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
+.parent-card-role.principal {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.parent-card-role.secondaire {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+.parent-card-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.parent-detail-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.82rem;
+    color: var(--color-gray-600);
+}
+
+.parent-detail-row i {
+    width: 18px;
+    text-align: center;
+    color: var(--color-primary);
+    font-size: 0.78rem;
+}
+
+.parent-detail-row strong {
+    color: var(--color-dark);
+    font-weight: 500;
+}
+
+/* ============================================================
+   6. TIMELINE (HISTORIQUE)
+   ============================================================ */
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--color-primary), var(--border-color));
+}
+
+.timeline-item {
+    position: relative;
+    padding-bottom: 24px;
+}
+
+.timeline-item:last-child {
+    padding-bottom: 0;
+}
+
+.timeline-dot {
+    position: absolute;
+    left: -24px;
+    top: 4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 3px solid var(--color-white);
+    box-shadow: 0 0 0 2px var(--color-primary);
+    background-color: var(--color-primary);
+}
+
+.timeline-dot.current {
+    background-color: #10b981;
+    box-shadow: 0 0 0 2px #10b981;
+}
+
+.timeline-dot.past {
+    background-color: var(--color-gray-400);
+    box-shadow: 0 0 0 2px var(--color-gray-400);
+}
+
+.timeline-content {
+    background-color: var(--color-gray-50);
+    border-radius: 12px;
+    padding: 14px 18px;
+    border: 1px solid var(--border-color-light);
+}
+
+.timeline-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-dark);
+    margin-bottom: 4px;
+}
+
+.timeline-date {
+    font-size: 0.72rem;
+    color: var(--color-gray-400);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.timeline-badge {
+    display: inline-block;
+    margin-top: 6px;
+}
+
+/* ============================================================
+   7. TABLEAUX DANS LA FICHE
+   ============================================================ */
+.data-table-card {
+    background-color: var(--color-white);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+}
+
+.data-table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color-light);
+    background-color: var(--color-gray-50);
+}
+
+.data-table-title {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--color-dark);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.data-table-title i {
+    color: var(--color-primary);
+}
+
+.data-table-count {
+    font-size: 0.72rem;
+    color: var(--color-gray-400);
+}
+
+/* Note colorée */
+.note-value {
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.note-value.excellent { color: #10b981; }
+.note-value.good { color: #3b82f6; }
+.note-value.average { color: #f59e0b; }
+.note-value.low { color: #ef4444; }
+
+/* ============================================================
+   8. BOUTON IMPRESSION FICHE
+   ============================================================ */
+.btn-print-fiche {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background-color: var(--color-gray-50);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-gray-600);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-family: var(--font-primary);
+}
+
+.btn-print-fiche:hover {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    border-color: var(--color-primary);
+}
+
+/* ============================================================
+   9. RESPONSIVE
+   ============================================================ */
+@media (max-width: 992px) {
+    .eleve-profile-hero {
+        flex-direction: column;
+        text-align: center;
+        padding: 24px;
+    }
+
+    .profile-actions {
+        justify-content: center;
+    }
+
+    .profile-meta {
+        justify-content: center;
+    }
+
+    .profile-badges {
+        justify-content: center;
+    }
+
+    .parents-container {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-tabs {
+        overflow-x: auto;
+    }
+
+    .profile-tab {
+        flex: none;
+        min-width: 120px;
+    }
+}
+
+@media (max-width: 768px) {
+    .eleve-profile-hero {
+        padding: 20px;
+        border-radius: 14px;
+    }
+
+    .profile-avatar,
+    .profile-avatar-placeholder {
+        width: 80px;
+        height: 80px;
+        font-size: 1.8rem;
+    }
+
+    .profile-name {
+        font-size: 1.2rem;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-tab span:not(.tab-count) {
+        display: none;
+    }
+
+    .profile-tab i {
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .eleve-profile-hero {
+        padding: 16px;
+        gap: 16px;
+    }
+
+    .profile-avatar,
+    .profile-avatar-placeholder {
+        width: 64px;
+        height: 64px;
+        font-size: 1.4rem;
+        border-radius: 16px;
+    }
+
+    .profile-meta {
+        gap: 8px;
+    }
+
+    .profile-meta-item {
+        font-size: 0.74rem;
+    }
+}
+
+/* ============================================================
+   10. IMPRESSION
+   ============================================================ */
+@media print {
+    .profile-actions,
+    .profile-tabs,
+    .btn-print-fiche,
+    .sidebar,
+    .navbar-top,
+    .footer,
+    .breadcrumb {
+        display: none !important;
+    }
+
+    .eleve-profile-hero {
+        background: #f1f5f9 !important;
+        color: #000 !important;
+        box-shadow: none;
+    }
+
+    .card, .info-card, .parent-detail-card, .data-table-card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+        page-break-inside: avoid;
+    }
+
+    .profile-panel {
+        display: block !important;
+    }
+}
+
+
+/* ============================================================
+   STYLES SPÉCIFIQUES — Fiche utilisateur (profil card)
+   Ces styles complètent ceux déjà présents dans utilisateurs.css
+   ============================================================ */
+
+/* Carte profil */
+.profile-card {
+    background-color: var(--color-white);
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    margin-bottom: 24px;
+    transition: all 0.3s ease;
+}
+
+.profile-card:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* En-tête du profil */
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 28px 32px;
+    background: linear-gradient(135deg, #2c3e90 0%, #3b4fa0 100%);
+    color: var(--color-white);
+    flex-wrap: wrap;
+    position: relative;
+    overflow: hidden;
+}
+
+.profile-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 300px;
+    height: 300px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.profile-header::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -5%;
+    width: 200px;
+    height: 200px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.profile-avatar-placeholder-large {
+    width: 90px;
+    height: 90px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--color-white);
+    background: rgba(255, 255, 255, 0.15);
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+    transition: all 0.3s ease;
+}
+
+.profile-card:hover .profile-avatar-placeholder-large {
+    transform: scale(1.05);
+}
+
+.profile-header-info {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+    z-index: 1;
+}
+
+.profile-header-info h3 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+}
+
+.profile-header-info p {
+    font-size: 0.84rem;
+    opacity: 0.9;
+    margin: 0 0 6px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.profile-header-info p i {
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+.profile-header-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.profile-header-actions .btn {
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    padding: 9px 16px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.profile-header-actions .btn-outline-primary {
+    background-color: transparent;
+    color: var(--color-white);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.profile-header-actions .btn-outline-primary:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: var(--color-white);
+    border-color: rgba(255, 255, 255, 0.7);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+/* Corps de la fiche */
+.profile-body {
+    padding: 24px 32px;
+}
+
+/* Section */
+.profile-section {
+    margin-bottom: 28px;
+}
+
+.profile-section:last-child {
+    margin-bottom: 0;
+}
+
+.profile-section-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--color-dark);
+    margin: 0 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color-light);
+    transition: all 0.3s ease;
+}
+
+.profile-section-title i {
+    color: var(--color-primary);
+    font-size: 0.95rem;
+    transition: transform 0.3s ease;
+}
+
+.profile-section:hover .profile-section-title i {
+    transform: scale(1.15);
+}
+
+/* Grille d'informations */
+.profile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.profile-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    transition: all 0.25s ease;
+    margin: -4px -8px;
+}
+
+.profile-field:hover {
+    background-color: #f8fafc;
+}
+
+.profile-field-label {
+    font-size: 0.72rem;
+    color: var(--color-gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+}
+
+.profile-field-value {
+    font-size: 0.88rem;
+    color: var(--color-dark);
+    font-weight: 500;
+}
+
+/* Badge rôle dans la fiche */
+.profile-header-info .role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.74rem;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.profile-header-info .role-badge i {
+    font-size: 0.6rem;
+}
+
+/* ============================================================
+   STATS CARDS DANS LA FICHE
+   ============================================================ */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background-color: #ffffff;
+    border-radius: 16px;
+    padding: 20px 24px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    cursor: default;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: #ffffff;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover .stat-icon {
+    transform: rotate(-5deg) scale(1.1);
+}
+
+.stat-icon.blue   { background: linear-gradient(135deg, #2c3e90, #4a6cf7); }
+.stat-icon.green  { background: linear-gradient(135deg, #10b981, #34d399); }
+.stat-icon.orange { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+.stat-icon.red    { background: linear-gradient(135deg, #ef4444, #f87171); }
+.stat-icon.cyan   { background: linear-gradient(135deg, #06b6d4, #22d3ee); }
+.stat-icon.purple { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+
+.stat-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.2;
+    margin-bottom: 2px;
+}
+
+.stat-label {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #64748b;
+}
+
+/* ============================================================
+   BADGES (styles complets)
+   ============================================================ */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.badge-success   { background-color: #d1fae5; color: #065f46; }
+.badge-danger    { background-color: #fee2e2; color: #991b1b; }
+.badge-warning   { background-color: #fef3c7; color: #92400e; }
+.badge-info      { background-color: #dbeafe; color: #1e40af; }
+.badge-secondary { background-color: #f1f5f9; color: #475569; }
+.badge-primary   { background-color: #e8eaf6; color: #2c3e90; }
+
+/* ============================================================
+   TABLEAU D'HISTORIQUE
+   ============================================================ */
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table thead th {
+    background-color: #f8fafc;
+    color: #64748b;
+    font-weight: 600;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 12px 14px;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.82rem;
+    vertical-align: middle;
+    color: #334155;
+}
+
+.table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+.table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.table tbody tr td:first-child {
+    position: relative;
+}
+
+.table tbody tr td:first-child::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--color-primary);
+    border-radius: 0 3px 3px 0;
+    transform: scaleY(0);
+    transition: transform 0.3s ease;
+}
+
+.table tbody tr:hover td:first-child::before {
+    transform: scaleY(1);
+}
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+.empty-state {
+    text-align: center;
+    padding: 50px 20px;
+}
+
+.empty-state i {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: 12px;
+    color: #94a3b8;
+}
+
+.empty-state p {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin: 0;
+    font-weight: 500;
+}
+
+/* ============================================================
+   RESPONSIVE — Fiche utilisateur
+   ============================================================ */
+@media (max-width: 992px) {
+    .profile-header {
+        flex-direction: column;
+        text-align: center;
+        padding: 20px 24px;
+    }
+
+    .profile-header-actions {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .profile-header-info p {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .profile-body {
+        padding: 16px 20px;
+    }
+
+    .profile-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-avatar-placeholder-large {
+        width: 70px;
+        height: 70px;
+        border-radius: 16px;
+        font-size: 1.5rem;
+    }
+
+    .profile-header-info h3 {
+        font-size: 1.2rem;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .stat-card {
+        padding: 14px 16px;
+    }
+
+    .stat-icon {
+        width: 42px;
+        height: 42px;
+        font-size: 1.1rem;
+    }
+
+    .stat-value {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 575px) {
+    .profile-header {
+        padding: 16px;
+    }
+
+    .profile-avatar-placeholder-large {
+        width: 56px;
+        height: 56px;
+        font-size: 1.2rem;
+        border-radius: 14px;
+    }
+
+    .profile-header-info h3 {
+        font-size: 1.05rem;
+    }
+
+    .profile-body {
+        padding: 14px;
+    }
+
+    .profile-section-title {
+        font-size: 0.84rem;
+    }
+
+    .profile-field {
+        padding: 6px 8px;
+    }
+
+    .profile-field-label {
+        font-size: 0.68rem;
+    }
+
+    .profile-field-value {
+        font-size: 0.82rem;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .stat-card {
+        padding: 12px 14px;
+        border-radius: 14px;
+    }
+
+    .stat-icon {
+        width: 38px;
+        height: 38px;
+        font-size: 1rem;
+    }
+
+    .stat-value {
+        font-size: 1.1rem;
+    }
+
+    .stat-label {
+        font-size: 0.72rem;
+    }
+
+    .badge {
+        font-size: 0.66rem;
+        padding: 3px 8px;
+    }
+
+    .table thead th,
+    .table tbody td {
+        padding: 8px 8px;
+        font-size: 0.7rem;
+    }
+}
+
+/* ============================================================
+   IMPRESSION — Fiche utilisateur
+   ============================================================ */
+@media print {
+    .profile-header-actions,
+    .btn,
+    .d-flex.gap-sm,
+    .breadcrumb,
+    .sidebar,
+    .navbar-top,
+    .footer {
+        display: none !important;
+    }
+
+    .profile-header {
+        background: #f1f5f9 !important;
+        color: #000 !important;
+    }
+
+    .profile-header-info h3,
+    .profile-header-info p {
+        color: #000 !important;
+    }
+
+    .profile-header-info .role-badge {
+        background: #e2e8f0 !important;
+        color: #000 !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    .profile-card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+        page-break-inside: avoid;
+    }
+
+    body {
+        background: #fff !important;
+        font-size: 10px;
+    }
+}

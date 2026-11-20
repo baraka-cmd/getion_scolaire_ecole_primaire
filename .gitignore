@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+/vendor/
+/storage/
+/public/assets/uploads/
+/public/assets/fontawesome/js/
+/public/assets/fontawesome/metadata/
+/public/assets/fontawesome/sprites/
+/public/assets/fontawesome/sprites-full/
+/public/assets/fontawesome/svgs/
+/public/assets/fontawesome/svgs-full/
+/hash.php
+/test_diagnostic.php
+*.zip
+*.log

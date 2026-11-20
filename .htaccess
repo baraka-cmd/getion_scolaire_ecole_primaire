@@ -1,0 +1,17 @@
+RewriteEngine On
+
+# Keep credentials and environment files inaccessible over HTTP.
+<FilesMatch "^\.env">
+    Require all denied
+</FilesMatch>
+
+# Internal application, dependency, backup, and test files are never web resources.
+RewriteRule ^(?:\.git|src|database|vendor|storage|tests|\.github|node_modules)(?:/|$) - [F,L,NC]
+
+# 1. Rediriger l'accès à la racine vers public/index.php
+RewriteRule ^$ public/index.php [QSA,L]
+
+# 2. Transmettre les requêtes vers public/index.php si le fichier ou dossier n'existe pas
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ public/index.php?url=$1 [QSA,L]

@@ -1,0 +1,34 @@
+@media print {
+    @page {
+        margin: 5mm;
+    }
+
+    @page resultats-proclamation {
+        margin: 5mm;
+    }
+
+    @page resultats-landscape {
+        margin: 5mm;
+    }
+
+    @page registre-scolaire {
+        size: A4 landscape;
+        margin: 0;
+    }
+
+    body:has(.proclamation-document) {
+        page: resultats-proclamation;
+    }
+
+    body:has(.resultats-print-page) {
+        page: resultats-landscape;
+    }
+
+    body:has(.register-page) {
+        page: registre-scolaire;
+    }
+
+    .resultats-header {
+        display: none !important;
+    }
+}

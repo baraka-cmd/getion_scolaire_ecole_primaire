@@ -1,0 +1,553 @@
+@media screen {
+    .bulletin-document {
+        position: relative;
+        box-sizing: border-box;
+        width: 202mm;
+        max-width: 100%;
+        margin: 0 auto 24px;
+        padding: 1.5mm;
+        overflow: hidden;
+        border: 1px solid #222;
+        border-radius: 0;
+        background: #fff;
+        box-shadow: none;
+        color: #000;
+        font-family: "Times New Roman", Times, serif;
+        font-size: 7pt;
+        animation: none;
+    }
+
+    .bulletin-document::after {
+        position: absolute;
+        z-index: 5;
+        top: 43%;
+        left: 50%;
+        width: 92mm;
+        height: 92mm;
+        content: "";
+        transform: translate(-50%, -50%);
+        background: url("../../images/armoiries_rdc.jpg") center / contain no-repeat;
+        mix-blend-mode: multiply;
+        opacity: 0.1;
+        pointer-events: none;
+    }
+
+    .bulletin-rdc-header {
+        padding: 0;
+        border: 0;
+        background: #fff;
+    }
+
+    .rdc-header-top {
+        display: flex;
+        min-height: 13mm;
+        align-items: center;
+        justify-content: space-between;
+        margin: 0 0 1mm;
+        padding: 0 0 1mm;
+        border-bottom: 1px solid #000;
+    }
+
+    .rdc-flag-col,
+    .rdc-coat-col {
+        flex: 0 0 18mm;
+        width: 18mm;
+        text-align: center;
+    }
+
+    .rdc-flag,
+    .rdc-coat {
+        display: block;
+        width: 14mm;
+        height: 12mm;
+        max-width: 14mm;
+        margin: 0 auto;
+        object-fit: contain;
+    }
+
+    .rdc-title-col {
+        flex: 1 1 auto;
+        padding: 0 2mm;
+        text-align: center;
+    }
+
+    .rdc-pays,
+    .rdc-ministere {
+        margin: 0;
+        color: #000;
+        font-family: "Times New Roman", Times, serif;
+        letter-spacing: 0;
+        text-align: center;
+        text-transform: uppercase;
+    }
+
+    .rdc-pays {
+        margin-bottom: 0.7mm;
+        font-size: 8pt;
+        font-weight: 700;
+        line-height: 1.05;
+    }
+
+    .rdc-ministere {
+        font-size: 6pt;
+        font-weight: 600;
+        line-height: 1.1;
+    }
+
+    .rdc-id-row {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 1mm;
+        margin: 0 0 1mm;
+    }
+
+    .id-label {
+        color: #000;
+        font-size: 5.5pt;
+        font-weight: 700;
+    }
+
+    .id-grid {
+        display: flex;
+        gap: 0;
+    }
+
+    .id-box {
+        display: flex;
+        box-sizing: border-box;
+        width: 5.5mm;
+        height: 4mm;
+        align-items: center;
+        justify-content: center;
+        border: 0.2mm solid #000;
+        background: #fff;
+        color: #000;
+        font-size: 5pt;
+        font-weight: 600;
+    }
+
+    .rdc-info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1.12fr;
+        gap: 2mm;
+        margin: 0 0 1mm;
+        padding: 1mm;
+        border: 0.25mm solid #000;
+        background: #fff;
+    }
+
+    .rdc-info-col {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 0.6mm;
+    }
+
+    .rdc-info-line {
+        display: flex;
+        min-height: 3mm;
+        align-items: flex-end;
+        color: #000;
+        font-size: 5.4pt;
+        line-height: 1.05;
+        white-space: nowrap;
+    }
+
+    .rdc-info-line .lbl,
+    .rdc-info-line .lbl-inline {
+        margin: 0 0.7mm 0 0;
+        color: #000;
+        font-size: 5.1pt;
+        font-weight: 700;
+    }
+
+    .rdc-info-line .lbl-inline {
+        margin-left: 1mm;
+    }
+
+    .rdc-info-line .val.dotted {
+        min-width: 0;
+        min-height: 2.8mm;
+        flex: 1 1 auto;
+        padding-left: 0.5mm;
+        overflow: hidden;
+        border-bottom: 0.2mm dotted #000;
+        color: #000;
+        text-overflow: ellipsis;
+    }
+
+    .rdc-info-line .val-sm {
+        min-width: 5mm;
+        padding: 0 0.5mm;
+        border-bottom: 0.2mm dotted #000;
+        color: #000;
+        text-align: center;
+    }
+
+    .rdc-info-line .val-code,
+    .rdc-info-line .val-perm {
+        padding-left: 0.5mm;
+        color: #000;
+        font-size: 5.2pt;
+        font-weight: 700;
+    }
+
+    .rdc-banner-title,
+    .rdc-titre-bulletin {
+        margin: 0 0 1mm;
+        padding: 1mm 0;
+        border-top: 1px solid #000;
+        border-bottom: 1px solid #000;
+        background: #fff;
+        color: #000;
+        font-family: "Times New Roman", Times, serif;
+        font-size: 7pt;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-align: center;
+    }
+
+    .bulletin-title {
+        color: #000;
+        font-size: 7pt;
+        font-weight: 700;
+        letter-spacing: 0;
+    }
+
+    .bulletin-annee,
+    .rdc-annee-scolaire {
+        margin-top: 0.5mm;
+        color: #000;
+        font-size: 5.8pt;
+        font-weight: 700;
+    }
+
+    .rdc-titre-bulletin::after {
+        display: none;
+    }
+
+    .rdc-id {
+        margin: 0 0 1mm;
+        color: #000;
+        font-size: 5.5pt;
+        text-align: right;
+    }
+
+    .rdc-ecole,
+    .rdc-eleve {
+        display: grid;
+        grid-template-columns: 1fr 1.12fr;
+        gap: 0.6mm 2mm;
+        margin: 0 0 1mm;
+        padding: 1mm;
+        border: 0.25mm solid #000;
+        border-radius: 0;
+        background: #fff;
+        color: #000;
+        font-size: 5.4pt;
+    }
+
+    .rdc-ecole-ligne,
+    .rdc-eleve-ligne {
+        display: flex;
+        min-width: 0;
+        white-space: normal;
+    }
+
+    .rdc-label,
+    .rdc-valeur {
+        color: #000;
+    }
+
+    .bulletin-table-wrapper {
+        width: 100%;
+        overflow: visible;
+        padding: 0;
+    }
+
+    .bulletin-table {
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        table-layout: fixed;
+        border-collapse: collapse;
+        background: #fff;
+        font-family: "Times New Roman", Times, serif;
+        font-size: 5.4pt;
+    }
+
+    .bulletin-table .col-branches {
+        box-sizing: border-box;
+        width: 32mm;
+        min-width: 0;
+        max-width: 32mm;
+        padding: 0.55mm;
+        overflow: hidden;
+        color: #000;
+        font-size: 5.2pt;
+        line-height: 1.1;
+        text-align: left;
+        text-overflow: ellipsis;
+    }
+
+    .bulletin-table .col-m,
+    .bulletin-table .col-o {
+        box-sizing: border-box;
+        width: 6.4mm;
+        min-width: 0;
+        max-width: 6.4mm;
+        padding: 0.8mm 0.15mm;
+        color: #000;
+        font-size: 5.2pt;
+        line-height: 1.1;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .bulletin-table thead th {
+        padding: 1mm 0.2mm;
+        border: 0.25mm solid #000;
+        background: #e6e6e6;
+        color: #000;
+        font-size: 5pt;
+        font-weight: 700;
+        line-height: 1;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .bulletin-table .col-trimestre,
+    .bulletin-table .col-annuel {
+        background: #d7d7d7;
+        color: #000;
+    }
+
+    .bulletin-table tbody td.col-total {
+        background: #f1f1f1 !important;
+        color: #000 !important;
+    }
+
+    .bulletin-table tbody td {
+        padding: 0.8mm 0.15mm;
+        border: 0.2mm solid #333;
+        background: #fff;
+        color: #000;
+        font-size: 5.2pt;
+        line-height: 1.1;
+        text-align: center;
+    }
+
+    .bulletin-table tbody .col-branches {
+        text-align: left;
+    }
+
+    .bulletin-table .groupe-row td {
+        padding: 1.25mm;
+        background: #dedede;
+        color: #000;
+        font-size: 5.3pt;
+        font-weight: 700;
+    }
+
+    .bulletin-table .sous-total-row td,
+    .bulletin-table .pourcentage-row td,
+    .bulletin-table .mention-row td,
+    .bulletin-table .decision-row td,
+    .bulletin-table .rang-row td {
+        background: #f1f1f1;
+        color: #000;
+        font-weight: 700;
+    }
+
+    .bulletin-table .total-general-row td {
+        background: #d7d7d7;
+        color: #000;
+        font-weight: 700;
+    }
+
+    .bulletin-table .border-left-strong {
+        border-left: 0.5mm solid #000;
+    }
+
+    .bulletin-footer-official {
+        margin-top: 0.5mm;
+    }
+
+    .signatures-box {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5mm;
+    }
+
+    .signature-col {
+        display: flex;
+        box-sizing: border-box;
+        min-height: 22mm;
+        flex-direction: column;
+        padding: 1mm;
+        border: 0.25mm solid #000;
+        background: #fff;
+        text-align: center;
+    }
+
+    .sig-title {
+        padding-bottom: 0.7mm;
+        border-bottom: 0.2mm solid #000;
+        color: #000;
+        font-size: 5pt;
+        font-weight: 700;
+    }
+
+    .sig-space {
+        min-height: 9mm;
+        flex: 1 1 auto;
+    }
+
+    .sig-date,
+    .sig-name {
+        color: #000;
+        font-size: 4.6pt;
+    }
+
+    .bulletin-signatures {
+        padding: 2mm;
+        border-top: 1px solid #000;
+    }
+
+    .signature-line {
+        border-color: #000;
+    }
+
+    .bulletin-document .rdc-header-top {
+        min-height: 13mm !important;
+        margin: 0 0 1mm !important;
+        padding: 0 0 1mm !important;
+        border-bottom: 1px solid #000 !important;
+    }
+
+    .bulletin-document .rdc-flag-col,
+    .bulletin-document .rdc-coat-col {
+        flex: 0 0 18mm !important;
+    }
+
+    .bulletin-document .rdc-title-col {
+        padding: 0 2mm !important;
+    }
+
+    .bulletin-document .rdc-pays {
+        margin: 0 0 0.7mm !important;
+        font-size: 8pt !important;
+        letter-spacing: 0 !important;
+    }
+
+    .bulletin-document .rdc-ministere {
+        margin: 0 !important;
+        font-size: 6pt !important;
+        line-height: 1.1 !important;
+    }
+
+    .bulletin-document .rdc-id-row {
+        gap: 1mm !important;
+        margin: 0 0 1mm !important;
+    }
+
+    .bulletin-document .id-label {
+        font-size: 5.5pt !important;
+        letter-spacing: 0 !important;
+    }
+
+    .bulletin-document .id-grid {
+        gap: 0 !important;
+    }
+
+    .bulletin-document .id-box {
+        width: 5.5mm !important;
+        height: 4mm !important;
+        border: 0.2mm solid #000 !important;
+        font-size: 5pt !important;
+    }
+
+    .bulletin-document .rdc-info-grid {
+        display: grid !important;
+        grid-template-columns: 1fr 1.12fr !important;
+        gap: 2mm !important;
+        margin: 0 0 1mm !important;
+        padding: 1mm !important;
+    }
+
+    .bulletin-document .rdc-info-col {
+        gap: 0.6mm !important;
+    }
+
+    .bulletin-document .rdc-info-line {
+        min-height: 3mm !important;
+        font-size: 5.4pt !important;
+        line-height: 1.05 !important;
+    }
+
+    .bulletin-document .rdc-info-line .lbl {
+        margin-right: 0.7mm !important;
+        font-size: 5.1pt !important;
+    }
+
+    .bulletin-document .rdc-info-line .lbl-inline {
+        margin-left: 1mm !important;
+        margin-right: 0.7mm !important;
+        font-size: 5.1pt !important;
+    }
+
+    .bulletin-document .rdc-info-line .val.dotted {
+        min-height: 2.8mm !important;
+        padding-left: 0.5mm !important;
+    }
+
+    .bulletin-document .rdc-info-line .val-sm {
+        min-width: 5mm !important;
+        padding: 0 0.5mm !important;
+    }
+
+    .bulletin-document .rdc-info-line .val-code,
+    .bulletin-document .rdc-info-line .val-perm {
+        padding-left: 0.5mm !important;
+        font-size: 5.2pt !important;
+        letter-spacing: 0 !important;
+    }
+
+    .bulletin-document .rdc-banner-title {
+        margin: 0 0 1mm !important;
+        padding: 1mm 0 !important;
+        border-top: 1px solid #000 !important;
+        border-bottom: 1px solid #000 !important;
+        background: #fff !important;
+    }
+
+    .bulletin-document .bulletin-title {
+        font-size: 7pt !important;
+        letter-spacing: 0 !important;
+    }
+
+    .bulletin-document .bulletin-annee {
+        margin-top: 0.5mm !important;
+        font-size: 5.8pt !important;
+    }
+
+    .bulletin-document .handwriting {
+        font-family: "Times New Roman", Times, serif !important;
+    }
+
+    .bulletin-document .signatures-box {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 1.5mm !important;
+    }
+
+    .bulletin-document .signature-col {
+        min-height: 22mm !important;
+        padding: 1mm !important;
+    }
+
+    .bulletin-document .sig-space {
+        min-height: 9mm !important;
+    }
+}

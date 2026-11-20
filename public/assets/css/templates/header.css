@@ -1,0 +1,633 @@
+/* ============================================================
+   Fichier : public/assets/css/templates/header.css
+   Rôle    : Styles de la barre de navigation supérieure
+   ============================================================ */
+
+/* ============================================================
+   1. STRUCTURE PRINCIPALE
+   ============================================================ */
+.navbar-top {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-navbar, 1000);
+    height: var(--navbar-height, 60px);
+    background-color: var(--color-white, #ffffff);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    flex-shrink: 0;
+    transition: box-shadow 0.3s ease;
+}
+
+.navbar-top.scrolled {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* ============================================================
+   2. PARTIE GAUCHE
+   ============================================================ */
+.navbar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Bouton toggle sidebar (support ID et classe) */
+.btn-toggle-sidebar,
+#btn-toggle-sidebar {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    color: var(--color-gray-500, #6b7280);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 10px;
+    transition: all 0.25s ease;
+    display: none; /* Caché par défaut sur grand écran */
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+/* Visible seulement sur écrans <= 992px */
+@media (max-width: 992px) {
+    .btn-toggle-sidebar,
+    #btn-toggle-sidebar {
+        display: flex !important;
+    }
+}
+
+.btn-toggle-sidebar:hover,
+#btn-toggle-sidebar:hover {
+    color: var(--color-primary, #4f46e5);
+    background-color: var(--color-primary-lighter, #eeef2);
+}
+
+.btn-toggle-sidebar:active,
+#btn-toggle-sidebar:active {
+    transform: scale(0.92);
+}
+
+.btn-toggle-sidebar i,
+#btn-toggle-sidebar i {
+    transition: transform 0.3s ease;
+}
+
+.btn-toggle-sidebar:hover i,
+#btn-toggle-sidebar:hover i {
+    transform: rotate(90deg);
+}
+
+@media (max-width: 480px) {
+    .btn-toggle-sidebar,
+    #btn-toggle-sidebar {
+        width: 34px;
+        height: 34px;
+        padding: 6px;
+    }
+}
+
+/* Titre de la page */
+.page-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.page-title-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background-color: var(--color-primary-lighter, #e0e7ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background-color 0.3s ease;
+}
+
+.page-title-icon i {
+    font-size: 1rem;
+    color: var(--color-primary, #4f46e5);
+}
+
+.page-title-text {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--color-dark, #111827);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.2px;
+}
+
+/* ============================================================
+   3. PARTIE DROITE
+   ============================================================ */
+.navbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   4. BOUTONS D'ACTIONS
+   ============================================================ */
+.navbar-action-btn {
+    position: relative;
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    color: var(--color-gray-500, #6b7280);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 10px;
+    transition: all 0.25s ease;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.navbar-action-btn:hover {
+    color: var(--color-primary, #4f46e5);
+    background-color: var(--color-primary-lighter, #e0e7ff);
+}
+
+.navbar-action-btn:active {
+    transform: scale(0.92);
+}
+
+/* Badge de notification */
+.navbar-action-btn .badge-dot {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 9px;
+    height: 9px;
+    background-color: var(--color-error, #ef4444);
+    border-radius: 50%;
+    border: 2px solid var(--color-white, #ffffff);
+    animation: badgePulse 2s ease-in-out infinite;
+}
+
+.navbar-action-btn .badge-count {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+    min-width: 20px;
+    height: 20px;
+    background-color: var(--color-error, #ef4444);
+    color: var(--color-white, #ffffff);
+    border-radius: 50px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    border: 2px solid var(--color-white, #ffffff);
+    letter-spacing: 0.2px;
+}
+
+@keyframes badgePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+/* ============================================================
+   5. RECHERCHE GLOBALE
+   ============================================================ */
+.navbar-search {
+    position: relative;
+    margin-right: 8px;
+}
+
+.navbar-search input {
+    width: 220px;
+    padding: 9px 14px 9px 38px;
+    font-family: var(--font-primary, inherit);
+    font-size: 0.82rem;
+    color: var(--color-dark, #111827);
+    background-color: var(--color-gray-50, #f9fafb);
+    border: 1.5px solid transparent;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+.navbar-search input::placeholder {
+    color: var(--color-gray-400, #9ca3af);
+    font-size: 0.8rem;
+}
+
+.navbar-search input:focus {
+    width: 300px;
+    background-color: var(--color-white, #ffffff);
+    border-color: var(--color-primary, #4f46e5);
+    box-shadow: 0 0 0 3px var(--color-primary-transparent, rgba(79, 70, 229, 0.15));
+}
+
+.navbar-search .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-gray-400, #9ca3af);
+    font-size: 0.85rem;
+    pointer-events: none;
+    transition: color 0.3s ease;
+}
+
+.navbar-search input:focus ~ .search-icon,
+.navbar-search input:focus + .search-icon {
+    color: var(--color-primary, #4f46e5);
+}
+
+/* ============================================================
+   6. DATE/HEURE
+   ============================================================ */
+.navbar-datetime {
+    font-size: 0.75rem;
+    color: var(--color-gray-500, #6b7280);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background-color: var(--color-gray-50, #f9fafb);
+    border-radius: 8px;
+    cursor: default;
+    transition: background-color 0.3s ease;
+}
+
+.navbar-datetime:hover {
+    background-color: var(--color-gray-100, #f3f4f6);
+}
+
+.navbar-datetime i {
+    font-size: 0.8rem;
+    color: var(--color-primary, #4f46e5);
+}
+
+/* ============================================================
+   7. DROPDOWN UTILISATEUR
+   ============================================================ */
+.navbar-user {
+    position: relative;
+    margin-left: 4px;
+}
+
+.user-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    padding: 6px 14px 6px 8px;
+    border-radius: 12px;
+    transition: all 0.25s ease;
+    border: 1.5px solid transparent;
+    background: none;
+    font-family: var(--font-primary, inherit);
+}
+
+.user-dropdown-trigger:hover {
+    background-color: var(--color-gray-50, #f9fafb);
+    border-color: var(--border-color, #e5e7eb);
+}
+
+.user-dropdown-trigger:focus-visible {
+    border-color: var(--color-primary, #4f46e5);
+    outline: none;
+}
+
+.user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    object-fit: cover;
+    background-color: var(--color-primary-lighter, #e0e7ff);
+    flex-shrink: 0;
+    border: 2px solid var(--border-color, #e5e7eb);
+    transition: border-color 0.3s ease;
+}
+
+.user-dropdown-trigger:hover .user-avatar {
+    border-color: var(--color-primary, #4f46e5);
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.user-info .user-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-dark, #111827);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
+
+.user-info .user-role-text {
+    font-size: 0.68rem;
+    color: var(--color-gray-400, #9ca3af);
+    font-weight: 400;
+    line-height: 1.2;
+}
+
+.user-dropdown-arrow {
+    font-size: 0.6rem;
+    color: var(--color-gray-400, #9ca3af);
+    transition: transform 0.3s ease;
+    margin-left: 2px;
+}
+
+.user-dropdown-trigger.open .user-dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+/* ============================================================
+   8. MENU DROPDOWN
+   ============================================================ */
+.user-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background-color: var(--color-white, #ffffff);
+    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+    min-width: 260px;
+    z-index: var(--z-overlay, 2000);
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.user-dropdown-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* En-tête du dropdown */
+.user-dropdown-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 18px;
+    background-color: var(--color-gray-50, #f9fafb);
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.user-dropdown-header img {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    object-fit: cover;
+    background-color: var(--color-primary-lighter, #e0e7ff);
+}
+
+.user-dropdown-header .user-info {
+    flex: 1;
+}
+
+.user-dropdown-header .user-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-dark, #111827);
+}
+
+.user-dropdown-header .user-email {
+    font-size: 0.7rem;
+    color: var(--color-gray-500, #6b7280);
+    margin-top: 2px;
+}
+
+/* Liens du dropdown */
+.user-dropdown-links {
+    padding: 6px 0;
+}
+
+.user-dropdown-links a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 18px;
+    font-size: 0.82rem;
+    color: var(--color-gray-600, #4b5563);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-weight: 400;
+}
+
+.user-dropdown-links a:hover {
+    background-color: var(--color-gray-50, #f9fafb);
+    color: var(--color-primary, #4f46e5);
+}
+
+.user-dropdown-links a i {
+    width: 18px;
+    text-align: center;
+    font-size: 0.9rem;
+    transition: transform 0.2s ease;
+}
+
+.user-dropdown-links a:hover i {
+    transform: translateX(2px);
+}
+
+.user-dropdown-divider {
+    height: 1px;
+    background-color: var(--border-color, #e5e7eb);
+    margin: 6px 0;
+}
+
+.user-dropdown-links .logout-link {
+    color: var(--color-error, #ef4444);
+    font-weight: 500;
+}
+
+.user-dropdown-links .logout-link:hover {
+    background-color: var(--color-error-light, #fef2f2);
+    color: var(--color-error-dark, #dc2626);
+}
+
+.user-dropdown-links .logout-link i {
+    color: var(--color-error, #ef4444);
+}
+
+/* ============================================================
+   9. RESPONSIVE & COMPORTEMENT SIDEBAR MOBILE (CORRIGÉ)
+   ============================================================ */
+@media (max-width: 992px) {
+    /* Support complet des classes .sidebar et des ID #sidebar */
+    .sidebar,
+    #sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 280px !important;
+        height: 100vh !important;
+        transform: translateX(-100%) !important;
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        z-index: 1050 !important;
+    }
+
+    /* État ouvert activé par JS (.show, .active, .open) */
+    .sidebar.show,
+    #sidebar.show,
+    .sidebar.active,
+    #sidebar.active,
+    .sidebar.open,
+    #sidebar.open {
+        transform: translateX(0) !important;
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.2) !important;
+    }
+
+    /* Overlay sombre de fond */
+    .sidebar-overlay,
+    #sidebar-overlay {
+        display: none;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+        z-index: 1045 !important;
+    }
+
+    .sidebar-overlay.show,
+    #sidebar-overlay.show,
+    .sidebar-overlay.active,
+    #sidebar-overlay.active {
+        display: block !important;
+    }
+
+    .main-wrapper,
+    #main-wrapper {
+        margin-left: 0 !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .navbar-top {
+        padding: 0 12px;
+        height: 56px;
+    }
+
+    .navbar-search {
+        display: none;
+    }
+
+    .page-title-wrapper {
+        gap: 8px;
+    }
+
+    .page-title-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+    }
+
+    .page-title-icon i {
+        font-size: 0.85rem;
+    }
+
+    .page-title-text {
+        font-size: 0.9rem;
+    }
+
+    .navbar-action-btn {
+        width: 34px;
+        height: 34px;
+        padding: 6px;
+        font-size: 1rem;
+    }
+
+    .user-dropdown-trigger {
+        padding: 4px 8px 4px 4px;
+        gap: 6px;
+    }
+
+    .user-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+    }
+
+    .user-info {
+        display: none;
+    }
+
+    .user-dropdown-arrow {
+        display: none;
+    }
+
+    .user-dropdown-menu {
+        min-width: 230px;
+        right: -8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .navbar-top {
+        padding: 0 8px;
+    }
+
+    .btn-toggle-sidebar,
+    #btn-toggle-sidebar {
+        width: 34px;
+        height: 34px;
+        padding: 6px;
+    }
+
+    .page-title-text {
+        font-size: 0.82rem;
+    }
+
+    .navbar-action-btn {
+        width: 30px;
+        height: 30px;
+        padding: 5px;
+        font-size: 0.9rem;
+    }
+}
+
+/* ============================================================
+   10. ANIMATIONS SUPPLÉMENTAIRES
+   ============================================================ */
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.user-dropdown-menu.show {
+    animation: dropdownFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}

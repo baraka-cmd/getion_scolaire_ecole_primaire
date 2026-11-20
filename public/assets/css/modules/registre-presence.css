@@ -1,0 +1,522 @@
+.register-shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 1.25rem 1rem 2.5rem;
+}
+
+.register-toolbar,
+.register-toolbar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.register-toolbar {
+    margin-bottom: 1rem;
+}
+
+.register-toolbar h1 {
+    margin: .2rem 0;
+    font-size: clamp(1.45rem, 3vw, 2rem);
+}
+
+.register-toolbar p {
+    margin: 0;
+    color: var(--text-secondary, #657083);
+}
+
+.register-eyebrow {
+    color: var(--primary-color, #2c3e90) !important;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.register-filters {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    max-width: 900px;
+    margin: 1.25rem 0;
+    padding: 1rem;
+    background: var(--surface-color, #fff);
+    border: 1px solid var(--border-color, #e1e5eb);
+    border-radius: .75rem;
+}
+
+.register-filters label {
+    display: grid;
+    gap: .4rem;
+    font-size: .85rem;
+    font-weight: 600;
+}
+
+.register-filters select {
+    min-height: 2.65rem;
+    padding: .55rem .7rem;
+    color: inherit;
+    background: var(--surface-color, #fff);
+    border: 1px solid var(--border-color, #d6dbe4);
+    border-radius: .45rem;
+}
+
+.register-filters input[type="date"] {
+    width: 100%;
+    min-height: 2.65rem;
+    padding: .55rem .7rem;
+    color: inherit;
+    background: var(--surface-color, #fff);
+    border: 1px solid var(--border-color, #d6dbe4);
+    border-radius: .45rem;
+}
+
+.register-preview-notice {
+    max-width: 900px;
+    margin: 0 0 1rem;
+    padding: .75rem 1rem;
+    color: #684d00;
+    background: #fff7df;
+    border: 1px solid #e8d18c;
+    border-radius: .55rem;
+    font-size: .9rem;
+}
+
+.register-preview-notice.is-error {
+    color: #8d2424;
+    background: #fdecec;
+    border-color: #efb4b4;
+}
+
+.register-empty {
+    margin-top: 1.25rem;
+    padding: 2rem;
+    text-align: center;
+    background: var(--surface-color, #fff);
+    border: 1px solid var(--border-color, #e1e5eb);
+    border-radius: .75rem;
+}
+
+.register-empty > i {
+    color: var(--primary-color, #2c3e90);
+    font-size: 1.5rem;
+}
+
+.register-document {
+    display: grid;
+    justify-items: center;
+    gap: 1.25rem;
+    padding: 1rem 0;
+}
+
+.register-page {
+    box-sizing: border-box;
+    width: 297mm;
+    height: 210mm;
+    min-height: 210mm;
+    padding: 5mm;
+    overflow: hidden;
+    color: #23384e;
+    background: #fff;
+    border: 1px solid #dfe3e8;
+    font-family: 'Poppins', sans-serif;
+}
+
+.cover-page {
+    padding: 8mm 18mm;
+    background: #f3e3e7;
+}
+
+.cover-half {
+    display: flex;
+    width: 100%;
+    height: 95mm;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.cover-topline {
+    margin: 4mm 0 0;
+    padding-bottom: 1.5mm;
+    border-bottom: 1.3mm solid #23384e;
+    font-size: 14pt;
+    font-weight: 700;
+}
+
+.cover-logo {
+    width: 22mm;
+    height: 22mm;
+    margin: 8mm 0 5mm;
+    object-fit: contain;
+}
+
+.cover-half h1 {
+    margin: 0;
+    font-size: 17pt;
+    font-weight: 700;
+}
+
+.cover-fields {
+    display: grid;
+    width: 100%;
+    gap: 3mm;
+    margin-top: 7mm;
+    text-align: left;
+}
+
+.cover-fields div {
+    display: flex;
+    min-height: 7mm;
+    align-items: end;
+    gap: 2mm;
+    border-bottom: .6mm dotted #23384e;
+}
+
+.cover-fields span {
+    flex: 0 0 auto;
+    font-size: 9pt;
+    font-style: italic;
+    font-weight: 700;
+}
+
+.cover-fields strong {
+    overflow: hidden;
+    font-size: 9pt;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.paper-page-title,
+.month-page-heading {
+    margin: 0 0 2mm;
+    color: #688fae;
+    font-size: 10pt;
+    font-weight: 700;
+    text-align: center;
+}
+
+.paper-page-title {
+    height: 8mm;
+    padding-top: 1mm;
+}
+
+.identity-table,
+.attendance-register-table,
+.annual-summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    color: #385e7d;
+}
+
+.identity-table th,
+.identity-table td,
+.attendance-register-table th,
+.attendance-register-table td,
+.annual-summary-table th,
+.annual-summary-table td {
+    border: .25mm solid #84a8c1;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.identity-table {
+    font-size: 5.8pt;
+}
+
+.identity-table thead th {
+    height: 9mm;
+    color: #688fae;
+    font-size: 7pt;
+    font-weight: 600;
+}
+
+.identity-table tbody tr {
+    height: 2.35mm;
+}
+
+.identity-table td {
+    padding: 0 .7mm;
+    overflow: hidden;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.identity-table tbody td {
+    font-size: 5.8pt;
+}
+
+.identity-number { width: 7mm; }
+.identity-name { width: 62mm; }
+.identity-matricule { width: 35mm; }
+.identity-birth { width: 25mm; }
+.identity-parent { width: 37mm; }
+.identity-origin { width: 40mm; }
+.identity-observations { width: 44mm; }
+
+.identity-student-name {
+    font-size: 6.2pt;
+    font-weight: 600;
+    text-align: left !important;
+}
+
+.month-page {
+    padding: 4mm;
+}
+
+.month-page-heading {
+    display: flex;
+    height: 8mm;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0 1mm;
+    border-bottom: .25mm solid #84a8c1;
+}
+
+.month-page-heading h2,
+.month-page-heading p {
+    margin: 0;
+    font-size: 9pt;
+    font-weight: 600;
+}
+
+.month-page-heading p {
+    color: #385e7d;
+    font-size: 7pt;
+}
+
+.month-page-heading strong {
+    letter-spacing: .04em;
+}
+
+.attendance-register-table {
+    font-size: 5.4pt;
+}
+
+.attendance-register-table thead th {
+    height: 5mm;
+    padding: .2mm;
+    color: #688fae;
+    font-size: 5.3pt;
+    font-weight: 600;
+    line-height: 1.05;
+}
+
+.attendance-register-table tbody tr {
+    height: 2.2mm;
+}
+
+.attendance-register-table tbody td {
+    padding: 0 .2mm;
+    overflow: hidden;
+    font-size: 5.4pt;
+    line-height: 1;
+}
+
+.month-table .col-number { width: 7mm; }
+.month-table .col-student { width: 43mm; }
+.month-table .col-day { width: 5mm; }
+.month-table .col-total { width: 19.5mm; }
+
+.month-table .student-name {
+    padding-left: 1mm;
+    font-size: 5.4pt;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.attendance-register-table tfoot th,
+.attendance-register-table tfoot td {
+    height: 3mm;
+    padding: 0 .2mm;
+    font-size: 5.2pt;
+    font-weight: 600;
+}
+
+.month-table tfoot th {
+    text-align: left;
+    white-space: nowrap;
+}
+
+.month-table tbody td:first-child {
+    font-weight: 600;
+}
+
+.attendance-register-table .off-day {
+    color: #bd3441;
+    background: #fff3f3;
+    border-right: .55mm solid #c51f2b;
+    border-left: .55mm solid #c51f2b;
+}
+
+.month-key {
+    margin-top: 1mm;
+    color: #688fae;
+    font-size: 5.5pt;
+    text-align: center;
+}
+
+.annual-summary-page {
+    padding: 8mm;
+}
+
+.annual-summary-page .paper-page-title {
+    height: 12mm;
+    font-size: 14pt;
+}
+
+.annual-summary-table {
+    font-size: 6.8pt;
+}
+
+.annual-summary-table thead th {
+    height: 9mm;
+    padding: .7mm;
+    color: #688fae;
+    font-size: 6.5pt;
+    font-weight: 600;
+}
+
+.annual-summary-table tbody tr {
+    height: 8mm;
+}
+
+.annual-summary-table tbody td,
+.annual-summary-table tbody th {
+    padding: .5mm;
+    font-weight: 500;
+}
+
+.annual-summary-table tbody th:first-child {
+    width: 25mm;
+    text-align: left;
+}
+
+.annual-summary-table tbody tr:last-child {
+    border-bottom: .6mm solid #688fae;
+}
+
+.summary-instructions {
+    margin: 7mm 0 5mm;
+    padding-left: 7mm;
+    color: #668aa7;
+    font-size: 7.2pt;
+    line-height: 1.5;
+}
+
+.summary-instructions li {
+    padding-left: 1mm;
+}
+
+.observations-title {
+    margin: 4mm 0 1mm;
+    color: #688fae;
+    font-size: 9pt;
+    text-align: center;
+}
+
+.observation-lines {
+    display: grid;
+    gap: 6mm;
+}
+
+.observation-lines i {
+    height: 4mm;
+    border-bottom: .25mm solid #9db5c8;
+}
+
+.summary-approval {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8mm;
+    color: #688fae;
+    font-size: 8pt;
+}
+
+@media (max-width: 900px) {
+    .register-document {
+        justify-items: start;
+        overflow-x: auto;
+    }
+
+    .register-toolbar,
+    .register-toolbar-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .register-filters {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media print {
+    @page {
+        size: A4 landscape;
+        margin: 0;
+    }
+
+    html,
+    body {
+        width: 297mm;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .no-print,
+    .sidebar,
+    .header,
+    .topbar,
+    .navbar-top,
+    .footer,
+    .breadcrumb {
+        display: none !important;
+    }
+
+    body,
+    .main-wrapper,
+    .page-content,
+    .register-shell,
+    .register-document {
+        width: 297mm !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+    }
+
+    .main-wrapper,
+    .page-content {
+        display: block !important;
+        margin-left: 0 !important;
+        transform: none !important;
+    }
+
+    .register-document {
+        display: block;
+    }
+
+    .register-page {
+        width: 297mm;
+        height: 210mm;
+        min-height: 210mm;
+        margin: 0;
+        border: 0;
+        page-break-after: always;
+        break-after: page;
+        overflow: hidden;
+    }
+
+    .register-page:last-child {
+        page-break-after: auto;
+        break-after: auto;
+    }
+}
