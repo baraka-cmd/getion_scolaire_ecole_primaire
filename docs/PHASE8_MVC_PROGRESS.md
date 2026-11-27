@@ -21,8 +21,8 @@ La phase est une migration MVC sans changement des règles scolaires, calculs, r
 
 ## Périmètre restant — ne pas déclarer la phase complète
 - `NoteController` : extraire les opérations restantes d'évaluations (liste, détail, création, modification, suppression, génération), grille de saisie, progression et listes de référence.
-- `ResultatController` : extraire les lectures/écritures SQL des résultats, rangs, délibérations, procès-verbaux et calculs par classe vers services/repositories, tout en conservant exactement les règles.
-- `BulletinController` : extraire les accès SQL de génération, consultation, statistiques et chargement du bulletin.
+- Les fonctionnalités de résultats, rangs, délibérations, procès-verbaux et bulletins sont désormais attribuées à la **phase 9** (`Résultats et bulletins`), conformément au découpage fonctionnel retenu. Elles ne doivent pas être dupliquées dans la phase 8.
+- `NoteController` : terminer l'extraction des opérations CRUD d'évaluations, grille de saisie, progression et listes de référence.
 - Auditer les vues et scripts des modules notes/résultats/bulletins : SQL direct, instanciation de contrôleurs, contrats AJAX, permissions et CSRF.
 - Ajouter des tests ciblés de délégation, autorisations, non-régression des calculs et transactions.
 
