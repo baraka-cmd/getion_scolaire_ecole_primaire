@@ -10,7 +10,11 @@ on:
       - 'src/services/DashboardService.php'
       - 'src/repositories/DashboardRepository.php'
       - 'public/views/dashboard/admin.php'
-      - 'public/views/dashboard/enseignant.php'\n      - 'src/controllers/TeacherDashboardController.php'\n      - 'src/services/TeacherDashboardService.php'\n      - 'src/repositories/TeacherDashboardRepository.php'\n      - 'tests/teacher_dashboard_mvc_smoke.php'
+      - 'public/views/dashboard/enseignant.php'
+      - 'src/controllers/TeacherDashboardController.php'
+      - 'src/services/TeacherDashboardService.php'
+      - 'src/repositories/TeacherDashboardRepository.php'
+      - 'tests/teacher_dashboard_mvc_smoke.php'
       - 'tests/phase12_dashboard_mvc_smoke.php'
       - 'public/views/dashboard/parent.php'
       - 'src/controllers/ParentDashboardController.php'
@@ -35,4 +39,7 @@ jobs:
             php -l "$file"
           done
       - name: Dashboard MVC and authorization smoke
-        run: php tests/phase12_dashboard_mvc_smoke.php
+        run: |
+          php tests/phase12_dashboard_mvc_smoke.php
+          php tests/teacher_dashboard_mvc_smoke.php
+          php tests/parent_dashboard_mvc_smoke.php
