@@ -18,10 +18,16 @@ foreach ($feeControllerMethods as $method) {
         throw new RuntimeException("Direct database access remains in fee controller method: {$method}");
     }
 }
-foreach (['listFeesForYear', 'createFee', 'updateFee', 'deleteFeeIfUnused', 'toggleFeeStatus'] as $method) {
-    if (!preg_match('/public function ' . preg_quote($method, '/') . '\\([^)]*\\)\\s*\\{([\\s\\S]*?)\\n\\}/', $service, $matches)
-        || !str_contains($matches[1], '$this->repository->')) {
-        throw new RuntimeException("Finance service does not delegate {$method} to repository.");
+$serviceDelegations = [
+    '$this->repository->listFeesForYear($yearId)',
+    '$this->repository->createFee($data)',
+    '$this->repository->updateFee($feeId, $data)',
+    '$this->repository->countClaimsForFee($feeId)',
+    '$this->repository->updateFeeStatus($feeId, $status)',
+];
+foreach ($serviceDelegations as $delegation) {
+    if (!str_contains($service, $delegation)) {
+        throw new RuntimeException("Finance service delegation missing: {$delegation}");
     }
 }
 foreach (['listFeesForYear', 'feeExists', 'classBelongsToYear', 'createFee', 'createFeeConfig', 'updateFee', 'countClaimsForFee'] as $method) {
