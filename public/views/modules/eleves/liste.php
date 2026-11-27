@@ -32,25 +32,12 @@ $extraCSS = ['modules/eleves.css'];
 $extraJS  = ['modules/eleves.js'];
 
 
-// Statistiques pour le résumé
-$totalActifs = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) AND statut = 'Actif'"
-);
-$totalGarcons = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions i 
-     INNER JOIN eleves e ON i.eleve_id = e.id 
-     WHERE i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) 
-     AND i.statut = 'Actif' AND e.sexe = 'M'"
-);
-$totalFilles = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions i 
-     INNER JOIN eleves e ON i.eleve_id = e.id 
-     WHERE i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) 
-     AND i.statut = 'Actif' AND e.sexe = 'F'"
-);
-$nouvellesInscriptions = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions WHERE MONTH(date_inscription) = MONTH(CURDATE()) AND YEAR(date_inscription) = YEAR(CURDATE())"
-);
+// Statistiques de la liste via le contrôleur (aucune requête SQL dans la vue).
+$stats = $eleveController->getSummaryStats();
+$totalActifs = $stats['total_actifs'];
+$totalGarcons = $stats['total_garcons'];
+$totalFilles = $stats['total_filles'];
+$nouvellesInscriptions = $stats['nouvelles_inscriptions'];
 
 require_once VIEWS_PATH . 'templates' . DIRECTORY_SEPARATOR . 'header.php';
 ?>
