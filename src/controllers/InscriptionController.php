@@ -76,21 +76,11 @@ class InscriptionController
 
     private function getListe(): void
     {
-$page = max(1, (int) post('page', 1));
-        $filters = [
-            'recherche' => post('recherche', ''),
-            'classe_id' => (int) post('classe_id', 0),
-            'annee_id' => (int) post('annee_id', 0),
-            'statut' => post('statut', ''),
-        ];
+        $page = max(1, (int) post('page', 1));
+        $filters = ['recherche' => post('recherche', ''), 'classe_id' => (int) post('classe_id', 0), 'annee_id' => (int) post('annee_id', 0), 'statut' => post('statut', '')];
         $result = $this->inscriptionService->paginate($filters, $page, ITEMS_PER_PAGE);
-        jsonResponse(true, 'Liste récupérée.', [
-            'inscriptions' => $result['inscriptions'],
-            'total' => $result['total'],
-            'page' => $page,
-            'pages' => ceil($result['total'] / ITEMS_PER_PAGE)
-        ]);
-    
+        jsonResponse(true, 'Liste récupérée.', ['inscriptions' => $result['inscriptions'], 'total' => $result['total'], 'page' => $page, 'pages' => ceil($result['total'] / ITEMS_PER_PAGE)]);
+    }
 
     // ============================================================
     // INSCRIPTION INDIVIDUELLE
@@ -595,24 +585,21 @@ $page = max(1, (int) post('page', 1));
 
     private function getHistorique(): void
     {
-$eleveId = (int) post('eleve_id', 0);
+        $eleveId = (int) post('eleve_id', 0);
         if ($eleveId <= 0) jsonResponse(false, 'ID élève invalide.', [], 400);
         $result = $this->inscriptionService->getStudentHistory($eleveId);
-        jsonResponse(true, 'Historique récupéré.', [
-            'eleve' => $result['eleve'],
-            'historique' => $result['historique']
-        ]);
-    
+        jsonResponse(true, 'Historique récupéré.', ['eleve' => $result['eleve'], 'historique' => $result['historique']]);
+    }
 
     /**
      * Récupère les classes disponibles (avec capacité)
      */
     private function getClassesDisponibles(): void
     {
-$anneeId = (int) post('annee_id', 0);
+        $anneeId = (int) post('annee_id', 0);
         $classes = $this->inscriptionService->getAvailableClasses($anneeId);
         jsonResponse(true, 'Classes récupérées.', ['classes' => $classes]);
-    
+    }
 
     // ============================================================
     // MÉTHODES PUBLIQUES (pour les vues)
@@ -623,38 +610,38 @@ $anneeId = (int) post('annee_id', 0);
      */
     public function getAnneesScolaires(): array
     {
-return $this->inscriptionService->getSchoolYears();
-    
+        return $this->inscriptionService->getSchoolYears();
+    }
 
     /**
      * Récupère les classes de l'année active
      */
     public function getClassesActives(): array
     {
-return $this->inscriptionService->getActiveClasses();
-    
+        return $this->inscriptionService->getActiveClasses();
+    }
 
     /**
      * Récupère les élèves non inscrits (disponibles pour inscription)
      */
     public function getElevesNonInscrits(): array
     {
-return $this->inscriptionService->getUnenrolledStudents();
-    
+        return $this->inscriptionService->getUnenrolledStudents();
+    }
 
     /**
      * Récupère une inscription par ID
      */
     public function getInscriptionById(int $id): ?array
     {
-return $this->inscriptionService->findEnrollment($id);
-    
+        return $this->inscriptionService->findEnrollment($id);
+    }
 
     /**
      * Récupère l'historique complet d'un élève
      */
     public function getHistoriqueEleve(int $eleveId): array
     {
-return $this->inscriptionService->getEnrollmentHistory($eleveId);
-    
+        return $this->inscriptionService->getEnrollmentHistory($eleveId);
+    }
 }
