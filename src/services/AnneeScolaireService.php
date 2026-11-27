@@ -13,6 +13,46 @@ class AnneeScolaireService
         $this->repository = $repository ?? new AnneeScolaireRepository();
     }
 
+    public function countLabel(string $label, ?int $excludeId = null): int
+    {
+        return $this->repository->countLabel($label, $excludeId);
+    }
+
+    public function countOverlappingDates(string $start, string $end, ?int $excludeId = null): int
+    {
+        return $this->repository->countOverlappingDates($start, $end, $excludeId);
+    }
+
+    public function findForUpdate(int $id): ?array
+    {
+        return $this->repository->findForUpdate($id);
+    }
+
+    public function findSchoolYearConfigurationForUpdate(): ?array
+    {
+        return $this->repository->findSchoolYearConfigurationForUpdate();
+    }
+
+    public function countEnrollments(int $yearId): int
+    {
+        return $this->repository->countEnrollments($yearId);
+    }
+
+    public function countClasses(int $yearId): int
+    {
+        return $this->repository->countClasses($yearId);
+    }
+
+    public function deleteTerms(int $yearId): void
+    {
+        $this->repository->deleteTerms($yearId);
+    }
+
+    public function deleteYear(int $yearId): void
+    {
+        $this->repository->deleteYear($yearId);
+    }
+
     public function getListForAjax(): array
     {
         return $this->repository->findListForAjax();
