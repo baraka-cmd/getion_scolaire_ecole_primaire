@@ -316,4 +316,77 @@ class StudentRecordRepository
         );
     }
 
+
+    public function updateProfile(int $studentId, array $data): void
+    {
+        $this->db->update(
+            "UPDATE eleves
+             SET nom = :nom, prenom = :prenom, date_naissance = :dn, lieu_naissance = :ln,
+                 sexe = :sexe, adresse = :adresse, telephone = :tel, email = :email,
+                 groupe_sanguin = :gs, allergies = :allergies, maladies = :maladies
+             WHERE id = :id",
+            [
+                'nom' => $data['nom'], 'prenom' => $data['prenom'], 'dn' => $data['date_naissance'],
+                'ln' => $data['lieu_naissance'], 'sexe' => $data['sexe'], 'adresse' => $data['adresse'],
+                'tel' => $data['telephone'], 'email' => $data['email'], 'gs' => $data['groupe_sanguin'],
+                'allergies' => $data['allergies'], 'maladies' => $data['maladies'], 'id' => $studentId,
+            ]
+        );
+    }
+
+    public function deactivate(int $studentId, string $reason): void
+    {
+        $this->db->beginTransaction();
+        try {
+            $this->db->update('UPDATE eleves SET est_actif = 0 WHERE id = :id', ['id' => $studentId]);
+            $this->db->update(
+                "UPDATE inscriptions
+                 SET statut = :statut, motif_statut = :motif, date_changement_statut = CURDATE()
+                 WHERE eleve_id = :eid AND statut = 'Actif'",
+                ['statut' => 'Abandon', 'motif' => $reason, 'eid' => $studentId]
+            );
+            $this->db->commit();
+        } catch (Throwable $exception) {
+            $this->db->rollback();
+            throw $exception;
+        }
+    }
+
+    public function transferEnrollment(int $studentId, int $oldClassId, int $newClassId, string $reason): array
+    {
+        $capacity = (int) $this->db->fetchColumn(
+            'SELECT capacite_max FROM classes WHERE id = :cid', ['cid' => $newClassId]
+        );
+        $count = (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif'",
+            ['cid' => $newClassId]
+        );
+        if ($count >= $capacity) {
+            return ['success' => false, 'capacity' => $capacity];
+        }
+
+        $this->db->beginTransaction();
+        try {
+            $this->db->update(
+                "UPDATE inscriptions
+                 SET statut = 'Transféré', motif_statut = :motif, date_changement_statut = CURDATE()
+                 WHERE eleve_id = :eid AND classe_id = :cid AND statut = 'Actif'",
+                ['motif' => $reason, 'eid' => $studentId, 'cid' => $oldClassId]
+            );
+            $activeYear = $this->db->fetchColumn(
+                'SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1'
+            );
+            $this->db->query(
+                "INSERT INTO inscriptions (eleve_id, classe_id, annee_scolaire_id, date_inscription, statut)
+                 VALUES (:eid, :cid, :aid, CURDATE(), 'Actif')",
+                ['eid' => $studentId, 'cid' => $newClassId, 'aid' => $activeYear]
+            );
+            $this->db->commit();
+            return ['success' => true, 'capacity' => $capacity];
+        } catch (Throwable $exception) {
+            $this->db->rollback();
+            throw $exception;
+        }
+    }
+
 }
