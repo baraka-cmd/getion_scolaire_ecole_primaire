@@ -12,6 +12,9 @@ requirePermission('classes.creer');
 
 global $db;
 
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'SchoolSettingsService.php';
+$schoolSettingsService = new SchoolSettingsService();
+
 // Charger le contrôleur
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'ClasseController.php';
 $classeController = new ClasseController();
@@ -21,7 +24,7 @@ $anneesScolaires = $classeController->getAnneesScolaires();
 $enseignantsDisponibles = $classeController->getEnseignantsDisponibles();
 
 // Récupérer l'année active
-$anneeActiveId = $db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1") ?? 1;
+$anneeActiveId = $schoolSettingsService->getActiveYearId() ?: 1;
 
 // Messages
 $successMessage = '';
