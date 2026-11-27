@@ -127,6 +127,20 @@ class AttendanceRegisterRepository
         ];
     }
 
+    public function findRegisterClass(int $classId, int $yearId): ?array
+    {
+        return $this->db->fetchOne(
+            "SELECT c.id, c.nom, c.niveau, c.annee_scolaire_id, a.libelle AS annee_libelle,
+                    a.date_debut, a.date_fin, p.nom_ecole, p.logo,
+                    CONCAT(COALESCE(en.prenom, ''), ' ', COALESCE(en.nom, '')) AS titulaire
+             FROM classes c INNER JOIN annees_scolaires a ON a.id = c.annee_scolaire_id
+             LEFT JOIN parametres_ecole p ON p.id = 1
+             LEFT JOIN enseignants en ON en.classe_id = c.id AND en.est_actif = 1
+             WHERE c.id = :classe AND c.annee_scolaire_id = :annee LIMIT 1",
+            ['classe'=>$classId,'annee'=>$yearId]
+        );
+    }
+
     public function getRegisterData(int $classId, int $yearId, string $startDate, string $endDate): array
     {
         return [
