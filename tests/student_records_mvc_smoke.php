@@ -66,6 +66,11 @@ class DocumentRepositoryFake extends DocumentRepository
 {
     public array $lastArgs = [];
     public function __construct() {}
+    public function statistics(bool $admin): array
+    {
+        return ['total' => 3, 'total_size' => 2048, 'public_count' => 2, 'current_month_count' => 1];
+    }
+
     public function paginateVisible(array $filters, int $page, int $perPage, bool $admin): array
     {
         $this->lastArgs = compact('filters', 'page', 'perPage', 'admin');
