@@ -58,4 +58,9 @@ class StudentRecordService
         return $this->repository->summaryStats();
     }
 
+    public function exportRows(array $filters, string $role, int $userId): array
+    {
+        return $this->repository->exportRows($filters, $role, $userId);
+    }
+
 }
