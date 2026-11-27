@@ -37,4 +37,5 @@ class PaymentReadRepository
     {
         return $this->db->fetchAll("SELECT c.* FROM classes c WHERE c.annee_scolaire_id = :annee ORDER BY c.niveau", ['annee' => $yearId]);
     }
+public function className(int $classId): ?string { $value = $this->db->fetchColumn("SELECT nom FROM classes WHERE id = :id", ['id' => $classId]); return $value === false || $value === null ? null : (string) $value; }
 }
