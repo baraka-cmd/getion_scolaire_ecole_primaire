@@ -235,7 +235,7 @@ class InscriptionRepository
     {
         $this->db->beginTransaction();
         try {
-            $this->db->fetchOne('SELECT id FROM eleves WHERE id = :id AND est_actif = 1 FOR UPDATE', ['id' => $studentId]);
+            $student = $this->db->fetchOne('SELECT id FROM eleves WHERE id = :id AND est_actif = 1 FOR UPDATE', ['id' => $studentId]);
             $destination = $this->db->fetchOne(
                 "SELECT id, capacite_max, annee_scolaire_id, est_actif FROM classes WHERE id = :id FOR UPDATE",
                 ['id' => $newClassId]
@@ -245,7 +245,7 @@ class InscriptionRepository
                  AND annee_scolaire_id = :aid AND statut = 'Actif' FOR UPDATE",
                 ['eid' => $studentId, 'cid' => $oldClassId, 'aid' => $yearId]
             );
-            if (!$source || !$destination || (int) $destination['annee_scolaire_id'] !== $yearId || (int) $destination['est_actif'] !== 1 || $newClassId === $oldClassId) {
+            if (!$student || !$source || !$destination || (int) $destination['annee_scolaire_id'] !== $yearId || (int) $destination['est_actif'] !== 1 || $newClassId === $oldClassId) {
                 $this->db->rollback();
                 return ['ok' => false, 'status' => 409, 'message' => 'L’inscription source ou la classe de destination n’est plus valide.'];
             }
@@ -294,9 +294,13 @@ class InscriptionRepository
                 "SELECT id, capacite_max, annee_scolaire_id, est_actif FROM classes WHERE id = :id FOR UPDATE",
                 ['id' => $classId]
             );
-            if (!$student || !$class || (int) $class['est_actif'] !== 1 || (int) $class['annee_scolaire_id'] !== $yearId) {
+            if (!$student) {
                 $this->db->rollback();
-                return ['ok' => false, 'errors' => ['eleve_id' => !$student ? 'Élève introuvable ou inactif.' : 'Classe ou année scolaire invalide.']];
+                return ['ok' => false, 'errors' => ['eleve_id' => 'Élève introuvable ou inactif.']];
+            }
+            if (!$class || (int) $class['est_actif'] !== 1 || (int) $class['annee_scolaire_id'] !== $yearId) {
+                $this->db->rollback();
+                return ['ok' => false, 'errors' => ['classe_id' => 'Classe ou année scolaire invalide.']];
             }
             $existing = $this->activeEnrollmentForStudent($studentId, $yearId);
             if ($existing) {
@@ -397,7 +401,8 @@ class InscriptionRepository
             sort($studentIds, SORT_NUMERIC);
             if ($studentIds) {
                 $placeholders = implode(',', array_fill(0, count($studentIds), '?'));
-                $this->db->fetchAll('SELECT id FROM eleves WHERE id IN (' . $placeholders . ') ORDER BY id FOR UPDATE', $studentIds);
+                $lockedStudents = $this->db->fetchAll('SELECT id FROM eleves WHERE est_actif = 1 AND id IN (' . $placeholders . ') ORDER BY id FOR UPDATE', $studentIds);
+                if (count($lockedStudents) !== count($studentIds)) throw new DomainException('Un élève sélectionné est désormais inactif ou introuvable.');
             }
             foreach ($plans as $plan) {
                 if ($this->enrollmentExistsInYear((int) $plan['eleve_id'], $yearId)) {
