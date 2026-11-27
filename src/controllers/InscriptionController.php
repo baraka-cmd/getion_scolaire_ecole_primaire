@@ -89,64 +89,14 @@ class InscriptionController
     private function inscrire(): void
     {
         requirePermission('inscriptions.creer');
-
-        $eleveId  = (int) post('eleve_id', 0);
-        $classeId = (int) post('classe_id', 0);
-        $statut   = post('statut', 'Actif');
-
-        $errors = [];
-
-        if ($eleveId <= 0) $errors['eleve_id'] = 'Veuillez sélectionner un élève.';
-        if ($classeId <= 0) $errors['classe_id'] = 'Veuillez sélectionner une classe.';
-
-        // Vérifier que l'élève existe
-        $eleve = $this->db->fetchOne("SELECT id, nom, prenom FROM eleves WHERE id = :id AND est_actif = 1", ['id' => $eleveId]);
-        if (!$eleve) $errors['eleve_id'] = 'Élève introuvable ou inactif.';
-
-        // Vérifier la capacité de la classe
-        if ($classeId > 0) {
-            $capacite = (int) $this->db->fetchColumn("SELECT capacite_max FROM classes WHERE id = :id", ['id' => $classeId]);
-            $nbInscrits = (int) $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif'",
-                ['cid' => $classeId]
-            );
-            if ($nbInscrits >= $capacite) {
-                $errors['classe_id'] = "Classe complète ({$capacite} élèves maximum).";
-            }
+        $studentId = (int) post('eleve_id', 0);
+        $classId = (int) post('classe_id', 0);
+        $result = $this->inscriptionService->createEnrollment($studentId, $classId, (string) post('statut', 'Actif'));
+        if (!$result['ok']) {
+            jsonResponse(false, $result['message'] ?? 'Veuillez corriger les erreurs.', ['errors' => $result['errors'] ?? []], $result['status'] ?? 422);
         }
-
-        // Vérifier que l'élève n'est pas déjà inscrit dans une classe active cette année
-        $anneeActive = $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-        $dejaInscrit = $this->db->fetchOne(
-            "SELECT i.id, c.nom FROM inscriptions i
-             INNER JOIN classes c ON i.classe_id = c.id
-             WHERE i.eleve_id = :eid AND i.annee_scolaire_id = :aid AND i.statut = 'Actif'",
-            ['eid' => $eleveId, 'aid' => $anneeActive]
-        );
-        if ($dejaInscrit) {
-            $errors['eleve_id'] = "Cet élève est déjà inscrit en {$dejaInscrit['nom']} pour cette année.";
-        }
-
-        if (!empty($errors)) {
-            jsonResponse(false, 'Veuillez corriger les erreurs.', ['errors' => $errors], 422);
-        }
-
-        try {
-            $inscriptionId = $this->db->insert(
-                "INSERT INTO inscriptions (eleve_id, classe_id, annee_scolaire_id, date_inscription, statut)
-                 VALUES (:eid, :cid, :aid, CURDATE(), :statut)",
-                ['eid' => $eleveId, 'cid' => $classeId, 'aid' => $anneeActive, 'statut' => $statut]
-            );
-
-            logActivity('Création', 'inscriptions', $inscriptionId,
-                "Inscription : {$eleve['nom']} {$eleve['prenom']}");
-
-            jsonResponse(true, 'Élève inscrit avec succès.', ['id' => $inscriptionId]);
-
-        } catch (Exception $e) {
-            error_log('Erreur inscription: ' . $e->getMessage());
-            jsonResponse(false, 'Erreur lors de l\'inscription.');
-        }
+        logActivity('Création', 'inscriptions', $result['id'], "Inscription : {$result['student']['nom']} {$result['student']['prenom']}");
+        jsonResponse(true, 'Élève inscrit avec succès.', ['id' => $result['id']]);
     }
 
     // ============================================================
@@ -156,56 +106,15 @@ class InscriptionController
     private function changerClasse(): void
     {
         requirePermission('inscriptions.modifier');
-
-        $eleveId          = (int) post('eleve_id', 0);
-        $ancienneClasseId = (int) post('ancienne_classe_id', 0);
-        $nouvelleClasseId = (int) post('nouvelle_classe_id', 0);
-        $motif            = post('motif', 'Changement de classe');
-
-        if ($eleveId <= 0 || $nouvelleClasseId <= 0) {
-            jsonResponse(false, 'Paramètres invalides.', [], 400);
-        }
-
-        // Vérifier la capacité
-        $capacite = (int) $this->db->fetchColumn("SELECT capacite_max FROM classes WHERE id = :id", ['id' => $nouvelleClasseId]);
-        $nbInscrits = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif'",
-            ['cid' => $nouvelleClasseId]
+        $result = $this->inscriptionService->changeClass(
+            (int) post('eleve_id', 0),
+            (int) post('ancienne_classe_id', 0),
+            (int) post('nouvelle_classe_id', 0),
+            (string) post('motif', 'Changement de classe')
         );
-        if ($nbInscrits >= $capacite) {
-            jsonResponse(false, "Classe complète ({$capacite} élèves max).", [], 409);
-        }
-
-        try {
-            $this->db->beginTransaction();
-
-            $anneeActive = $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-
-            // Terminer l'ancienne inscription
-            $this->db->update(
-                "UPDATE inscriptions SET statut = 'Transféré', motif_statut = :motif, date_changement_statut = CURDATE()
-                 WHERE eleve_id = :eid AND classe_id = :cid AND annee_scolaire_id = :aid AND statut = 'Actif'",
-                ['motif' => $motif, 'eid' => $eleveId, 'cid' => $ancienneClasseId, 'aid' => $anneeActive]
-            );
-
-            // Créer la nouvelle inscription
-            $this->db->insert(
-                "INSERT INTO inscriptions (eleve_id, classe_id, annee_scolaire_id, date_inscription, statut)
-                 VALUES (:eid, :cid, :aid, CURDATE(), 'Actif')",
-                ['eid' => $eleveId, 'cid' => $nouvelleClasseId, 'aid' => $anneeActive]
-            );
-
-            $this->db->commit();
-
-            logActivity('Modification', 'inscriptions', null, "Changement de classe élève {$eleveId}");
-
-            jsonResponse(true, 'Changement de classe effectué avec succès.');
-
-        } catch (Exception $e) {
-            $this->db->rollback();
-            error_log('Erreur changement classe: ' . $e->getMessage());
-            jsonResponse(false, 'Erreur lors du changement de classe.');
-        }
+        if (!$result['ok']) jsonResponse(false, $result['message'], [], $result['status']);
+        logActivity('Modification', 'inscriptions', null, 'Changement de classe élève ' . (int) post('eleve_id', 0));
+        jsonResponse(true, 'Changement de classe effectué avec succès.');
     }
 
     // ============================================================
@@ -215,32 +124,14 @@ class InscriptionController
     private function desinscrire(): void
     {
         requirePermission('inscriptions.modifier');
-
-        $inscriptionId = (int) post('inscription_id', 0);
-        $statut        = post('statut', 'Abandon');
-        $motif         = post('motif', '');
-
-        if ($inscriptionId <= 0) jsonResponse(false, 'ID inscription invalide.', [], 400);
-        if (!in_array($statut, ['Abandon', 'Exclu', 'Diplômé'])) {
-            jsonResponse(false, 'Statut invalide.', [], 400);
-        }
-        if (isBlank($motif)) jsonResponse(false, 'Le motif est obligatoire.', [], 422);
-
-        try {
-            $this->db->update(
-                "UPDATE inscriptions SET statut = :statut, motif_statut = :motif, date_changement_statut = CURDATE()
-                 WHERE id = :id",
-                ['statut' => $statut, 'motif' => $motif, 'id' => $inscriptionId]
-            );
-
-            logActivity('Modification', 'inscriptions', $inscriptionId, "Désinscription : {$statut}");
-
-            jsonResponse(true, 'Statut mis à jour avec succès.');
-
-        } catch (Exception $e) {
-            error_log('Erreur désinscription: ' . $e->getMessage());
-            jsonResponse(false, 'Erreur lors de la mise à jour.');
-        }
+        $result = $this->inscriptionService->discontinue(
+            (int) post('inscription_id', 0),
+            (string) post('statut', 'Abandon'),
+            (string) post('motif', '')
+        );
+        if (!$result['ok']) jsonResponse(false, $result['message'], [], $result['status']);
+        logActivity('Modification', 'inscriptions', (int) post('inscription_id', 0), 'Désinscription : ' . (string) post('statut', 'Abandon'));
+        jsonResponse(true, 'Statut mis à jour avec succès.');
     }
 
     // ============================================================
