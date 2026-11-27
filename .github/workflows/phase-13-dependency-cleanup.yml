@@ -1,0 +1,29 @@
+name: Phase 13 - Controlled dependency cleanup
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/controllers/ClasseController.php'
+      - 'src/services/ClasseService.php'
+      - 'src/repositories/ClasseRepository.php'
+      - 'tests/phase13_class_controller_mvc_smoke.php'
+      - '.github/workflows/phase-13-dependency-cleanup.yml'
+
+jobs:
+  class-controller-mvc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: PHP syntax validation
+        run: |
+          set -e
+          for file in src/controllers/ClasseController.php src/services/ClasseService.php src/repositories/ClasseRepository.php tests/phase13_class_controller_mvc_smoke.php; do
+            php -l "$file"
+          done
+      - name: Class controller MVC contract smoke
+        run: php tests/phase13_class_controller_mvc_smoke.php
