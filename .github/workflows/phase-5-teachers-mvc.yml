@@ -1,0 +1,30 @@
+name: Phase 5 - Teachers MVC smoke
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/controllers/EnseignantController.php'
+      - 'src/services/EnseignantService.php'
+      - 'src/repositories/EnseignantRepository.php'
+      - 'tests/enseignant_mvc_smoke.php'
+      - '.github/workflows/phase-5-teachers-mvc.yml'
+  push:
+    branches: [refactor/phase-5-teachers]
+jobs:
+  php-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: PHP syntax
+        run: |
+          php -l src/controllers/EnseignantController.php
+          php -l src/services/EnseignantService.php
+          php -l src/repositories/EnseignantRepository.php
+          php -l tests/enseignant_mvc_smoke.php
+      - name: Teacher listing MVC contract
+        run: php tests/enseignant_mvc_smoke.php
+      - name: Existing assignment contract
+        run: php tests/academic_assignment_service_smoke.php
