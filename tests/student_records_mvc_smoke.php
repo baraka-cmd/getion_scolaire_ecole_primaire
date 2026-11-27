@@ -77,7 +77,7 @@ $history = $service->getAcademicAndAttendanceHistory(17);
 studentAssert(isset($history['notes'], $history['absences'], $history['paiements']), 'structure historique stable');
 
 $accessRepository = new StudentAccessRepositoryFake();
-$policy = new StudentAccessPolicy($accessRepository);
+$policy = new StudentAccessPolicy(null, $accessRepository);
 $_SESSION['utilisateur_id'] = 9;
 studentAssert(!$policy->canCurrentUserAccessStudent(17), 'parent non lié refusé');
 $accessRepository->linked = true;
