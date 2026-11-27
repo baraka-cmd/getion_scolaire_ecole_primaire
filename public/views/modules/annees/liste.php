@@ -12,6 +12,9 @@ requirePermission('parametres.consulter');
 
 global $db;
 
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AnneeScolaireService.php';
+$anneeService = new AnneeScolaireService();
+
 // Charger le contrôleur
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AnneeController.php';
 $anneeController = new AnneeController();
