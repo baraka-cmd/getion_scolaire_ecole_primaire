@@ -180,4 +180,96 @@ class AttendanceRegisterRepository
         ];
     }
 
+
+    public function saveDailyCall(int $classId, int $yearId, string $date, array $studentIds, array $presentIds, int $userId, bool $scheduled): string
+    {
+        $this->db->beginTransaction();
+        try {
+            $call = $this->db->fetchOne('SELECT statut FROM appels_presence WHERE classe_id = :classe AND date_appel = :date FOR UPDATE', ['classe'=>$classId,'date'=>$date]);
+            if ($call && $call['statut'] === 'conge') {
+                $this->db->rollback();
+                return 'holiday';
+            }
+            if (!$scheduled && (!$call || $call['statut'] !== 'valide')) {
+                $this->db->rollback();
+                return 'not_scheduled';
+            }
+            $current = $this->db->fetchAll(
+                "SELECT e.id FROM inscriptions i INNER JOIN eleves e ON e.id = i.eleve_id
+                 WHERE i.classe_id = :classe AND i.annee_scolaire_id = :annee
+                   AND i.statut IN ('Actif', 'Redoublant') AND e.est_actif = 1
+                 ORDER BY e.id FOR UPDATE",
+                ['classe'=>$classId,'annee'=>$yearId]
+            );
+            $currentIds = array_map('intval', array_column($current, 'id'));
+            if (!$currentIds || array_diff($studentIds, $currentIds) || array_diff($currentIds, $studentIds)) {
+                $this->db->rollback();
+                return 'enrollment_changed';
+            }
+            foreach ($currentIds as $studentId) {
+                $this->db->query(
+                    "INSERT INTO absences (eleve_id, date_absence, type_absence, est_justifiee, saisie_par, created_at)
+                     VALUES (:eleve, :date, :type, 0, :utilisateur, NOW())
+                     ON DUPLICATE KEY UPDATE
+                        type_absence = VALUES(type_absence),
+                        est_justifiee = IF(VALUES(type_absence) = 'Présent', 0, est_justifiee),
+                        motif = IF(VALUES(type_absence) = 'Présent', NULL, motif),
+                        date_justification = IF(VALUES(type_absence) = 'Présent', NULL, date_justification),
+                        saisie_par = VALUES(saisie_par)",
+                    ['eleve'=>$studentId,'date'=>$date,'type'=>in_array($studentId,$presentIds,true)?'Présent':'Absence','utilisateur'=>$userId]
+                );
+            }
+            $this->db->query(
+                "INSERT INTO appels_presence (classe_id, annee_scolaire_id, date_appel, statut, traite_par, traite_le)
+                 VALUES (:classe, :annee, :date, 'valide', :utilisateur, NOW())
+                 ON DUPLICATE KEY UPDATE statut = 'valide', motif_conge = NULL,
+                    traite_par = VALUES(traite_par), traite_le = NOW()",
+                ['classe'=>$classId,'annee'=>$yearId,'date'=>$date,'utilisateur'=>$userId]
+            );
+            $this->db->commit();
+            return 'saved';
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
+
+    public function saveManualClosure(int $classId, int $yearId, string $date, string $reason, int $userId): string
+    {
+        $this->db->beginTransaction();
+        try {
+            $call = $this->db->fetchOne('SELECT statut FROM appels_presence WHERE classe_id = :classe AND date_appel = :date FOR UPDATE', ['classe'=>$classId,'date'=>$date]);
+            $marks = (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM absences a INNER JOIN inscriptions i ON i.eleve_id = a.eleve_id
+                 WHERE i.classe_id = :classe AND i.annee_scolaire_id = :annee AND a.date_absence = :date",
+                ['classe'=>$classId,'annee'=>$yearId,'date'=>$date]
+            );
+            if (($call && $call['statut'] === 'valide') || $marks > 0) {
+                $this->db->rollback();
+                return 'already_marked';
+            }
+            $this->db->query(
+                "INSERT INTO appels_presence (classe_id, annee_scolaire_id, date_appel, statut, motif_conge, traite_par, traite_le)
+                 VALUES (:classe, :annee, :date, 'conge', :motif, :utilisateur, NOW())
+                 ON DUPLICATE KEY UPDATE statut = 'conge', motif_conge = VALUES(motif_conge),
+                    traite_par = VALUES(traite_par), traite_le = NOW()",
+                ['classe'=>$classId,'annee'=>$yearId,'date'=>$date,'motif'=>$reason,'utilisateur'=>$userId]
+            );
+            $this->db->commit();
+            return 'saved';
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
+
+    public function cancelManualClosure(int $classId, int $yearId, string $date): int
+    {
+        return $this->db->delete(
+            "DELETE FROM appels_presence WHERE classe_id = :classe AND annee_scolaire_id = :annee
+             AND date_appel = :date AND statut = 'conge'",
+            ['classe'=>$classId,'annee'=>$yearId,'date'=>$date]
+        );
+    }
+
 }
