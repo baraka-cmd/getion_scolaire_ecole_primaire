@@ -6,19 +6,14 @@
 
 defined('ACCESS') or die('Accès interdit');
 
-require_once __DIR__ . '/../services/AcademicResultsService.php';
 require_once __DIR__ . '/../services/InscriptionService.php';
 
 class InscriptionController
 {
-    private Database $db;
-    private AcademicResultsService $academicResults;
     private InscriptionService $inscriptionService;
 
     public function __construct()
     {
-        $this->db = Database::getInstance();
-        $this->academicResults = new AcademicResultsService();
         $this->inscriptionService = new InscriptionService();
     }
 
