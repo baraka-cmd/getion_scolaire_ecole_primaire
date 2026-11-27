@@ -11,6 +11,8 @@ Les vues ne doivent pas exécuter de SQL ni réaliser de mutations. Les requête
 
 Les vues suivantes ont été déchargées de leurs accès SQL directs :
 
+- `public/views/modules/enseignants/liste.php` : statistiques enseignant actif, affecté à une classe et sans classe, préparées par `TeacherListRepository` → `TeacherListService` → `TeacherListReadController`.
+
 - `public/views/modules/paiements/liste.php`
 - `public/views/modules/paiements/impayes.php`
 - `public/views/modules/frais/liste.php`
