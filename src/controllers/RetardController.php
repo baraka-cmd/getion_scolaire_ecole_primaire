@@ -149,6 +149,7 @@ class RetardController
         $classeId = (int) post('classe_id', 0);
         if (hasRole('Enseignant')) {
             $ownedClass = $this->retardService->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
+            if (!$ownedClass) jsonResponse(false, 'Aucune classe active n’est affectée à votre compte.', [], 403);
             if ($classeId > 0 && $classeId !== $ownedClass) jsonResponse(false, 'Vous ne pouvez consulter que votre classe.', [], 403);
             $classeId = $ownedClass;
         }
