@@ -12,6 +12,9 @@ requirePermission('classes.consulter');
 
 global $db;
 
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'SchoolSettingsService.php';
+$schoolSettingsService = new SchoolSettingsService();
+
 // Charger le contrôleur
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'ClasseController.php';
 $classeController = new ClasseController();
@@ -25,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
 $anneesScolaires = $classeController->getAnneesScolaires();
 
 // Récupérer l'année active
-$anneeActive = $db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1") ?? 1;
+$anneeActive = $schoolSettingsService->getActiveYearId() ?: 1;
 
 // Métadonnées
 $pageTitle = 'Gestion des classes';
