@@ -10,8 +10,6 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('enseignants.consulter');
 
-global $db;
-
 // Charger le contrôleur
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'EnseignantController.php';
 $enseignantController = new EnseignantController();
@@ -24,10 +22,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
 // Récupérer les spécialités pour le filtre
 $specialites = $enseignantController->getSpecialites();
 
-// Statistiques
-$totalEnseignants = (int) $db->fetchColumn("SELECT COUNT(*) FROM enseignants WHERE est_actif = 1");
-$totalClassesAssignees = (int) $db->fetchColumn("SELECT COUNT(*) FROM enseignants WHERE classe_id IS NOT NULL AND est_actif = 1");
-$totalSansClasse = (int) $db->fetchColumn("SELECT COUNT(*) FROM enseignants WHERE classe_id IS NULL AND est_actif = 1");
+// Données statistiques préparées selon MVC.
+require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'TeacherListReadController.php';
+$teacherListReadController = new TeacherListReadController();
+extract($teacherListReadController->getViewData(), EXTR_OVERWRITE);
 
 // Métadonnées
 $pageTitle = 'Gestion des enseignants';
