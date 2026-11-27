@@ -11,7 +11,7 @@ $service = file_get_contents(__DIR__ . '/../src/services/FinanceService.php');
 
 $feeControllerMethods = ['getListeFrais', 'ajouterFrais', 'modifierFrais', 'supprimerFrais', 'toggleStatutFrais'];
 foreach ($feeControllerMethods as $method) {
-    if (!preg_match('/public function ' . preg_quote($method, '/') . '\\([^)]*\\)\\s*\\{([\\s\\S]*?)\\n\\}/', $controller, $matches)) {
+    if (!preg_match('/public function ' . preg_quote($method, '/') . '\\([^)]*\\)\\s*(?::\\s*[^\\{]+)?\\s*\\{([\\s\\S]*?)\\n\\}/', $controller, $matches)) {
         throw new RuntimeException("Controller method missing: {$method}");
     }
     if (preg_match('/->(?:fetchAll|fetchOne|fetchColumn|insert|update|delete)\\s*\\(/', $matches[1])) {
