@@ -62,7 +62,7 @@ class LogController
     // 1. LISTE PAGINÉE DES LOGS
     // ============================================================
 
-    private private function getListe(): void
+    private function getListe(): void
     {
         $page = max(1, (int) post('page', 1));
         $perPage = ITEMS_PER_PAGE;
@@ -122,7 +122,7 @@ class LogController
         return [$where ? 'WHERE ' . implode(' AND ', $where) : '', $params];
     }
 
-    private private function exporterCsv(): void
+    private function exporterCsv(): void
     {
         requirePermission('logs.consulter');
         global $security;
@@ -156,7 +156,7 @@ class LogController
     // 2. STATISTIQUES GLOBALES
     // ============================================================
 
-    private private function getStatistiques(): void
+    private function getStatistiques(): void
     {
         jsonResponse(true, 'Statistiques récupérées.', ['stats' => $this->logService->statistics()]);
     }
@@ -165,7 +165,7 @@ class LogController
     // 3. TOP 10 ACTIONS LES PLUS FRÉQUENTES
     // ============================================================
 
-    private private function getTopActions(): void
+    private function getTopActions(): void
     {
         jsonResponse(true, 'Top actions récupéré.', ['top_actions' => $this->logService->topActions()]);
     }
@@ -174,7 +174,7 @@ class LogController
     // 4. TOP 5 UTILISATEURS LES PLUS ACTIFS
     // ============================================================
 
-    private private function getTopUtilisateurs(): void
+    private function getTopUtilisateurs(): void
     {
         jsonResponse(true, 'Top utilisateurs récupéré.', ['top_utilisateurs' => $this->logService->topUsers()]);
     }
@@ -183,7 +183,7 @@ class LogController
     // 5. ACTIVITÉ PAR JOUR (7 DERNIERS JOURS)
     // ============================================================
 
-    private private function getActiviteParJour(): void
+    private function getActiviteParJour(): void
     {
         jsonResponse(true, 'Activité récupérée.', ['activite' => $this->logService->activityLastSevenDays()]);
     }
@@ -195,7 +195,7 @@ class LogController
     /**
      * Récupère les utilisateurs pour le filtre
      */
-    public public function getUtilisateursActifs(): array
+    public function getUtilisateursActifs(): array
     {
         return $this->logService->activeUsers();
     }
@@ -203,7 +203,7 @@ class LogController
     /**
      * Récupère les actions distinctes pour le filtre
      */
-    public public function getActionsDistinctes(): array
+    public function getActionsDistinctes(): array
     {
         return $this->logService->distinctActions();
     }
@@ -211,7 +211,7 @@ class LogController
     /**
      * Récupère les tables distinctes pour le filtre
      */
-    public public function getTablesDistinctes(): array
+    public function getTablesDistinctes(): array
     {
         return $this->logService->distinctTables();
     }
