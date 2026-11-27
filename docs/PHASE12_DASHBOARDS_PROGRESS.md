@@ -30,3 +30,16 @@ Les quatre vues suivantes ont encore des appels directs `$db->fetchOne/fetchAll/
 
 ## État
 **Phase 12 non clôturée.** Les tests smoke/CI du lot précédent ne prouvent pas la conformité des quatre vues restantes. Aucun test XAMPP/navigateur n'est déclaré exécuté à distance.
+
+
+## Journal de migration MVC — lot en cours (27 novembre 2026)
+
+Sur la branche `refactor/mvc-phase12-13-completion`, les données de présentation des dashboards **Enseignant** et **Parent** ont été déplacées des vues vers leurs chaînes dédiées Controller → Service → Repository :
+
+- `TeacherDashboardController/Service/Repository` : classe assignée, effectifs, présences, notes, répartition, absences, examens, élèves en difficulté et anniversaires.
+- `ParentDashboardController/Service/Repository` : parent authentifié, enfants liés, moyenne, absences/retards, solde, événements, messages et notifications.
+- Les requêtes existantes ont été reprises avec leurs paramètres ; le périmètre parent-enfant reste filtré par `eleve_parent.parent_id` côté repository.
+- Les deux vues consomment maintenant les données préparées et ne contiennent plus de requêtes directes dans leur bloc de préparation.
+- Des smoke tests statiques et le workflow de phase 12 ont été étendus pour les deux parcours.
+
+**Lot non clôturé :** Comptable et Secrétaire restent à migrer. Les tests PHP/CI n'ont pas encore été observés comme réussis sur le commit courant; la comparaison avec une base et une session XAMPP demeure obligatoire. Cette progression ne clôt pas la Phase 12.
