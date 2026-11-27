@@ -27,16 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
 $classes = $inscriptionService->getActiveClasses();
 $annees = $inscriptionService->getSchoolYears();
 
-// Statistiques
-$totalActifs = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) AND statut = 'Actif'"
-);
-$totalRedoublants = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) AND statut = 'Redoublant'"
-);
-$totalTransferes = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) AND statut = 'Transféré'"
-);
+// Statistiques calculées par le service d'inscription
+$statistiques = $inscriptionService->getEnrollmentStatistics();
+$totalActifs = $statistiques['actifs'];
+$totalRedoublants = $statistiques['redoublants'];
+$totalTransferes = $statistiques['transferes'];
 
 // Métadonnées
 $pageTitle = 'Gestion des inscriptions';
