@@ -13,6 +13,64 @@ class MatiereRepository
         $this->db = $db ?? Database::getInstance();
     }
 
+    public function findPaginatedGroupHierarchy(string $search, int $limit, int $offset): array
+    {
+        $where = '';
+        $params = [];
+        if ($search !== '') {
+            $where = ' AND (m.libelle LIKE :search_label OR m.code LIKE :search_code OR m.description LIKE :search_description)';
+            $term = '%' . $search . '%';
+            $params = ['search_label' => $term, 'search_code' => $term, 'search_description' => $term];
+        }
+
+        $total = (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM matieres m
+             WHERE m.est_groupe = 1 AND m.est_actif = 1 {$where}",
+            $params
+        );
+        $groups = $this->db->fetchAll(
+            "SELECT m.*,
+                    (SELECT COUNT(*) FROM matieres sm WHERE sm.parent_id = m.id AND sm.est_actif = 1) AS nb_sous_matieres,
+                    (SELECT COUNT(*) FROM classe_matieres cm
+                     INNER JOIN matieres sm ON cm.matiere_id = sm.id
+                     WHERE sm.parent_id = m.id AND cm.est_active = 1) AS nb_associations
+             FROM matieres m
+             WHERE m.est_groupe = 1 AND m.est_actif = 1 {$where}
+             ORDER BY m.id
+             LIMIT :limit OFFSET :offset",
+            array_merge($params, ['limit' => $limit, 'offset' => $offset])
+        );
+
+        foreach ($groups as &$group) {
+            $subjects = $this->db->fetchAll(
+                "SELECT m.*,
+                        (SELECT COUNT(*) FROM classe_matieres cm
+                         WHERE cm.matiere_id = m.id AND cm.est_active = 1) AS nb_classes
+                 FROM matieres m
+                 WHERE m.parent_id = :parent_id AND m.est_groupe = 0 AND m.est_actif = 1
+                 ORDER BY m.id",
+                ['parent_id' => $group['id']]
+            );
+            foreach ($subjects as &$subject) {
+                $subject['classes'] = $this->db->fetchAll(
+                    "SELECT c.nom, c.niveau, COALESCE(cm.maxima_override, m.maxima) AS maxima_final
+                     FROM classe_matieres cm
+                     INNER JOIN classes c ON cm.classe_id = c.id
+                     INNER JOIN matieres m ON cm.matiere_id = m.id
+                     WHERE cm.matiere_id = :subject_id AND cm.est_active = 1
+                       AND c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
+                     ORDER BY c.niveau",
+                    ['subject_id' => $subject['id']]
+                );
+            }
+            unset($subject);
+            $group['sous_matieres'] = $subjects;
+        }
+        unset($group);
+
+        return ['total' => $total, 'groupes' => $groups];
+    }
+
     public function findGroups(): array
     {
         return $this->db->fetchAll(
