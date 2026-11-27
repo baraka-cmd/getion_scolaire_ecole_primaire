@@ -86,6 +86,104 @@ class UserRepository
         );
     }
 
+
+    /**
+     * Recherche et pagination des utilisateurs pour l'administration.
+     * Les colonnes de tri proviennent d'une liste blanche, jamais de SQL utilisateur.
+     */
+    public function getAdminList(
+        string $search,
+        string $role,
+        string $status,
+        string $order,
+        string $direction,
+        int $limit,
+        int $offset
+    ): array {
+        $where = [];
+        $params = [];
+
+        if (!empty($search)) {
+            $where[] = "(u.nom LIKE :recherche1 OR u.prenom LIKE :recherche2 OR u.email LIKE :recherche3 OR u.login LIKE :recherche4)";
+            $params['recherche1'] = "%{$search}%";
+            $params['recherche2'] = "%{$search}%";
+            $params['recherche3'] = "%{$search}%";
+            $params['recherche4'] = "%{$search}%";
+        }
+
+        if (!empty($role)) {
+            $where[] = "u.role_id = :role";
+            $params['role'] = (int) $role;
+        }
+
+        if ($status !== '') {
+            $where[] = "u.est_actif = :statut";
+            $params['statut'] = (int) $status;
+        }
+
+        $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
+        $allowedColumns = [
+            'id' => 'u.id',
+            'nom' => 'u.nom',
+            'prenom' => 'u.prenom',
+            'email' => 'u.email',
+            'login' => 'u.login',
+            'role_nom' => 'r.nom',
+            'derniere_connexion' => 'u.derniere_connexion',
+            'est_actif' => 'u.est_actif',
+        ];
+        $order = $allowedColumns[$order] ?? $allowedColumns['nom'];
+        $direction = in_array(strtoupper($direction), ['ASC', 'DESC'], true)
+            ? strtoupper($direction)
+            : 'ASC';
+
+        $total = (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM utilisateurs u
+             LEFT JOIN roles r ON u.role_id = r.id
+             {$whereClause}",
+            $params
+        );
+
+        $users = $this->db->fetchAll(
+            "SELECT u.id, u.nom, u.prenom, u.email, u.telephone, u.login, u.photo,
+                    u.est_actif, u.derniere_connexion, u.created_at,
+                    COALESCE(r.nom, 'Rôle inconnu') AS role_nom, r.id AS role_id
+             FROM utilisateurs u
+             LEFT JOIN roles r ON u.role_id = r.id
+             {$whereClause}
+             ORDER BY {$order} {$direction}, u.id ASC
+             LIMIT :limit OFFSET :offset",
+            array_merge($params, ['limit' => $limit, 'offset' => $offset])
+        );
+
+        return ['total' => $total, 'users' => $users];
+    }
+
+    public function findAdminDetails(int $userId): ?array
+    {
+        return $this->db->fetchOne(
+            "SELECT u.id, u.nom, u.prenom, u.email, u.telephone, u.login, u.photo,
+                    u.est_actif, u.derniere_connexion, u.created_at,
+                    u.role_id, r.nom AS role_nom
+             FROM utilisateurs u
+             INNER JOIN roles r ON u.role_id = r.id
+             WHERE u.id = :id",
+            ['id' => $userId]
+        );
+    }
+
+    public function getAuthenticationHistory(int $userId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT action, description, date_action
+             FROM logs_activites
+             WHERE utilisateur_id = :uid AND action IN ('Connexion', 'Tentative échouée', 'Déconnexion')
+             ORDER BY date_action DESC
+             LIMIT 20",
+            ['uid' => $userId]
+        );
+    }
+
     public function getLogs(int $userId, int $limit = 50): array
     {
         return $this->db->fetchAll(
