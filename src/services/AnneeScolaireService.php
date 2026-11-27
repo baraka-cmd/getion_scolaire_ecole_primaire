@@ -207,4 +207,13 @@ class AnneeScolaireService
             }
         }
     }
+
+    public function createYear(array $data): int { return $this->repository->createYear($data); }
+    public function updateYear(array $data): void { $this->repository->updateYear($data); }
+    public function deactivateAllYears(): void { $this->repository->deactivateAllYears(); }
+    public function activateYear(int $yearId): void { $this->repository->activateYear($yearId); }
+    public function setActiveYearInSchoolSettings(int $yearId): void { $this->repository->setActiveYearInSchoolSettings($yearId); }
+    public function findValidActiveYearForUpdate(int $yearId): ?array { return $this->repository->findValidActiveYearForUpdate($yearId); }
+    public function closeYear(int $yearId): void { $this->repository->closeYear($yearId); }
+
 }
