@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($result['ok']) {
             logActivity('Création', 'inscriptions', $result['id'], 'Inscription élève ' . (int) post('eleve_id', 0));
-        setFlash('success', 'Élève inscrit avec succès.');
+            setFlash('success', 'Élève inscrit avec succès.');
             redirect('/gestion_scolaire/inscriptions');
         }
 
