@@ -5,6 +5,8 @@ require_once __DIR__ . '/../src/repositories/FinanceReportRepository.php';
 
 final class FinanceReportRepositorySmokeStub extends FinanceReportRepository
 {
+    public function __construct() {}
+
     public function findSchoolYears(): array
     {
         return [['id' => 7, 'libelle' => '2026-2027', 'date_debut' => '2026-09-01', 'date_fin' => '2027-06-30']];
