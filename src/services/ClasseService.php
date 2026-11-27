@@ -13,6 +13,24 @@ class ClasseService
         $this->repository = $repository ?? new ClasseRepository();
     }
 
+    public function getPaginatedList(
+        string $search,
+        int $schoolYearId,
+        string $orderBy,
+        string $direction,
+        int $limit,
+        int $offset
+    ): array {
+        return $this->repository->findPaginatedList(
+            $search,
+            $schoolYearId,
+            $orderBy,
+            $direction,
+            $limit,
+            $offset
+        );
+    }
+
     public function getForAjax(int $id): ?array
     {
         $class = $this->repository->findForAjax($id);
