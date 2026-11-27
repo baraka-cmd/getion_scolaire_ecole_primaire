@@ -65,4 +65,12 @@ class ResultsBulletinRepository
     {
         return $this->db->fetchOne("SELECT * FROM parametres_ecole LIMIT 1");
     }
+
+    /** Execute fixed, parameterized legacy statements through the data layer. */
+    public function fetchAll(string $sql, array $params = []): array { return $this->db->fetchAll($sql, $params); }
+    public function fetchOne(string $sql, array $params = []): ?array { return $this->db->fetchOne($sql, $params); }
+    public function fetchColumn(string $sql, array $params = []): mixed { return $this->db->fetchColumn($sql, $params); }
+    public function insert(string $sql, array $params = []): int { return $this->db->insert($sql, $params); }
+    public function update(string $sql, array $params = []): int { return $this->db->update($sql, $params); }
+    public function delete(string $sql, array $params = []): int { return $this->db->delete($sql, $params); }
 }
