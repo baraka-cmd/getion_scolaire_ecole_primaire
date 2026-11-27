@@ -7,21 +7,25 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../services/ParentStudentService.php';
+require_once __DIR__ . '/../services/StudentRecordService.php';
 require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
 
 class EleveController
 {
     private Database $db;
     private ParentStudentService $parentStudentService;
+    private StudentRecordService $studentRecordService;
     private StudentAccessPolicy $studentAccessPolicy;
 
     public function __construct(
         ?ParentStudentService $parentStudentService = null,
-        ?StudentAccessPolicy $studentAccessPolicy = null
+        ?StudentAccessPolicy $studentAccessPolicy = null,
+        ?StudentRecordService $studentRecordService = null
     )
     {
         $this->db = Database::getInstance();
         $this->parentStudentService = $parentStudentService ?? new ParentStudentService();
+        $this->studentRecordService = $studentRecordService ?? new StudentRecordService();
         $this->studentAccessPolicy = $studentAccessPolicy ?? new StudentAccessPolicy($this->db);
     }
 
@@ -75,101 +79,30 @@ class EleveController
      */
     private function getListe(): void
     {
-        $page       = max(1, (int) post('page', 1));
-        $recherche  = post('recherche', '');
-        $classeId   = (int) post('classe_id', 0);
-        $sexe       = post('sexe', '');
-        $statut     = post('statut', '');
-        $ordre      = post('ordre', 'nom');
-        $direction  = post('direction', 'ASC');
-        $parPage    = ITEMS_PER_PAGE;
+        $page = max(1, (int) post('page', 1));
+        $filters = [
+            'recherche' => post('recherche', ''),
+            'classe_id' => (int) post('classe_id', 0),
+            'sexe' => post('sexe', ''),
+            'statut' => post('statut', ''),
+            'ordre' => post('ordre', 'nom'),
+            'direction' => post('direction', 'ASC'),
+        ];
 
-        $where = [];
-        $params = [];
-
-        // Année active par défaut
-        $where[] = "i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)";
-
-        if (!empty($recherche)) {
-            $where[] = "(e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3)";
-            $params['r1'] = "%{$recherche}%";
-            $params['r2'] = "%{$recherche}%";
-            $params['r3'] = "%{$recherche}%";
-        }
-
-        if ($classeId > 0) {
-            $where[] = "i.classe_id = :classe";
-            $params['classe'] = $classeId;
-        }
-
-        if (hasRole('Parent')) {
-            $where[] = "EXISTS (
-                SELECT 1 FROM eleve_parent ep
-                INNER JOIN parents_tuteurs pt ON pt.id = ep.parent_id
-                WHERE ep.eleve_id = e.id AND pt.utilisateur_id = :parent_user_id
-            )";
-            $params['parent_user_id'] = (int) $_SESSION['utilisateur_id'];
-        } elseif (hasRole('Enseignant')) {
-            $where[] = "EXISTS (
-                SELECT 1 FROM enseignants ens
-                WHERE ens.utilisateur_id = :teacher_user_id AND ens.est_actif = 1
-                  AND ens.classe_id = i.classe_id
-            )";
-            $params['teacher_user_id'] = (int) $_SESSION['utilisateur_id'];
-        }
-
-        if (!empty($sexe)) {
-            $where[] = "e.sexe = :sexe";
-            $params['sexe'] = $sexe;
-        }
-
-        if ($statut !== '') {
-            $where[] = "e.est_actif = :statut";
-            $params['statut'] = (int) $statut;
-        } else {
-            $where[] = "e.est_actif = 1"; // Actifs par défaut
-        }
-
-        $whereClause = 'WHERE ' . implode(' AND ', $where);
-
-        // Colonnes autorisées pour le tri
-        $colonnesAutorisees = ['id', 'nom', 'prenom', 'matricule', 'date_naissance', 'sexe', 'classe_nom'];
-        if (!in_array($ordre, $colonnesAutorisees)) $ordre = 'nom';
-        if (!in_array(strtoupper($direction), ['ASC', 'DESC'])) $direction = 'ASC';
-
-        // Adapter le ORDER BY
-        $orderMap = ['classe_nom' => 'c.nom'];
-        $orderCol = $orderMap[$ordre] ?? 'e.' . $ordre;
-
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM eleves e
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             INNER JOIN classes c ON i.classe_id = c.id
-             {$whereClause}",
-            $params
-        );
-
-        $offset = ($page - 1) * $parPage;
-        $eleves = $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe, e.photo,
-                    e.telephone, e.est_actif, e.date_inscription,
-                    c.nom AS classe_nom, c.id AS classe_id,
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age
-             FROM eleves e
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             INNER JOIN classes c ON i.classe_id = c.id
-             {$whereClause}
-             ORDER BY {$orderCol} {$direction}
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, ['limit' => $parPage, 'offset' => $offset])
+        $role = hasRole('Parent') ? 'Parent' : (hasRole('Enseignant') ? 'Enseignant' : '');
+        $result = $this->studentRecordService->paginate(
+            $filters,
+            $page,
+            ITEMS_PER_PAGE,
+            $role,
+            (int) ($_SESSION['utilisateur_id'] ?? 0)
         );
 
         jsonResponse(true, 'Liste récupérée.', [
-            'eleves' => $eleves,
-            'total'  => $total,
-            'page'   => $page,
-            'pages'  => ceil($total / $parPage)
+            'eleves' => $result['rows'],
+            'total' => $result['total'],
+            'page' => $page,
+            'pages' => ceil($result['total'] / ITEMS_PER_PAGE)
         ]);
     }
 
@@ -184,68 +117,18 @@ class EleveController
             jsonResponse(false, 'Élève introuvable.', [], 404);
         }
 
-        $eleve = $this->db->fetchOne(
-            "SELECT e.*,
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age,
-                    c.nom AS classe_nom, c.id AS classe_id, c.niveau AS classe_niveau,
-                    i.date_inscription AS date_inscription_classe,
-                    i.statut AS statut_inscription,
-                    CONCAT(COALESCE(ens.prenom, ''), ' ', COALESCE(ens.nom, '')) AS titulaire_nom
-             FROM eleves e
-             LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             LEFT JOIN classes c ON i.classe_id = c.id
-             LEFT JOIN enseignants ens ON c.id = ens.classe_id AND ens.est_actif = 1
-             WHERE e.id = :id",
-            ['id' => $id]
-        );
-
+        $eleve = $this->studentRecordService->findRecord($id);
         if (!$eleve) jsonResponse(false, 'Élève introuvable.', [], 404);
 
-        // Récupérer les parents
         $parents = $this->parentStudentService->getStudentParentsForDetail($id);
-
-        // Récupérer les dernières notes
-        $notes = $this->db->fetchAll(
-            "SELECT n.valeur, ev.type_evaluation, ev.date_evaluation, m.libelle AS matiere,
-                    t.libelle AS trimestre
-             FROM notes n
-             INNER JOIN evaluations ev ON n.evaluation_id = ev.id
-             INNER JOIN matieres m ON ev.matiere_id = m.id
-             INNER JOIN trimestres t ON ev.trimestre_id = t.id
-             WHERE n.eleve_id = :eid
-             ORDER BY ev.date_evaluation DESC
-             LIMIT 20",
-            ['eid' => $id]
-        );
-
-        // Récupérer les absences récentes
-        $absences = $this->db->fetchAll(
-            "SELECT date_absence, type_absence, est_justifiee, motif
-             FROM absences
-             WHERE eleve_id = :eid
-             ORDER BY date_absence DESC
-             LIMIT 10",
-            ['eid' => $id]
-        );
-
-        // Récupérer les paiements
-        $paiements = $this->db->fetchAll(
-            "SELECT p.montant_total, p.montant_paye, p.statut, p.date_paiement, p.mode_paiement,
-                    f.libelle AS frais_libelle
-             FROM paiements p
-             INNER JOIN frais_scolaires f ON p.frais_scolaire_id = f.id
-             WHERE p.eleve_id = :eid
-             ORDER BY p.date_paiement DESC",
-            ['eid' => $id]
-        );
+        $history = $this->studentRecordService->getAcademicAndAttendanceHistory($id);
 
         jsonResponse(true, 'Élève récupéré.', [
-            'eleve'     => $eleve,
-            'parents'   => $parents,
-            'notes'     => $notes,
-            'absences'  => $absences,
-            'paiements' => $paiements
+            'eleve' => $eleve,
+            'parents' => $parents,
+            'notes' => $history['notes'],
+            'absences' => $history['absences'],
+            'paiements' => $history['paiements']
         ]);
     }
 
