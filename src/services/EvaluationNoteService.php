@@ -162,4 +162,17 @@ class EvaluationNoteService
     {
         return $this->repository->findActiveGroupsForEvaluationGeneration();
     }
+
+    public function getEvaluationAccessContext(int $id): ?array { return $id > 0 ? $this->repository->findEvaluationAccessContext($id) : null; }
+    public function teacherHasClassAssignment(int $userId, int $classId, int $yearId): bool { return $userId > 0 && $this->repository->teacherHasClassAssignment($userId,$classId,$yearId); }
+    public function getEvaluationIdsForProgression(int $termId,int $classId,string $type): array { return $this->repository->findEvaluationIdsForProgression($termId,$classId,$type); }
+    public function countNotesForEvaluationIds(array $ids): int { return $this->repository->countNotesForEvaluationIds($ids); }
+    public function countActiveStudentsInClass(int $id): int { return $id > 0 ? $this->repository->countActiveStudentsInClass($id) : 0; }
+    public function countActiveSubjectsForClassGroup(int $classId,int $groupId): int { return $classId>0 && $groupId>0 ? $this->repository->countActiveSubjectsForClassGroup($classId,$groupId) : 0; }
+    public function getActiveClasses(): array { return $this->repository->findActiveClasses(); }
+    public function getActiveTerms(): array { return $this->repository->findActiveTerms(); }
+    public function getCurrentActiveTerm(): ?array { return $this->repository->findCurrentActiveTerm(); }
+    public function getActiveGroupsWithSubjectCounts(): array { return $this->repository->findActiveGroupsWithSubjectCounts(); }
+    public function getSubjectsForClassGroup(int $groupId,int $classId): array { return $classId>0 && $groupId>0 ? $this->repository->findSubjectsForClassGroup($groupId,$classId) : []; }
+    public function getEvaluationById(int $id): ?array { return $id>0 ? $this->repository->findEvaluationById($id) : null; }
 }
