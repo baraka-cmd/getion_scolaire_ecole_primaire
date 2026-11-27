@@ -4,26 +4,23 @@ defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/FinanceService.php';
+require_once __DIR__ . '/../repositories/FinanceReportRepository.php';
 
 class FinanceReportService
 {
     private Database $db;
+    private FinanceReportRepository $repository;
 
-    public function __construct(?Database $db = null)
+    public function __construct(?Database $db = null, ?FinanceReportRepository $repository = null)
     {
         $this->db = $db ?? Database::getInstance();
+        $this->repository = $repository ?? new FinanceReportRepository($this->db);
     }
 
     public function build(array $input): array
     {
-        $years = $this->db->fetchAll(
-            "SELECT id, libelle, date_debut, date_fin
-             FROM annees_scolaires
-             ORDER BY date_debut DESC"
-        );
-        $activeYearId = (int) $this->db->fetchColumn(
-            "SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1"
-        );
+        $years = $this->repository->findSchoolYears();
+        $activeYearId = $this->repository->getActiveYearId();
         $yearId = (int) ($input['annee_id'] ?? 0);
         $year = $this->findById($years, $yearId);
         $invalidYear = $yearId > 0 && $year === null;
@@ -48,24 +45,8 @@ class FinanceReportService
         if ($invalidYear) {
             $errors[] = 'L’année scolaire demandée est invalide; le rapport affiche l’année active.';
         }
-        $classes = $this->db->fetchAll(
-            "SELECT id, nom, niveau
-             FROM classes
-             WHERE annee_scolaire_id = :annee
-             ORDER BY niveau, nom",
-            ['annee' => (int) $year['id']]
-        );
-        $fees = $this->db->fetchAll(
-            "SELECT f.id, f.libelle, f.classe_id, f.est_actif, f.est_obligatoire,
-                    cfg.categorie, cfg.devise, cfg.periodicite,
-                    c.nom AS classe_nom
-             FROM frais_scolaires f
-             INNER JOIN finance_frais_config cfg ON cfg.frais_scolaire_id = f.id
-             LEFT JOIN classes c ON c.id = f.classe_id
-             WHERE f.annee_scolaire_id = :annee
-             ORDER BY cfg.categorie, f.libelle",
-            ['annee' => (int) $year['id']]
-        );
+        $classes = $this->repository->findClassesForYear((int) $year['id']);
+        $fees = $this->repository->findFeesForYear((int) $year['id']);
         $categories = array_values(array_unique(array_map(
             static function (array $fee): string {
                 return (string) $fee['categorie'];

@@ -125,32 +125,13 @@ public function getListeFrais(): void
 {
     $anneeId = (int) post('annee_id', 0);
     if ($anneeId <= 0) {
-        $anneeId = (int) $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
+        $anneeId = $this->finance->getActiveYearId();
     }
-
-    $frais = $this->db->fetchAll(
-        "SELECT f.*, cfg.categorie, cfg.devise, cfg.periodicite, cfg.jour_echeance,
-                (SELECT COUNT(*) FROM finance_creances c WHERE c.frais_scolaire_id = f.id) AS nb_creances,
-                (SELECT COALESCE(SUM(a.montant_affecte), 0)
-                 FROM finance_affectations a
-                 INNER JOIN finance_creances c ON c.id = a.creance_id
-                 INNER JOIN finance_versements v ON v.id = a.versement_id
-                 LEFT JOIN finance_annulations an ON an.versement_id = v.id
-                 WHERE c.frais_scolaire_id = f.id AND an.id IS NULL) AS total_encaisse
-         FROM frais_scolaires f
-         INNER JOIN finance_frais_config cfg ON cfg.frais_scolaire_id = f.id
-         WHERE f.annee_scolaire_id = :aid
-         ORDER BY f.est_obligatoire DESC, f.libelle",
-        ['aid' => $anneeId]
-    );
-
-    $totalFrais = count($frais);
-    $totalEncaisse = array_sum(array_column($frais, 'total_encaisse'));
-
+    $frais = $this->finance->listFeesForYear($anneeId);
     jsonResponse(true, 'Liste récupérée.', [
-        'frais'          => $frais,
-        'total_frais'    => $totalFrais,
-        'total_encaisse' => $totalEncaisse
+        'frais' => $frais,
+        'total_frais' => count($frais),
+        'total_encaisse' => array_sum(array_column($frais, 'total_encaisse')),
     ]);
 }
 
@@ -160,74 +141,41 @@ public function getListeFrais(): void
 public function ajouterFrais(): void
 {
     requirePermission('paiements.modifier');
-
-    $libelle       = post('libelle', '');
-    $description   = post('description', '');
-    $montant       = (float) post('montant', 0);
-    $estObligatoire = (int) post('est_obligatoire', 1);
-    $classeId      = (int) post('classe_id', 0);
-    $anneeId       = (int) post('annee_scolaire_id', 0);
-    $categorie     = trim((string) post('categorie', 'Scolarité'));
-    $devise        = (string) post('devise', 'USD');
-    $periodicite   = (string) post('periodicite', 'annuel');
-    $jourEcheance  = (int) post('jour_echeance', 10);
+    $libelle = trim((string) post('libelle', ''));
+    $description = trim((string) post('description', ''));
+    $montant = (float) post('montant', 0);
+    $obligatoire = (int) post('est_obligatoire', 1) === 1 ? 1 : 0;
+    $classeId = (int) post('classe_id', 0);
+    $anneeId = (int) post('annee_scolaire_id', 0);
+    $categorie = trim((string) post('categorie', 'Scolarité'));
+    $devise = (string) post('devise', 'USD');
+    $periodicite = (string) post('periodicite', 'annuel');
+    $jour = (int) post('jour_echeance', 10);
 
     if (isBlank($libelle)) jsonResponse(false, 'Le libellé est obligatoire.', [], 422);
     if (!is_finite($montant) || $montant <= 0) jsonResponse(false, 'Le montant doit être supérieur à 0.', [], 422);
-
-    if ($anneeId <= 0) {
-        $anneeId = (int) $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-    }
-    if ($categorie === '' || !in_array($devise, ['USD', 'CDF'], true)
+    if ($anneeId <= 0) $anneeId = $this->finance->getActiveYearId();
+    if ($anneeId <= 0 || $categorie === '' || !in_array($devise, ['USD', 'CDF'], true)
         || !in_array($periodicite, ['unique', 'annuel', 'trimestriel', 'mensuel'], true)
-        || $jourEcheance < 1 || $jourEcheance > 31) {
-        jsonResponse(false, 'Vérifiez la catégorie, la devise et l’échéancier du frais.', [], 422);
+        || $jour < 1 || $jour > 31) {
+        jsonResponse(false, 'Vérifiez l’année, la catégorie, la devise et l’échéancier du frais.', [], 422);
     }
-    if (FinanceService::estFraisScolarite($categorie)) {
-        $devise = 'USD';
-    }
-
-    $existe = $this->db->fetchColumn(
-        "SELECT COUNT(*) FROM frais_scolaires
-         WHERE libelle = :libelle AND annee_scolaire_id = :aid
-           AND COALESCE(classe_id, 0) = :classe",
-        ['libelle' => trim($libelle), 'aid' => $anneeId, 'classe' => $classeId]
-    );
-    if ($existe > 0) jsonResponse(false, 'Ce frais existe déjà pour cette année et cette classe.', [], 409);
-
+    if (FinanceService::estFraisScolarite($categorie)) $devise = 'USD';
     try {
-        $this->db->beginTransaction();
-        $fraisId = $this->db->insert(
-            "INSERT INTO frais_scolaires
-                (libelle, description, montant, classe_id, annee_scolaire_id, est_obligatoire, est_actif)
-             VALUES (:libelle, :desc, :montant, :classe, :annee, :obligatoire, 1)",
-            [
-                'libelle' => formatNom($libelle),
-                'desc' => $description ?: null,
-                'montant' => $montant,
-                'classe' => $classeId > 0 ? $classeId : null,
-                'annee' => $anneeId,
-                'obligatoire' => $estObligatoire,
-            ]
-        );
-        $this->db->insert(
-            "INSERT INTO finance_frais_config (frais_scolaire_id, categorie, devise, periodicite, jour_echeance)
-             VALUES (:id, :categorie, :devise, :periodicite, :jour)",
-            [
-                'id' => $fraisId,
-                'categorie' => $categorie,
-                'devise' => $devise,
-                'periodicite' => $periodicite,
-                'jour' => $jourEcheance,
-            ]
-        );
-        $this->db->commit();
-
-        logActivity('Création', 'frais_scolaires', $fraisId, "Frais créé : {$libelle}");
-        jsonResponse(true, 'Frais créé avec succès.', ['id' => $fraisId]);
-
+        $id = $this->finance->createFee([
+            'libelle' => formatNom($libelle), 'description' => $description ?: null,
+            'montant' => $montant, 'classe_id' => $classeId > 0 ? $classeId : null,
+            'annee_id' => $anneeId, 'est_obligatoire' => $obligatoire,
+            'categorie' => $categorie, 'devise' => $devise,
+            'periodicite' => $periodicite, 'jour_echeance' => $jour,
+        ]);
+        logActivity('Création', 'frais_scolaires', $id, "Frais créé : {$libelle}");
+        jsonResponse(true, 'Frais créé avec succès.', ['id' => $id]);
+    } catch (DomainException $e) {
+        if ($e->getMessage() === 'DUPLICATE_FEE') jsonResponse(false, 'Ce frais existe déjà pour cette année et cette classe.', [], 409);
+        error_log('Erreur métier création frais: ' . $e->getMessage());
+        jsonResponse(false, 'Impossible de créer ce frais.', [], 422);
     } catch (Throwable $e) {
-        $this->db->rollback();
         error_log('Erreur création frais: ' . $e->getMessage());
         jsonResponse(false, 'Erreur lors de la création du frais.');
     }
@@ -239,82 +187,39 @@ public function ajouterFrais(): void
 public function modifierFrais(): void
 {
     requirePermission('paiements.modifier');
-
-    // Récupérer les données directement depuis $_POST
-    $fraisId        = (int) ($_POST['frais_id'] ?? 0);
-    $libelle        = trim($_POST['libelle'] ?? '');
-    $description    = trim($_POST['description'] ?? '');
-    $montant        = (float) ($_POST['montant'] ?? 0);
-    $estObligatoire = isset($_POST['est_obligatoire']) ? 1 : 0;
-    $classeId       = (int) ($_POST['classe_id'] ?? 0);
-    $categorie      = trim((string) ($_POST['categorie'] ?? 'Scolarité'));
-    $devise         = (string) ($_POST['devise'] ?? 'USD');
-    $periodicite    = (string) ($_POST['periodicite'] ?? 'annuel');
-    $jourEcheance   = (int) ($_POST['jour_echeance'] ?? 10);
-
-    if ($fraisId <= 0) jsonResponse(false, 'ID frais invalide.', [], 400);
-    if (empty($libelle)) jsonResponse(false, 'Le libellé est obligatoire.', [], 422);
+    $feeId = (int) post('frais_id', 0);
+    $libelle = trim((string) post('libelle', ''));
+    $description = trim((string) post('description', ''));
+    $montant = (float) post('montant', 0);
+    $obligatoire = (int) post('est_obligatoire', 0) === 1 ? 1 : 0;
+    $classeId = (int) post('classe_id', 0);
+    $categorie = trim((string) post('categorie', 'Scolarité'));
+    $devise = (string) post('devise', 'USD');
+    $periodicite = (string) post('periodicite', 'annuel');
+    $jour = (int) post('jour_echeance', 10);
+    if ($feeId <= 0) jsonResponse(false, 'ID frais invalide.', [], 400);
+    if ($libelle === '') jsonResponse(false, 'Le libellé est obligatoire.', [], 422);
     if (!is_finite($montant) || $montant <= 0) jsonResponse(false, 'Le montant doit être supérieur à 0.', [], 422);
     if ($categorie === '' || !in_array($devise, ['USD', 'CDF'], true)
         || !in_array($periodicite, ['unique', 'annuel', 'trimestriel', 'mensuel'], true)
-        || $jourEcheance < 1 || $jourEcheance > 31) {
+        || $jour < 1 || $jour > 31) {
         jsonResponse(false, 'Vérifiez la catégorie, la devise et l’échéancier du frais.', [], 422);
     }
-    if (FinanceService::estFraisScolarite($categorie)) {
-        $devise = 'USD';
-    }
-
-    $frais = $this->db->fetchOne("SELECT id, annee_scolaire_id FROM frais_scolaires WHERE id = :id", ['id' => $fraisId]);
-    if (!$frais) jsonResponse(false, 'Frais introuvable.', [], 404);
-
-    $existe = $this->db->fetchColumn(
-        "SELECT COUNT(*) FROM frais_scolaires
-         WHERE libelle = :libelle AND annee_scolaire_id = :aid AND id != :id
-           AND COALESCE(classe_id, 0) = :classe",
-        [
-            'libelle' => $libelle,
-            'aid' => $frais['annee_scolaire_id'],
-            'id' => $fraisId,
-            'classe' => $classeId,
-        ]
-    );
-    if ($existe > 0) jsonResponse(false, 'Ce libellé existe déjà.', [], 409);
-
+    if (FinanceService::estFraisScolarite($categorie)) $devise = 'USD';
     try {
-        $this->db->beginTransaction();
-        $this->db->update(
-            "UPDATE frais_scolaires 
-             SET libelle = :libelle, description = :desc, montant = :montant, 
-                 classe_id = :classe, est_obligatoire = :obligatoire
-             WHERE id = :id",
-            [
-                'libelle'     => $libelle,
-                'desc'        => $description ?: null,
-                'montant'     => $montant,
-                'classe'      => $classeId > 0 ? $classeId : null,
-                'obligatoire' => $estObligatoire,
-                'id'          => $fraisId
-            ]
-        );
-        $this->db->update(
-            "UPDATE finance_frais_config
-             SET categorie = :categorie, devise = :devise, periodicite = :periodicite, jour_echeance = :jour
-             WHERE frais_scolaire_id = :id",
-            [
-                'categorie' => $categorie,
-                'devise' => $devise,
-                'periodicite' => $periodicite,
-                'jour' => $jourEcheance,
-                'id' => $fraisId,
-            ]
-        );
-        $this->db->commit();
-
-        logActivity('Modification', 'frais_scolaires', $fraisId, "Frais modifié : {$libelle}");
+        $this->finance->updateFee($feeId, [
+            'libelle' => formatNom($libelle), 'description' => $description ?: null,
+            'montant' => $montant, 'classe_id' => $classeId > 0 ? $classeId : null,
+            'est_obligatoire' => $obligatoire, 'categorie' => $categorie,
+            'devise' => $devise, 'periodicite' => $periodicite, 'jour_echeance' => $jour,
+        ]);
+        logActivity('Modification', 'frais_scolaires', $feeId, "Frais modifié : {$libelle}");
         jsonResponse(true, 'Frais modifié. Les créances déjà générées conservent leur montant et leur devise d’origine.');
-
+    } catch (DomainException $e) {
+        if ($e->getMessage() === 'FEE_NOT_FOUND') jsonResponse(false, 'Frais introuvable.', [], 404);
+        if ($e->getMessage() === 'DUPLICATE_FEE') jsonResponse(false, 'Ce libellé existe déjà.', [], 409);
+        jsonResponse(false, 'Modification refusée.', [], 422);
     } catch (Throwable $e) {
-        $this->db->rollback();
         error_log('Erreur modification frais: ' . $e->getMessage());
         jsonResponse(false, 'Erreur lors de la modification du frais.');
     }
@@ -326,27 +231,20 @@ public function modifierFrais(): void
 public function supprimerFrais(): void
 {
     requirePermission('paiements.modifier');
-
-    $fraisId = (int) post('frais_id', 0);
-    if ($fraisId <= 0) jsonResponse(false, 'ID frais invalide.', [], 400);
-
-    // Vérifier si des paiements sont liés
-    $nbPaiements = (int) $this->db->fetchColumn(
-        "SELECT COUNT(*) FROM paiements WHERE frais_scolaire_id = :fid",
-        ['fid' => $fraisId]
-    );
-    $nbCreances = (int) $this->db->fetchColumn(
-        "SELECT COUNT(*) FROM finance_creances WHERE frais_scolaire_id = :fid",
-        ['fid' => $fraisId]
-    );
-
-    if ($nbPaiements > 0 || $nbCreances > 0) {
-        jsonResponse(false, 'Ce frais est lié à des paiements ou créances; désactivez-le pour conserver l’historique.', [], 409);
+    $feeId = (int) post('frais_id', 0);
+    if ($feeId <= 0) jsonResponse(false, 'ID frais invalide.', [], 400);
+    try {
+        $this->finance->deleteFeeIfUnused($feeId);
+        logActivity('Suppression', 'frais_scolaires', $feeId, 'Frais supprimé');
+        jsonResponse(true, 'Frais supprimé avec succès.');
+    } catch (DomainException $e) {
+        if ($e->getMessage() === 'FEE_NOT_FOUND') jsonResponse(false, 'Frais introuvable.', [], 404);
+        if ($e->getMessage() === 'FEE_HAS_HISTORY') jsonResponse(false, 'Ce frais est lié à des paiements ou créances; désactivez-le pour conserver l’historique.', [], 409);
+        jsonResponse(false, 'Suppression refusée.', [], 422);
+    } catch (Throwable $e) {
+        error_log('Erreur suppression frais: ' . $e->getMessage());
+        jsonResponse(false, 'Erreur lors de la suppression du frais.');
     }
-
-    $this->db->delete("DELETE FROM frais_scolaires WHERE id = :id", ['id' => $fraisId]);
-    logActivity('Suppression', 'frais_scolaires', $fraisId, 'Frais supprimé');
-    jsonResponse(true, 'Frais supprimé avec succès.');
 }
 
 /**
@@ -355,23 +253,20 @@ public function supprimerFrais(): void
 public function toggleStatutFrais(): void
 {
     requirePermission('paiements.modifier');
-
-    $fraisId = (int) post('frais_id', 0);
-    if ($fraisId <= 0) jsonResponse(false, 'ID frais invalide.', [], 400);
-
-    $frais = $this->db->fetchOne("SELECT id, est_actif, libelle FROM frais_scolaires WHERE id = :id", ['id' => $fraisId]);
-    if (!$frais) jsonResponse(false, 'Frais introuvable.', [], 404);
-
-    $nouveauStatut = $frais['est_actif'] ? 0 : 1;
-
-    $this->db->update(
-        "UPDATE frais_scolaires SET est_actif = :statut WHERE id = :id",
-        ['statut' => $nouveauStatut, 'id' => $fraisId]
-    );
-
-    $action = $nouveauStatut ? 'activé' : 'désactivé';
-    logActivity('Modification', 'frais_scolaires', $fraisId, "Frais {$action} : {$frais['libelle']}");
-    jsonResponse(true, "Frais {$action} avec succès.", ['est_actif' => $nouveauStatut]);
+    $feeId = (int) post('frais_id', 0);
+    if ($feeId <= 0) jsonResponse(false, 'ID frais invalide.', [], 400);
+    try {
+        $fee = $this->finance->getFeeForStatus($feeId);
+        $status = $this->finance->toggleFeeStatus($feeId);
+        logActivity('Modification', 'frais_scolaires', $feeId, 'Frais ' . ($status ? 'activé' : 'désactivé') . ' : ' . $fee['libelle']);
+        jsonResponse(true, 'Frais ' . ($status ? 'activé' : 'désactivé') . ' avec succès.', ['est_actif' => $status]);
+    } catch (DomainException $e) {
+        if ($e->getMessage() === 'FEE_NOT_FOUND') jsonResponse(false, 'Frais introuvable.', [], 404);
+        jsonResponse(false, 'Modification refusée.', [], 422);
+    } catch (Throwable $e) {
+        error_log('Erreur statut frais: ' . $e->getMessage());
+        jsonResponse(false, 'Erreur lors de la modification du statut.');
+    }
 }
 
     // ============================================================

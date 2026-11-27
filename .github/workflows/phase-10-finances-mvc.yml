@@ -1,0 +1,39 @@
+name: Phase 10 - Finance MVC and regression checks
+
+on:
+  push:
+    branches: [refactor/phase-10-finances]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/controllers/PaiementController.php'
+      - 'src/services/FinanceService.php'
+      - 'src/services/FinanceReportService.php'
+      - 'src/repositories/FinanceRepository.php'
+      - 'src/repositories/FinanceReportRepository.php'
+      - 'tests/finance_report_reference_data_smoke.php'
+      - 'tests/finance_phase10_mvc_smoke.php'
+      - 'tests/finance_exchange_rate_smoke.php'
+      - '.github/workflows/phase-10-finances-mvc.yml'
+
+jobs:
+  finance-mvc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: PHP syntax validation
+        run: |
+          set -e
+          for file in src/controllers/PaiementController.php src/services/FinanceService.php src/services/FinanceReportService.php src/repositories/FinanceRepository.php src/repositories/FinanceReportRepository.php tests/finance_report_reference_data_smoke.php tests/finance_phase10_mvc_smoke.php tests/finance_exchange_rate_smoke.php; do
+            php -l "$file"
+          done
+      - name: Finance report repository contract
+        run: php tests/finance_report_reference_data_smoke.php
+      - name: Fee MVC boundary and security regression
+        run: php tests/finance_phase10_mvc_smoke.php
+      - name: Existing currency and tuition rules
+        run: php tests/finance_exchange_rate_smoke.php

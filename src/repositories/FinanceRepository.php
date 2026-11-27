@@ -118,4 +118,129 @@ class FinanceRepository
             ['annee' => $yearId]
         );
     }
+    public function listFeesForYear(int $yearId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT f.*, cfg.categorie, cfg.devise, cfg.periodicite, cfg.jour_echeance,
+                    (SELECT COUNT(*) FROM finance_creances c WHERE c.frais_scolaire_id = f.id) AS nb_creances,
+                    (SELECT COALESCE(SUM(a.montant_affecte), 0)
+                     FROM finance_affectations a
+                     INNER JOIN finance_creances c ON c.id = a.creance_id
+                     INNER JOIN finance_versements v ON v.id = a.versement_id
+                     LEFT JOIN finance_annulations an ON an.versement_id = v.id
+                     WHERE c.frais_scolaire_id = f.id AND an.id IS NULL) AS total_encaisse
+             FROM frais_scolaires f
+             INNER JOIN finance_frais_config cfg ON cfg.frais_scolaire_id = f.id
+             WHERE f.annee_scolaire_id = :aid
+             ORDER BY f.est_obligatoire DESC, f.libelle",
+            ['aid' => $yearId]
+        );
+    }
+
+    public function findFee(int $feeId): ?array
+    {
+        return $this->db->fetchOne(
+            "SELECT id, libelle, annee_scolaire_id, est_actif
+             FROM frais_scolaires WHERE id = :id",
+            ['id' => $feeId]
+        );
+    }
+
+    public function feeExists(string $label, int $yearId, int $classId, int $excludeId = 0): bool
+    {
+        $sql = "SELECT COUNT(*) FROM frais_scolaires
+                WHERE libelle = :libelle AND annee_scolaire_id = :aid
+                  AND COALESCE(classe_id, 0) = :classe";
+        $params = ['libelle' => $label, 'aid' => $yearId, 'classe' => $classId];
+        if ($excludeId > 0) {
+            $sql .= " AND id != :exclude_id";
+            $params['exclude_id'] = $excludeId;
+        }
+        return (int) $this->db->fetchColumn($sql, $params) > 0;
+    }
+
+    public function schoolYearExists(int $yearId): bool
+    {
+        return (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM annees_scolaires WHERE id = :id", ['id' => $yearId]
+        ) > 0;
+    }
+
+    public function classBelongsToYear(int $classId, int $yearId): bool
+    {
+        return (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM classes WHERE id = :id AND annee_scolaire_id = :annee",
+            ['id' => $classId, 'annee' => $yearId]
+        ) > 0;
+    }
+
+    public function createFee(array $data): int
+    {
+        return (int) $this->db->insert(
+            "INSERT INTO frais_scolaires
+                (libelle, description, montant, classe_id, annee_scolaire_id, est_obligatoire, est_actif)
+             VALUES (:libelle, :description, :montant, :classe, :annee, :obligatoire, 1)",
+            [
+                'libelle' => $data['libelle'], 'description' => $data['description'],
+                'montant' => $data['montant'], 'classe' => $data['classe_id'],
+                'annee' => $data['annee_id'], 'obligatoire' => $data['est_obligatoire'],
+            ]
+        );
+    }
+
+    public function createFeeConfig(int $feeId, array $data): void
+    {
+        $this->db->insert(
+            "INSERT INTO finance_frais_config
+                (frais_scolaire_id, categorie, devise, periodicite, jour_echeance)
+             VALUES (:id, :categorie, :devise, :periodicite, :jour)",
+            ['id' => $feeId, 'categorie' => $data['categorie'], 'devise' => $data['devise'],
+             'periodicite' => $data['periodicite'], 'jour' => $data['jour_echeance']]
+        );
+    }
+
+    public function updateFee(int $feeId, array $data): void
+    {
+        $this->db->update(
+            "UPDATE frais_scolaires
+             SET libelle = :libelle, description = :description, montant = :montant,
+                 classe_id = :classe, est_obligatoire = :obligatoire
+             WHERE id = :id",
+            ['libelle' => $data['libelle'], 'description' => $data['description'],
+             'montant' => $data['montant'], 'classe' => $data['classe_id'],
+             'obligatoire' => $data['est_obligatoire'], 'id' => $feeId]
+        );
+        $this->db->update(
+            "UPDATE finance_frais_config
+             SET categorie = :categorie, devise = :devise, periodicite = :periodicite, jour_echeance = :jour
+             WHERE frais_scolaire_id = :id",
+            ['categorie' => $data['categorie'], 'devise' => $data['devise'],
+             'periodicite' => $data['periodicite'], 'jour' => $data['jour_echeance'], 'id' => $feeId]
+        );
+    }
+
+    public function countLegacyPaymentsForFee(int $feeId): int
+    {
+        return (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM paiements WHERE frais_scolaire_id = :fid", ['fid' => $feeId]
+        );
+    }
+
+    public function countClaimsForFee(int $feeId): int
+    {
+        return (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM finance_creances WHERE frais_scolaire_id = :fid", ['fid' => $feeId]
+        );
+    }
+
+    public function deleteFee(int $feeId): void
+    {
+        $this->db->delete("DELETE FROM frais_scolaires WHERE id = :id", ['id' => $feeId]);
+    }
+
+    public function updateFeeStatus(int $feeId, int $status): void
+    {
+        $this->db->update("UPDATE frais_scolaires SET est_actif = :statut WHERE id = :id",
+            ['statut' => $status, 'id' => $feeId]);
+    }
 }
