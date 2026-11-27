@@ -84,68 +84,14 @@ class MatiereController
         $recherche  = post('recherche', '');
         $parPage    = ITEMS_PER_PAGE;
 
-        $where = [];
-        $params = [];
-
-        if (!empty($recherche)) {
-            $where[] = "(m.libelle LIKE :r1 OR m.code LIKE :r2 OR m.description LIKE :r3)";
-            $params['r1'] = "%{$recherche}%";
-            $params['r2'] = "%{$recherche}%";
-            $params['r3'] = "%{$recherche}%";
-        }
-
-        $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
-
-        // Compter uniquement les groupes (est_groupe = 1)
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM matieres m WHERE m.est_groupe = 1 AND m.est_actif = 1 {$whereClause}",
-            $params
-        );
-
         $offset = ($page - 1) * $parPage;
-
-        // Récupérer les groupes
-        $groupes = $this->db->fetchAll(
-            "SELECT m.*,
-                    (SELECT COUNT(*) FROM matieres sm WHERE sm.parent_id = m.id AND sm.est_actif = 1) AS nb_sous_matieres,
-                    (SELECT COUNT(*) FROM classe_matieres cm 
-                     INNER JOIN matieres sm ON cm.matiere_id = sm.id 
-                     WHERE sm.parent_id = m.id AND cm.est_active = 1) AS nb_associations
-             FROM matieres m
-             WHERE m.est_groupe = 1 AND m.est_actif = 1
-             {$whereClause}
-             ORDER BY m.id
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, ['limit' => $parPage, 'offset' => $offset])
+        $liste = $this->matiereService->getPaginatedGroupHierarchy(
+            (string) $recherche,
+            (int) $parPage,
+            (int) $offset
         );
-
-        // Pour chaque groupe, récupérer ses sous-matières
-        foreach ($groupes as &$groupe) {
-            $groupe['sous_matieres'] = $this->db->fetchAll(
-                "SELECT m.*,
-                        (SELECT COUNT(*) FROM classe_matieres cm WHERE cm.matiere_id = m.id AND cm.est_active = 1) AS nb_classes
-                 FROM matieres m
-                 WHERE m.parent_id = :pid AND m.est_groupe = 0 AND m.est_actif = 1
-                 ORDER BY m.id",
-                ['pid' => $groupe['id']]
-            );
-
-            // Pour chaque sous-matière, récupérer les classes associées
-            foreach ($groupe['sous_matieres'] as &$sm) {
-                $sm['classes'] = $this->db->fetchAll(
-                    "SELECT c.nom, c.niveau, COALESCE(cm.maxima_override, m.maxima) AS maxima_final
-                     FROM classe_matieres cm
-                     INNER JOIN classes c ON cm.classe_id = c.id
-                     INNER JOIN matieres m ON cm.matiere_id = m.id
-                     WHERE cm.matiere_id = :mid AND cm.est_active = 1
-                     AND c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-                     ORDER BY c.niveau",
-                    ['mid' => $sm['id']]
-                );
-            }
-            unset($sm);
-        }
-        unset($groupe);
+        $total = $liste['total'];
+        $groupes = $liste['groupes'];
 
         jsonResponse(true, 'Liste récupérée.', [
             'groupes' => $groupes,
