@@ -58,6 +58,12 @@ class FinanceService
 
     public function createFee(array $data): int
     {
+        if (!$this->repository->schoolYearExists((int) $data['annee_id'])) {
+            throw new DomainException('SCHOOL_YEAR_NOT_FOUND');
+        }
+        if (!empty($data['classe_id']) && !$this->repository->classBelongsToYear((int) $data['classe_id'], (int) $data['annee_id'])) {
+            throw new DomainException('CLASS_YEAR_MISMATCH');
+        }
         if ($this->repository->feeExists($data['libelle'], $data['annee_id'], $data['classe_id'])) {
             throw new DomainException('DUPLICATE_FEE');
         }
@@ -78,6 +84,9 @@ class FinanceService
         $fee = $this->repository->findFee($feeId);
         if (!$fee) {
             throw new DomainException('FEE_NOT_FOUND');
+        }
+        if (!empty($data['classe_id']) && !$this->repository->classBelongsToYear((int) $data['classe_id'], (int) $fee['annee_scolaire_id'])) {
+            throw new DomainException('CLASS_YEAR_MISMATCH');
         }
         if ($this->repository->feeExists($data['libelle'], (int) $fee['annee_scolaire_id'], $data['classe_id'], $feeId)) {
             throw new DomainException('DUPLICATE_FEE');
