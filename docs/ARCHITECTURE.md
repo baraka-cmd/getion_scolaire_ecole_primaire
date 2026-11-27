@@ -77,3 +77,16 @@ Les contrats de routes, validation, messages, paramètres du rate-limit, répons
 Derniers ajouts sur la branche dédiée : repositories et services pour le rate-limit, les paramètres école de la page login et la réinitialisation du mot de passe ; contrôleurs des pages oubli/réinitialisation désormais sans SQL ; vues login/forgot/reset sans SQL direct ; transactions de création utilisateur/Google et remplacement des permissions encapsulées dans les repositories.
 
 À la reprise, lire ce suivi et `docs/MVC_REFACTORING_CONTRACT.md`, récupérer la branche, exécuter `php -l` sur les fichiers modifiés et les tests `tests/auth_security_smoke.php`, `tests/google_oauth_config_smoke.php`, `tests/users_listing_smoke.php` et `tests/finance_auth_users_service_smoke.php` avec une base de test appropriée. Comparer ensuite les réponses et les flux de login, OAuth, reset, utilisateurs et rôles. Ne clôturer la validation qu'après ces résultats réels.
+
+
+## Phase 3 — Référentiels scolaires (mise en œuvre progressive)
+
+Sur la même branche de refonte, les premiers déplacements ont été réalisés sans changement de schéma ni de contrat HTTP :
+
+- **Années scolaires / périodes :** les requêtes de vérification d'unicité et de chevauchement, lectures verrouillées, recherche de configuration active, comptages des dépendances et suppressions simples sont accessibles via `AnneeScolaireService` et `AnneeScolaireRepository`. La validation des dates, messages, codes HTTP et transactions existantes du contrôleur restent inchangés.
+- **Classes :** la requête de liste paginée, le filtre d'année active, le total, le titulaire, les effectifs, le tri et la pagination sont déplacés vers `ClasseRepository` via `ClasseService`. Les colonnes de tri sont validées côté repository avec une liste blanche.
+- **Matières :** la liste hiérarchique groupes → sous-matières → classes associées, avec pagination et recherche, est déplacée vers `MatiereRepository` via `MatiereService`.
+- **Paramètres école :** les lectures, la validation de la paire année/trimestre, les listes d'années/périodes, le logo et la sauvegarde transactionnelle des paramètres sont délégués à `SchoolSettingsService`/`SchoolSettingsRepository`. Les valeurs de barème existantes sont conservées lors de la sauvegarde, comme auparavant.
+- Un smoke test sans base a été ajouté pour vérifier les contrats de délégation des nouveaux services.
+
+**Phase 3 reste en cours :** les validations CRUD et mutations transactionnelles des classes, matières et années scolaires sont encore progressivement extraites. Les tests doivent être exécutés localement avant clôture ; aucune validation PHP n'est revendiquée dans cette session.
