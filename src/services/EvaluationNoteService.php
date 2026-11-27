@@ -13,6 +13,35 @@ class EvaluationNoteService
         $this->repository = $repository ?? new EvaluationNoteRepository();
     }
 
+    public function getEntryContext(int $evaluationId): ?array
+    {
+        return $evaluationId > 0 ? $this->repository->findEvaluationEntryContext($evaluationId) : null;
+    }
+
+    public function getActiveStudentIds(int $classId, int $yearId): array
+    {
+        if ($classId <= 0 || $yearId <= 0) {
+            return [];
+        }
+        return $this->repository->findActiveStudentIdsForEvaluation($classId, $yearId);
+    }
+
+    public function getSubjectMaxima(int $classId, int $groupId, string $evaluationType): array
+    {
+        if ($classId <= 0 || $groupId <= 0) {
+            return [];
+        }
+        return $this->repository->findActiveSubjectMaximaForEvaluation($classId, $groupId, $evaluationType);
+    }
+
+    public function getStudentNotes(int $studentId, int $trimesterId = 0): array
+    {
+        if ($studentId <= 0 || $trimesterId < 0) {
+            return [];
+        }
+        return $this->repository->findStudentNotes($studentId, $trimesterId);
+    }
+
     public function saveCell(
         int $evaluationId,
         int $studentId,
