@@ -10,7 +10,6 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('inscriptions.creer');
 
-global $db;
 
 // Charger le service de lecture des années scolaires
 require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'InscriptionService.php';
