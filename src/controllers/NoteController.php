@@ -258,24 +258,13 @@ class NoteController
             jsonResponse(false, 'Classe et trimestre obligatoires.', [], 400);
         }
 
-        $trimestre = $this->db->fetchOne(
-            "SELECT t.*
-             FROM trimestres t
-             INNER JOIN classes c ON c.annee_scolaire_id = t.annee_scolaire_id
-             WHERE t.id = :tid AND c.id = :cid",
-            ['tid' => $trimestreId, 'cid' => $classeId]
-        );
+        $trimestre = $this->evaluationNoteService->getTermForGeneration($classeId, $trimestreId);
         if (!$trimestre) {
             jsonResponse(false, 'Le trimestre ne correspond pas à l’année scolaire de cette classe.', [], 422);
         }
 
         // Récupérer tous les groupes actifs
-        $groupes = $this->db->fetchAll(
-            "SELECT m.id, m.libelle 
-             FROM matieres m 
-             WHERE m.est_groupe = 1 AND m.est_actif = 1
-             ORDER BY m.id"
-        );
+        $groupes = $this->evaluationNoteService->getActiveGroupsForEvaluationGeneration();
 
         $types = ['Période 1', 'Période 2', 'Examen'];
         $crees = 0;
@@ -284,11 +273,7 @@ class NoteController
         foreach ($groupes as $groupe) {
             foreach ($types as $type) {
                 // Vérifier si l'évaluation existe déjà
-                $existe = $this->db->fetchColumn(
-                    "SELECT COUNT(*) FROM evaluations 
-                     WHERE trimestre_id = :tid AND classe_id = :cid AND groupe_id = :gid AND type_evaluation = :type",
-                    ['tid' => $trimestreId, 'cid' => $classeId, 'gid' => $groupe['id'], 'type' => $type]
-                );
+                $existe = $this->evaluationNoteService->evaluationAlreadyExists($trimestreId, $classeId, (int) $groupe['id'], $type);
 
                 if ($existe > 0) {
                     $ignores++;
@@ -298,17 +283,7 @@ class NoteController
                 // Calculer la date suggérée
                 $dateSuggeree = $this->calculerDateSuggestion($trimestre, $type);
 
-                $this->db->insert(
-                    "INSERT INTO evaluations (trimestre_id, groupe_id, classe_id, type_evaluation, date_evaluation)
-                     VALUES (:tid, :gid, :cid, :type, :date_eval)",
-                    [
-                        'tid'       => $trimestreId,
-                        'gid'       => $groupe['id'],
-                        'cid'       => $classeId,
-                        'type'      => $type,
-                        'date_eval' => $dateSuggeree
-                    ]
-                );
+                $this->evaluationNoteService->createEvaluation($trimestreId, (int) $groupe['id'], $classeId, $type, $dateSuggeree);
 
                 $crees++;
             }
