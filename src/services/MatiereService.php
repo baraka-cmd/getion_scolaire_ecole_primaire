@@ -53,6 +53,16 @@ class MatiereService
         $this->repository->updateSubject($data, $updateParent);
     }
 
+    public function getAllGroupHierarchyForView(): array
+    {
+        return $this->repository->findAllGroupHierarchyForView();
+    }
+
+    public function getSubjectSummaryCounts(): array
+    {
+        return $this->repository->findSubjectSummaryCounts();
+    }
+
     public function getPaginatedGroupHierarchy(string $search, int $limit, int $offset): array
     {
         return $this->repository->findPaginatedGroupHierarchy($search, $limit, $offset);
