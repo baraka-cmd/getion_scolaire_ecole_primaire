@@ -1,10 +1,5 @@
 <?php
-defined('ACCESS') or define('ACCESS', true);
-require_once __DIR__ . '/../../../src/config/app.php';
-requireLogin();
-if (!hasRole(['Comptable', 'Admin', 'Directeur'])) {
-    redirect('/gestion_scolaire/dashboard');
-}
+require_once SRC_PATH . 'config' . DIRECTORY_SEPARATOR . 'database.php';
 require_once __DIR__ . '/../../../src/controllers/AccountantDashboardController.php';
 $dashboardController = new AccountantDashboardController();
 extract($dashboardController->getViewData(), EXTR_OVERWRITE);
