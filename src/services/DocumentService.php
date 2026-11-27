@@ -13,6 +13,11 @@ class DocumentService
         $this->repository = $repository ?? new DocumentRepository();
     }
 
+    public function paginateVisible(array $filters, int $page, int $perPage, bool $admin): array
+    {
+        return $this->repository->paginateVisible($filters, max(1, $page), max(1, $perPage), $admin);
+    }
+
     public function findMetadata(int $documentId): ?array
     {
         return $this->repository->findMetadata($documentId);
@@ -48,4 +53,9 @@ class DocumentService
     {
         return $this->repository->findRecent($admin, max(1, $limit));
     }
+    public function statistics(bool $admin): array
+    {
+        return $this->repository->statistics($admin);
+    }
+
 }

@@ -1,0 +1,400 @@
+<?php
+
+defined('ACCESS') or die('Accès interdit');
+
+require_once __DIR__ . '/../config/database.php';
+
+/**
+ * Persistance en lecture des listes et dossiers d'élèves.
+ * Les valeurs de tri SQL sont sélectionnées exclusivement dans une whitelist.
+ */
+class StudentRecordRepository
+{
+    private Database $db;
+
+    public function __construct(?Database $db = null)
+    {
+        $this->db = $db ?? Database::getInstance();
+    }
+
+    public function paginate(array $filters, int $page, int $perPage, string $role, int $userId): array
+    {
+        $where = [
+            "i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)"
+        ];
+        $params = [];
+
+        $search = (string) ($filters['recherche'] ?? '');
+        if ($search !== '') {
+            $where[] = "(e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3)";
+            $params['r1'] = "%{$search}%";
+            $params['r2'] = "%{$search}%";
+            $params['r3'] = "%{$search}%";
+        }
+
+        $classId = (int) ($filters['classe_id'] ?? 0);
+        if ($classId > 0) {
+            $where[] = 'i.classe_id = :classe';
+            $params['classe'] = $classId;
+        }
+
+        if ($role === 'Parent') {
+            $where[] = "EXISTS (
+                SELECT 1 FROM eleve_parent ep
+                INNER JOIN parents_tuteurs pt ON pt.id = ep.parent_id
+                WHERE ep.eleve_id = e.id AND pt.utilisateur_id = :parent_user_id
+            )";
+            $params['parent_user_id'] = $userId;
+        } elseif ($role === 'Enseignant') {
+            $where[] = "EXISTS (
+                SELECT 1 FROM enseignants ens
+                WHERE ens.utilisateur_id = :teacher_user_id AND ens.est_actif = 1
+                  AND ens.classe_id = i.classe_id
+            )";
+            $params['teacher_user_id'] = $userId;
+        }
+
+        $sex = (string) ($filters['sexe'] ?? '');
+        if ($sex !== '') {
+            $where[] = 'e.sexe = :sexe';
+            $params['sexe'] = $sex;
+        }
+
+        $status = $filters['statut'] ?? '';
+        if ($status !== '') {
+            $where[] = 'e.est_actif = :statut';
+            $params['statut'] = (int) $status;
+        } else {
+            $where[] = 'e.est_actif = 1';
+        }
+
+        $whereClause = 'WHERE ' . implode(' AND ', $where);
+        $allowedColumns = ['id', 'nom', 'prenom', 'matricule', 'date_naissance', 'sexe', 'classe_nom'];
+        $order = (string) ($filters['ordre'] ?? 'nom');
+        if (!in_array($order, $allowedColumns, true)) {
+            $order = 'nom';
+        }
+        $direction = strtoupper((string) ($filters['direction'] ?? 'ASC'));
+        if (!in_array($direction, ['ASC', 'DESC'], true)) {
+            $direction = 'ASC';
+        }
+        $orderColumn = $order === 'classe_nom' ? 'c.nom' : 'e.' . $order;
+
+        $total = (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM eleves e
+             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
+             INNER JOIN classes c ON i.classe_id = c.id
+             {$whereClause}",
+            $params
+        );
+
+        $offset = ($page - 1) * $perPage;
+        $rows = $this->db->fetchAll(
+            "SELECT e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe, e.photo,
+                    e.telephone, e.est_actif, e.date_inscription,
+                    c.nom AS classe_nom, c.id AS classe_id,
+                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
+                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age
+             FROM eleves e
+             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
+             INNER JOIN classes c ON i.classe_id = c.id
+             {$whereClause}
+             ORDER BY {$orderColumn} {$direction}
+             LIMIT :limit OFFSET :offset",
+            array_merge($params, ['limit' => $perPage, 'offset' => $offset])
+        );
+
+        return ['rows' => $rows, 'total' => $total];
+    }
+
+    public function findRecord(int $studentId): ?array
+    {
+        return $this->db->fetchOne(
+            "SELECT e.*,
+                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
+                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age,
+                    c.nom AS classe_nom, c.id AS classe_id, c.niveau AS classe_niveau,
+                    i.date_inscription AS date_inscription_classe,
+                    i.statut AS statut_inscription,
+                    CONCAT(COALESCE(ens.prenom, ''), ' ', COALESCE(ens.nom, '')) AS titulaire_nom
+             FROM eleves e
+             LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
+             LEFT JOIN classes c ON i.classe_id = c.id
+             LEFT JOIN enseignants ens ON c.id = ens.classe_id AND ens.est_actif = 1
+             WHERE e.id = :id",
+            ['id' => $studentId]
+        );
+    }
+
+    public function findDetailForForm(int $studentId): ?array
+    {
+        return $this->db->fetchOne(
+            "SELECT e.*,
+                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
+                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age,
+                    c.nom AS classe_nom, c.id AS classe_id, c.niveau AS classe_niveau,
+                    i.date_inscription AS date_inscription_classe,
+                    i.statut AS statut_inscription,
+                    CONCAT(COALESCE(ens.prenom, ''), ' ', COALESCE(ens.nom, '')) AS titulaire_nom
+             FROM eleves e
+             LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
+             LEFT JOIN classes c ON i.classe_id = c.id
+             LEFT JOIN enseignants ens ON c.id = ens.classe_id AND ens.est_actif = 1
+             WHERE e.id = :id",
+            ['id' => $studentId]
+        );
+    }
+
+    public function getActiveClassesForForms(): array
+    {
+        return $this->db->fetchAll(
+            "SELECT c.id, c.nom, c.niveau
+             FROM classes c
+             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
+             ORDER BY c.niveau"
+        );
+    }
+
+    public function enrollmentHistory(int $studentId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT i.*, c.nom AS classe_nom, a.libelle AS annee_libelle
+             FROM inscriptions i
+             INNER JOIN classes c ON i.classe_id = c.id
+             INNER JOIN annees_scolaires a ON i.annee_scolaire_id = a.id
+             WHERE i.eleve_id = :eid
+             ORDER BY i.date_inscription DESC",
+            ['eid' => $studentId]
+        );
+    }
+
+    public function recentGrades(int $studentId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT n.valeur, ev.type_evaluation, ev.date_evaluation, m.libelle AS matiere,
+                    t.libelle AS trimestre
+             FROM notes n
+             INNER JOIN evaluations ev ON n.evaluation_id = ev.id
+             INNER JOIN matieres m ON ev.matiere_id = m.id
+             INNER JOIN trimestres t ON ev.trimestre_id = t.id
+             WHERE n.eleve_id = :eid
+             ORDER BY ev.date_evaluation DESC
+             LIMIT 20",
+            ['eid' => $studentId]
+        );
+    }
+
+    public function recentAbsences(int $studentId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT date_absence, type_absence, est_justifiee, motif
+             FROM absences
+             WHERE eleve_id = :eid
+             ORDER BY date_absence DESC
+             LIMIT 10",
+            ['eid' => $studentId]
+        );
+    }
+
+    public function payments(int $studentId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT p.montant_total, p.montant_paye, p.statut, p.date_paiement, p.mode_paiement,
+                    f.libelle AS frais_libelle
+             FROM paiements p
+             INNER JOIN frais_scolaires f ON p.frais_scolaire_id = f.id
+             WHERE p.eleve_id = :eid
+             ORDER BY p.date_paiement DESC",
+            ['eid' => $studentId]
+        );
+    }
+
+    /**
+     * Statistiques d'effectifs affichées sur la page de liste.
+     * Les requêtes restent ici afin que la vue ne dépende pas de SQL.
+     */
+    public function summaryStats(): array
+    {
+        return [
+            'total_actifs' => (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) AND statut = 'Actif'"
+            ),
+            'total_garcons' => (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM inscriptions i
+                 INNER JOIN eleves e ON i.eleve_id = e.id
+                 WHERE i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
+                   AND i.statut = 'Actif' AND e.sexe = 'M'"
+            ),
+            'total_filles' => (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM inscriptions i
+                 INNER JOIN eleves e ON i.eleve_id = e.id
+                 WHERE i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
+                   AND i.statut = 'Actif' AND e.sexe = 'F'"
+            ),
+            'nouvelles_inscriptions' => (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM inscriptions WHERE MONTH(date_inscription) = MONTH(CURDATE()) AND YEAR(date_inscription) = YEAR(CURDATE())"
+            ),
+        ];
+    }
+
+
+    /**
+     * Données exportables des élèves, avec le même filtrage que l'écran d'export.
+     * Les rôles et l'identifiant utilisateur proviennent exclusivement de la session.
+     */
+    public function exportRows(array $filters, string $role, int $userId): array
+    {
+        $where = [
+            "i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)"
+        ];
+        $params = [];
+
+        if ($role === 'Parent') {
+            $where[] = "EXISTS (
+                SELECT 1 FROM eleve_parent ep
+                INNER JOIN parents_tuteurs pt ON pt.id = ep.parent_id
+                WHERE ep.eleve_id = e.id AND pt.utilisateur_id = :parent_user_id
+            )";
+            $params['parent_user_id'] = $userId;
+        } elseif ($role === 'Enseignant') {
+            $where[] = "EXISTS (
+                SELECT 1 FROM enseignants ens
+                WHERE ens.classe_id = i.classe_id
+                  AND ens.utilisateur_id = :teacher_user_id
+                  AND ens.est_actif = 1
+            )";
+            $params['teacher_user_id'] = $userId;
+        }
+
+        $search = (string) ($filters['recherche'] ?? '');
+        if ($search !== '') {
+            $where[] = "(e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3)";
+            $params['r1'] = "%{$search}%";
+            $params['r2'] = "%{$search}%";
+            $params['r3'] = "%{$search}%";
+        }
+
+        $classId = (int) ($filters['classe_id'] ?? 0);
+        if ($classId > 0) {
+            $where[] = 'i.classe_id = :classe';
+            $params['classe'] = $classId;
+        }
+
+        $sex = (string) ($filters['sexe'] ?? '');
+        if ($sex !== '') {
+            $where[] = 'e.sexe = :sexe';
+            $params['sexe'] = $sex;
+        }
+
+        $status = (string) ($filters['statut'] ?? '1');
+        if ($status !== '') {
+            $where[] = 'e.est_actif = :statut';
+            $params['statut'] = (int) $status;
+        }
+
+        return $this->db->fetchAll(
+            "SELECT e.matricule, e.nom, e.prenom,
+                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance,
+                    e.sexe, e.lieu_naissance, e.adresse, e.telephone, e.email,
+                    e.groupe_sanguin, e.allergies, e.maladies,
+                    DATE_FORMAT(e.date_inscription, '%d/%m/%Y') AS date_inscription,
+                    CASE WHEN e.est_actif = 1 THEN 'Actif' ELSE 'Inactif' END AS statut,
+                    c.nom AS classe_nom,
+                    GROUP_CONCAT(CONCAT(pt.nom, ' ', pt.prenom, ' (', pt.lien, ' - ', pt.telephone_principal, ')') SEPARATOR ' | ') AS parents
+             FROM eleves e
+             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
+             INNER JOIN classes c ON i.classe_id = c.id
+             LEFT JOIN eleve_parent ep ON e.id = ep.eleve_id
+             LEFT JOIN parents_tuteurs pt ON ep.parent_id = pt.id
+             WHERE " . implode(' AND ', $where) . "
+             GROUP BY e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe,
+                      e.lieu_naissance, e.adresse, e.telephone, e.email,
+                      e.groupe_sanguin, e.allergies, e.maladies, e.date_inscription,
+                      e.est_actif, c.nom
+             ORDER BY c.nom, e.nom, e.prenom",
+            $params
+        );
+    }
+
+
+    public function updateProfile(int $studentId, array $data): void
+    {
+        $this->db->update(
+            "UPDATE eleves
+             SET nom = :nom, prenom = :prenom, date_naissance = :dn, lieu_naissance = :ln,
+                 sexe = :sexe, adresse = :adresse, telephone = :tel, email = :email,
+                 groupe_sanguin = :gs, allergies = :allergies, maladies = :maladies
+             WHERE id = :id",
+            [
+                'nom' => $data['nom'], 'prenom' => $data['prenom'], 'dn' => $data['date_naissance'],
+                'ln' => $data['lieu_naissance'], 'sexe' => $data['sexe'], 'adresse' => $data['adresse'],
+                'tel' => $data['telephone'], 'email' => $data['email'], 'gs' => $data['groupe_sanguin'],
+                'allergies' => $data['allergies'], 'maladies' => $data['maladies'], 'id' => $studentId,
+            ]
+        );
+    }
+
+    public function deactivate(int $studentId, string $reason): void
+    {
+        $this->db->beginTransaction();
+        try {
+            $this->db->update('UPDATE eleves SET est_actif = 0 WHERE id = :id', ['id' => $studentId]);
+            $this->db->update(
+                "UPDATE inscriptions
+                 SET statut = :statut, motif_statut = :motif, date_changement_statut = CURDATE()
+                 WHERE eleve_id = :eid AND statut = 'Actif'",
+                ['statut' => 'Abandon', 'motif' => $reason, 'eid' => $studentId]
+            );
+            $this->db->commit();
+        } catch (Throwable $exception) {
+            $this->db->rollback();
+            throw $exception;
+        }
+    }
+
+    public function transferEnrollment(int $studentId, int $newClassId, string $reason): array
+    {
+        $hasActiveEnrollment = (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM inscriptions WHERE eleve_id = :eid AND statut = 'Actif' AND annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)",
+            ['eid' => $studentId]
+        );
+        if ($hasActiveEnrollment === 0) {
+            return ['success' => false, 'capacity' => 0, 'reason' => 'NO_ACTIVE_ENROLLMENT'];
+        }
+        $capacity = (int) $this->db->fetchColumn(
+            'SELECT capacite_max FROM classes WHERE id = :cid', ['cid' => $newClassId]
+        );
+        $count = (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif'",
+            ['cid' => $newClassId]
+        );
+        if ($count >= $capacity) {
+            return ['success' => false, 'capacity' => $capacity];
+        }
+
+        $this->db->beginTransaction();
+        try {
+            $this->db->update(
+                "UPDATE inscriptions
+                 SET statut = 'Transféré', motif_statut = :motif, date_changement_statut = CURDATE()
+                 WHERE eleve_id = :eid AND statut = 'Actif'
+                   AND annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)",
+                ['motif' => $reason, 'eid' => $studentId]
+            );
+            $activeYear = $this->db->fetchColumn(
+                'SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1'
+            );
+            $this->db->query(
+                "INSERT INTO inscriptions (eleve_id, classe_id, annee_scolaire_id, date_inscription, statut)
+                 VALUES (:eid, :cid, :aid, CURDATE(), 'Actif')",
+                ['eid' => $studentId, 'cid' => $newClassId, 'aid' => $activeYear]
+            );
+            $this->db->commit();
+            return ['success' => true, 'capacity' => $capacity];
+        } catch (Throwable $exception) {
+            $this->db->rollback();
+            throw $exception;
+        }
+    }
+
+}

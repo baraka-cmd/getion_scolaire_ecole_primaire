@@ -7,21 +7,25 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../services/ParentStudentService.php';
+require_once __DIR__ . '/../services/StudentRecordService.php';
 require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
 
 class EleveController
 {
     private Database $db;
     private ParentStudentService $parentStudentService;
+    private StudentRecordService $studentRecordService;
     private StudentAccessPolicy $studentAccessPolicy;
 
     public function __construct(
         ?ParentStudentService $parentStudentService = null,
-        ?StudentAccessPolicy $studentAccessPolicy = null
+        ?StudentAccessPolicy $studentAccessPolicy = null,
+        ?StudentRecordService $studentRecordService = null
     )
     {
         $this->db = Database::getInstance();
         $this->parentStudentService = $parentStudentService ?? new ParentStudentService();
+        $this->studentRecordService = $studentRecordService ?? new StudentRecordService();
         $this->studentAccessPolicy = $studentAccessPolicy ?? new StudentAccessPolicy($this->db);
     }
 
@@ -75,101 +79,30 @@ class EleveController
      */
     private function getListe(): void
     {
-        $page       = max(1, (int) post('page', 1));
-        $recherche  = post('recherche', '');
-        $classeId   = (int) post('classe_id', 0);
-        $sexe       = post('sexe', '');
-        $statut     = post('statut', '');
-        $ordre      = post('ordre', 'nom');
-        $direction  = post('direction', 'ASC');
-        $parPage    = ITEMS_PER_PAGE;
+        $page = max(1, (int) post('page', 1));
+        $filters = [
+            'recherche' => post('recherche', ''),
+            'classe_id' => (int) post('classe_id', 0),
+            'sexe' => post('sexe', ''),
+            'statut' => post('statut', ''),
+            'ordre' => post('ordre', 'nom'),
+            'direction' => post('direction', 'ASC'),
+        ];
 
-        $where = [];
-        $params = [];
-
-        // Année active par défaut
-        $where[] = "i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)";
-
-        if (!empty($recherche)) {
-            $where[] = "(e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3)";
-            $params['r1'] = "%{$recherche}%";
-            $params['r2'] = "%{$recherche}%";
-            $params['r3'] = "%{$recherche}%";
-        }
-
-        if ($classeId > 0) {
-            $where[] = "i.classe_id = :classe";
-            $params['classe'] = $classeId;
-        }
-
-        if (hasRole('Parent')) {
-            $where[] = "EXISTS (
-                SELECT 1 FROM eleve_parent ep
-                INNER JOIN parents_tuteurs pt ON pt.id = ep.parent_id
-                WHERE ep.eleve_id = e.id AND pt.utilisateur_id = :parent_user_id
-            )";
-            $params['parent_user_id'] = (int) $_SESSION['utilisateur_id'];
-        } elseif (hasRole('Enseignant')) {
-            $where[] = "EXISTS (
-                SELECT 1 FROM enseignants ens
-                WHERE ens.utilisateur_id = :teacher_user_id AND ens.est_actif = 1
-                  AND ens.classe_id = i.classe_id
-            )";
-            $params['teacher_user_id'] = (int) $_SESSION['utilisateur_id'];
-        }
-
-        if (!empty($sexe)) {
-            $where[] = "e.sexe = :sexe";
-            $params['sexe'] = $sexe;
-        }
-
-        if ($statut !== '') {
-            $where[] = "e.est_actif = :statut";
-            $params['statut'] = (int) $statut;
-        } else {
-            $where[] = "e.est_actif = 1"; // Actifs par défaut
-        }
-
-        $whereClause = 'WHERE ' . implode(' AND ', $where);
-
-        // Colonnes autorisées pour le tri
-        $colonnesAutorisees = ['id', 'nom', 'prenom', 'matricule', 'date_naissance', 'sexe', 'classe_nom'];
-        if (!in_array($ordre, $colonnesAutorisees)) $ordre = 'nom';
-        if (!in_array(strtoupper($direction), ['ASC', 'DESC'])) $direction = 'ASC';
-
-        // Adapter le ORDER BY
-        $orderMap = ['classe_nom' => 'c.nom'];
-        $orderCol = $orderMap[$ordre] ?? 'e.' . $ordre;
-
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM eleves e
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             INNER JOIN classes c ON i.classe_id = c.id
-             {$whereClause}",
-            $params
-        );
-
-        $offset = ($page - 1) * $parPage;
-        $eleves = $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe, e.photo,
-                    e.telephone, e.est_actif, e.date_inscription,
-                    c.nom AS classe_nom, c.id AS classe_id,
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age
-             FROM eleves e
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             INNER JOIN classes c ON i.classe_id = c.id
-             {$whereClause}
-             ORDER BY {$orderCol} {$direction}
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, ['limit' => $parPage, 'offset' => $offset])
+        $role = hasRole('Parent') ? 'Parent' : (hasRole('Enseignant') ? 'Enseignant' : '');
+        $result = $this->studentRecordService->paginate(
+            $filters,
+            $page,
+            ITEMS_PER_PAGE,
+            $role,
+            (int) ($_SESSION['utilisateur_id'] ?? 0)
         );
 
         jsonResponse(true, 'Liste récupérée.', [
-            'eleves' => $eleves,
-            'total'  => $total,
-            'page'   => $page,
-            'pages'  => ceil($total / $parPage)
+            'eleves' => $result['rows'],
+            'total' => $result['total'],
+            'page' => $page,
+            'pages' => ceil($result['total'] / ITEMS_PER_PAGE)
         ]);
     }
 
@@ -184,68 +117,18 @@ class EleveController
             jsonResponse(false, 'Élève introuvable.', [], 404);
         }
 
-        $eleve = $this->db->fetchOne(
-            "SELECT e.*,
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age,
-                    c.nom AS classe_nom, c.id AS classe_id, c.niveau AS classe_niveau,
-                    i.date_inscription AS date_inscription_classe,
-                    i.statut AS statut_inscription,
-                    CONCAT(COALESCE(ens.prenom, ''), ' ', COALESCE(ens.nom, '')) AS titulaire_nom
-             FROM eleves e
-             LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             LEFT JOIN classes c ON i.classe_id = c.id
-             LEFT JOIN enseignants ens ON c.id = ens.classe_id AND ens.est_actif = 1
-             WHERE e.id = :id",
-            ['id' => $id]
-        );
-
+        $eleve = $this->studentRecordService->findRecord($id);
         if (!$eleve) jsonResponse(false, 'Élève introuvable.', [], 404);
 
-        // Récupérer les parents
         $parents = $this->parentStudentService->getStudentParentsForDetail($id);
-
-        // Récupérer les dernières notes
-        $notes = $this->db->fetchAll(
-            "SELECT n.valeur, ev.type_evaluation, ev.date_evaluation, m.libelle AS matiere,
-                    t.libelle AS trimestre
-             FROM notes n
-             INNER JOIN evaluations ev ON n.evaluation_id = ev.id
-             INNER JOIN matieres m ON ev.matiere_id = m.id
-             INNER JOIN trimestres t ON ev.trimestre_id = t.id
-             WHERE n.eleve_id = :eid
-             ORDER BY ev.date_evaluation DESC
-             LIMIT 20",
-            ['eid' => $id]
-        );
-
-        // Récupérer les absences récentes
-        $absences = $this->db->fetchAll(
-            "SELECT date_absence, type_absence, est_justifiee, motif
-             FROM absences
-             WHERE eleve_id = :eid
-             ORDER BY date_absence DESC
-             LIMIT 10",
-            ['eid' => $id]
-        );
-
-        // Récupérer les paiements
-        $paiements = $this->db->fetchAll(
-            "SELECT p.montant_total, p.montant_paye, p.statut, p.date_paiement, p.mode_paiement,
-                    f.libelle AS frais_libelle
-             FROM paiements p
-             INNER JOIN frais_scolaires f ON p.frais_scolaire_id = f.id
-             WHERE p.eleve_id = :eid
-             ORDER BY p.date_paiement DESC",
-            ['eid' => $id]
-        );
+        $history = $this->studentRecordService->getAcademicAndAttendanceHistory($id);
 
         jsonResponse(true, 'Élève récupéré.', [
-            'eleve'     => $eleve,
-            'parents'   => $parents,
-            'notes'     => $notes,
-            'absences'  => $absences,
-            'paiements' => $paiements
+            'eleve' => $eleve,
+            'parents' => $parents,
+            'notes' => $history['notes'],
+            'absences' => $history['absences'],
+            'paiements' => $history['paiements']
         ]);
     }
 
@@ -404,63 +287,51 @@ class EleveController
     {
         requirePermission('eleves.modifier');
 
-        $id               = (int) post('id', 0);
-        $nom              = post('nom', '');
-        $prenom           = post('prenom', '');
-        $dateNaissance    = post('date_naissance', '');
-        $lieuNaissance    = post('lieu_naissance', '');
-        $sexe             = post('sexe', '');
-        $adresse          = post('adresse', '');
-        $telephone        = post('telephone', '');
-        $email            = post('email', '');
-        $groupeSanguin    = post('groupe_sanguin', '');
-        $allergies        = post('allergies', '');
-        $maladies         = post('maladies', '');
+        $id = (int) post('id', 0);
+        $nom = post('nom', '');
+        $prenom = post('prenom', '');
+        $dateNaissance = post('date_naissance', '');
+        $lieuNaissance = post('lieu_naissance', '');
+        $sexe = post('sexe', '');
+        $adresse = post('adresse', '');
+        $telephone = post('telephone', '');
+        $email = post('email', '');
+        $groupeSanguin = post('groupe_sanguin', '');
+        $allergies = post('allergies', '');
+        $maladies = post('maladies', '');
 
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
-
-        $existant = $this->db->fetchOne("SELECT id FROM eleves WHERE id = :id", ['id' => $id]);
-        if (!$existant) jsonResponse(false, 'Élève introuvable.', [], 404);
+        if (!$this->studentRecordService->findRecord($id)) {
+            jsonResponse(false, 'Élève introuvable.', [], 404);
+        }
 
         $errors = [];
-
         if (isBlank($nom)) $errors['nom'] = 'Le nom est obligatoire.';
         if (isBlank($prenom)) $errors['prenom'] = 'Le prénom est obligatoire.';
         if (isBlank($dateNaissance)) $errors['date_naissance'] = 'La date de naissance est obligatoire.';
         elseif (!isValidDate($dateNaissance)) $errors['date_naissance'] = 'Date invalide.';
-        if (!in_array($sexe, ['M', 'F'])) $errors['sexe'] = 'Sexe invalide.';
+        if (!in_array($sexe, ['M', 'F'], true)) $errors['sexe'] = 'Sexe invalide.';
 
         if (!empty($errors)) {
             jsonResponse(false, 'Veuillez corriger les erreurs.', ['errors' => $errors], 422);
         }
 
         try {
-            $this->db->update(
-                "UPDATE eleves 
-                 SET nom = :nom, prenom = :prenom, date_naissance = :dn, lieu_naissance = :ln,
-                     sexe = :sexe, adresse = :adresse, telephone = :tel, email = :email,
-                     groupe_sanguin = :gs, allergies = :allergies, maladies = :maladies
-                 WHERE id = :id",
-                [
-                    'nom'        => formatNom($nom),
-                    'prenom'     => formatNom($prenom),
-                    'dn'         => $dateNaissance,
-                    'ln'         => $lieuNaissance ?: null,
-                    'sexe'       => $sexe,
-                    'adresse'    => $adresse ?: null,
-                    'tel'        => $telephone ?: null,
-                    'email'      => $email ?: null,
-                    'gs'         => $groupeSanguin ?: null,
-                    'allergies'  => $allergies ?: null,
-                    'maladies'   => $maladies ?: null,
-                    'id'         => $id
-                ]
-            );
-
+            $this->studentRecordService->updateProfile($id, [
+                'nom' => formatNom($nom),
+                'prenom' => formatNom($prenom),
+                'date_naissance' => $dateNaissance,
+                'lieu_naissance' => $lieuNaissance ?: null,
+                'sexe' => $sexe,
+                'adresse' => $adresse ?: null,
+                'telephone' => $telephone ?: null,
+                'email' => $email ?: null,
+                'groupe_sanguin' => $groupeSanguin ?: null,
+                'allergies' => $allergies ?: null,
+                'maladies' => $maladies ?: null,
+            ]);
             logActivity('Modification', 'eleves', $id, "Élève modifié : {$nom} {$prenom}");
-
             jsonResponse(true, 'Élève modifié avec succès.');
-
         } catch (Exception $e) {
             error_log('Erreur modification élève: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la modification.');
@@ -476,27 +347,15 @@ class EleveController
 
         $id = (int) post('id', 0);
         $motif = post('motif', '');
-
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $eleve = $this->db->fetchOne("SELECT id, nom, prenom FROM eleves WHERE id = :id", ['id' => $id]);
+        $eleve = $this->studentRecordService->findRecord($id);
         if (!$eleve) jsonResponse(false, 'Élève introuvable.', [], 404);
 
         try {
-            // Désactiver l'élève
-            $this->db->update("UPDATE eleves SET est_actif = 0 WHERE id = :id", ['id' => $id]);
-
-            // Mettre fin à l'inscription active
-            $this->db->update(
-                "UPDATE inscriptions SET statut = :statut, motif_statut = :motif, date_changement_statut = CURDATE()
-                 WHERE eleve_id = :eid AND statut = 'Actif'",
-                ['statut' => 'Abandon', 'motif' => $motif ?: 'Désactivation', 'eid' => $id]
-            );
-
+            $this->studentRecordService->deactivate($id, $motif ?: 'Désactivation');
             logActivity('Suppression', 'eleves', $id, "Élève désactivé : {$eleve['nom']} {$eleve['prenom']}");
-
             jsonResponse(true, 'Élève désactivé avec succès.');
-
         } catch (Exception $e) {
             error_log('Erreur suppression élève: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la désactivation.');
@@ -510,53 +369,32 @@ class EleveController
     {
         requirePermission('inscriptions.modifier');
 
-        $eleveId       = (int) post('eleve_id', 0);
-        $ancienneClasseId = (int) post('ancienne_classe_id', 0);
-        $nouvelleClasseId  = (int) post('nouvelle_classe_id', 0);
-        $motif         = post('motif', '');
+        $eleveId = (int) post('eleve_id', 0);
+        // Le champ ancienne_classe_id reste accepté pour compatibilité client,
+        // mais le repository détermine la classe source depuis la base.
+        $nouvelleClasseId = (int) post('nouvelle_classe_id', 0);
+        $motif = post('motif', '');
 
         if ($eleveId <= 0 || $nouvelleClasseId <= 0) {
             jsonResponse(false, 'Paramètres invalides.', [], 400);
         }
 
-        // Vérifier la capacité
-        $capacite = (int) $this->db->fetchColumn(
-            "SELECT capacite_max FROM classes WHERE id = :cid", ['cid' => $nouvelleClasseId]
-        );
-        $nbEleves = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif'",
-            ['cid' => $nouvelleClasseId]
-        );
-        if ($nbEleves >= $capacite) {
-            jsonResponse(false, "Classe complète ({$capacite} élèves max).", [], 409);
-        }
-
         try {
-            $this->db->beginTransaction();
-
-            // Terminer l'ancienne inscription
-            $this->db->update(
-                "UPDATE inscriptions SET statut = 'Transféré', motif_statut = :motif, date_changement_statut = CURDATE()
-                 WHERE eleve_id = :eid AND classe_id = :cid AND statut = 'Actif'",
-                ['motif' => $motif ?: 'Changement de classe', 'eid' => $eleveId, 'cid' => $ancienneClasseId]
+            $result = $this->studentRecordService->transferEnrollment(
+                $eleveId,
+                $nouvelleClasseId,
+                $motif ?: 'Changement de classe'
             );
+            if (!$result['success']) {
+                if (($result['reason'] ?? '') === 'NO_ACTIVE_ENROLLMENT') {
+                    jsonResponse(false, 'Aucune inscription active à transférer.', [], 409);
+                }
+                jsonResponse(false, "Classe complète ({$result['capacity']} élèves max).", [], 409);
+            }
 
-            // Créer la nouvelle inscription
-            $anneeActive = $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-            $this->db->query(
-                "INSERT INTO inscriptions (eleve_id, classe_id, annee_scolaire_id, date_inscription, statut)
-                 VALUES (:eid, :cid, :aid, CURDATE(), 'Actif')",
-                ['eid' => $eleveId, 'cid' => $nouvelleClasseId, 'aid' => $anneeActive]
-            );
-
-            $this->db->commit();
-
-            logActivity('Modification', 'eleves', $eleveId, "Changement de classe");
-
+            logActivity('Modification', 'eleves', $eleveId, 'Changement de classe');
             jsonResponse(true, 'Classe changée avec succès.');
-
         } catch (Exception $e) {
-            $this->db->rollback();
             error_log('Erreur changement classe: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors du changement de classe.');
         }
@@ -750,12 +588,7 @@ class EleveController
      */
     public function getClasses(): array
     {
-        return $this->db->fetchAll(
-            "SELECT c.id, c.nom, c.niveau
-             FROM classes c
-             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY c.niveau"
-        );
+        return $this->studentRecordService->getActiveClassesForForms();
     }
 
     /**
@@ -768,21 +601,7 @@ class EleveController
 
     public function getEleveDetail(int $id): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT e.*, 
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age,
-                    c.nom AS classe_nom, c.id AS classe_id, c.niveau AS classe_niveau,
-                    i.date_inscription AS date_inscription_classe,
-                    i.statut AS statut_inscription,
-                    CONCAT(COALESCE(ens.prenom, ''), ' ', COALESCE(ens.nom, '')) AS titulaire_nom
-             FROM eleves e
-             LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             LEFT JOIN classes c ON i.classe_id = c.id
-             LEFT JOIN enseignants ens ON c.id = ens.classe_id AND ens.est_actif = 1
-             WHERE e.id = :id",
-            ['id' => $id]
-        );
+        return $this->studentRecordService->findDetailForForm($id);
     }
 
     /**
@@ -798,14 +617,24 @@ class EleveController
      */
     public function getHistoriqueInscriptions(int $eleveId): array
     {
-        return $this->db->fetchAll(
-            "SELECT i.*, c.nom AS classe_nom, a.libelle AS annee_libelle
-             FROM inscriptions i
-             INNER JOIN classes c ON i.classe_id = c.id
-             INNER JOIN annees_scolaires a ON i.annee_scolaire_id = a.id
-             WHERE i.eleve_id = :eid
-             ORDER BY i.date_inscription DESC",
-            ['eid' => $eleveId]
+        return $this->studentRecordService->enrollmentHistory($eleveId);
+    }
+
+    /** Statistiques de la liste, fournies par la couche métier. */
+    public function getSummaryStats(): array
+    {
+        return $this->studentRecordService->summaryStats();
+    }
+
+    /** Données d'export filtrées selon le rôle de la session courante. */
+    public function getExportRows(array $filters): array
+    {
+        $role = hasRole('Parent') ? 'Parent' : (hasRole('Enseignant') ? 'Enseignant' : '');
+        return $this->studentRecordService->exportRows(
+            $filters,
+            $role,
+            (int) ($_SESSION['utilisateur_id'] ?? 0)
         );
     }
+
 }

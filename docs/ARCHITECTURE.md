@@ -91,3 +91,15 @@ Sur la même branche de refonte, les premiers déplacements ont été réalisés
 - Un smoke test sans base a été ajouté pour vérifier les contrats de délégation des nouveaux services.
 
 **Phase 3 reste en cours :** les formulaires de création/modification des années et classes contiennent encore des traitements SQL historiques dans les vues ; les mutations transactionnelles de ces référentiels et les formulaires d'ajout/modification/suppression de matières/classes restent à migrer progressivement. Les routes, traitements de formulaire et réponses devront être tracés avant extraction. Les tests doivent être exécutés localement avant clôture ; aucune validation PHP n'est revendiquée dans cette session.
+
+
+## Phase 4 — Élèves et dossiers (progression)
+
+Branche dédiée : `refactor/phase-4-students-records`.
+
+- Les requêtes SQL de pagination/liste et de lecture du dossier élève (identité, classe, enseignant titulaire, notes récentes, absences et paiements) sont déplacées dans `StudentRecordRepository`; `StudentRecordService` expose les cas de lecture.
+- `EleveController` conserve les contrôles HTTP, la permission générale, le contrôle d'accès individuel, les messages et le format JSON, mais délègue ces deux parcours.
+- Les requêtes SQL de la policy d'accès au dossier sont déplacées vers `StudentAccessRepository`. La policy reste la décision d'autorisation et garde les rôles Admin/Directeur, Parent lié, Enseignant affecté et le fallback de permission.
+- Le test `tests/student_records_mvc_smoke.php` vérifie les contrats de délégation avec des repositories simulés, sans base de données.
+
+**Phase 4 non clôturée / non fusionnée :** restent à auditer et migrer les écritures et formulaires élèves (création transactionnelle avec inscription et parents, modification, désactivation, changement de classe), les liens/gestion des parents et les autres routes et vues de documents (téléchargement, accès, upload/suppression). La liste et ses statistiques sont désormais déléguées à DocumentService/DocumentRepository. Vérifier également import/export, vues enseignants/parents et tous les accès IDOR. Aucun lint/test PHP n'a été exécuté dans cette session ; le smoke test ajouté n'est pas déclaré réussi. La phase sera mergeable après ces éléments, comparaison des contrats et vérifications locales.

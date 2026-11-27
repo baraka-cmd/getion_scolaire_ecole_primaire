@@ -92,3 +92,10 @@ Commits réalisés sur `refactor/mvc-phase-0-1` (aucun changement sur `main`) :
 - Exécuter les tests disponibles et les vérifications PHP dans un environnement PHP avant de considérer la phase terminée.
 
 **La phase 2 n'est pas terminée.** Les modifications sont une migration MVC par incréments ; aucun comportement ne doit être déclaré validé sans tests exécutés.
+
+
+## Phase 4 — Élèves, parents, accès et documents (progression)
+
+L'implémentation a commencé sur `refactor/phase-4-students-records`. Les lectures liste/dossier et la persistance des décisions d'accès ont été extraites vers `StudentRecordRepository`, `StudentRecordService` et `StudentAccessRepository`, sans changer les paramètres ou le JSON des actions ciblées. Un smoke test sans base est présent.
+
+La phase n'est pas terminée : les mutations/formulaires élèves, les liens et comptes parents, les parcours import/export, le téléchargement et la gestion des fichiers documents doivent être tracés puis migrés. La liste des documents et ses statistiques ont été extraites vers le service/repository ; la sécurité du téléchargement et des documents privés reste à vérifier. Ne pas fusionner tant que le périmètre n'est pas complet et les contrôles de non-régression/sécurité n'ont pas été exécutés.

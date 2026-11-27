@@ -13,6 +13,85 @@ class DocumentRepository
         $this->db = $db ?? Database::getInstance();
     }
 
+    public function paginateVisible(array $filters, int $page, int $perPage, bool $admin): array
+    {
+        $where = [];
+        $params = [];
+        if (!$admin) {
+            $where[] = 'd.est_public = 1';
+        }
+
+        $category = (string) ($filters['categorie'] ?? '');
+        if ($category !== '') {
+            $where[] = $category === 'Autre'
+                ? "(d.type_document = :cat OR d.type_document = '')"
+                : 'd.type_document = :cat';
+            $params['cat'] = $category;
+        }
+
+        $visibility = $filters['visibilite'] ?? '';
+        if ($visibility !== '' && $admin) {
+            $where[] = 'd.est_public = :vis';
+            $params['vis'] = (int) $visibility;
+        }
+
+        $search = (string) ($filters['recherche'] ?? '');
+        if ($search !== '') {
+            $where[] = '(d.titre LIKE :r1 OR d.description LIKE :r2 OR d.nom_fichier LIKE :r3 OR d.extension LIKE :r4)';
+            $params['r1'] = "%{$search}%";
+            $params['r2'] = "%{$search}%";
+            $params['r3'] = "%{$search}%";
+            $params['r4'] = "%{$search}%";
+        }
+
+        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+        $total = (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM documents d {$whereClause}",
+            $params
+        );
+        $offset = ($page - 1) * $perPage;
+        $documents = $this->db->fetchAll(
+            "SELECT d.*,
+                    DATE_FORMAT(d.created_at, '%d/%m/%Y') AS date_format,
+                    TIME_FORMAT(d.created_at, '%H:%i') AS heure_format,
+                    CONCAT(u.prenom, ' ', u.nom) AS upload_par_nom,
+                    ROUND(d.taille_fichier / 1024, 1) AS taille_ko,
+                    CASE
+                        WHEN d.taille_fichier > 1048576 THEN CONCAT(ROUND(d.taille_fichier / 1048576, 1), ' Mo')
+                        WHEN d.taille_fichier > 1024 THEN CONCAT(ROUND(d.taille_fichier / 1024, 1), ' Ko')
+                        ELSE CONCAT(d.taille_fichier, ' o')
+                    END AS taille_formatee,
+                    d.extension AS type_fichier,
+                    d.nom_fichier AS nom_original,
+                    COALESCE(NULLIF(d.type_document, ''), 'Autre') AS categorie,
+                    0 AS nb_telechargements
+             FROM documents d
+             LEFT JOIN utilisateurs u ON d.utilisateur_id = u.id
+             {$whereClause}
+             ORDER BY d.created_at DESC
+             LIMIT :limit OFFSET :offset",
+            array_merge($params, ['limit' => $perPage, 'offset' => $offset])
+        );
+
+        $statsWhere = $admin ? '' : 'WHERE est_public = 1';
+        $totalFiles = (int) $this->db->fetchColumn("SELECT COUNT(*) FROM documents {$statsWhere}");
+        $totalSize = (int) $this->db->fetchColumn("SELECT COALESCE(SUM(taille_fichier), 0) FROM documents {$statsWhere}");
+        $byCategory = $this->db->fetchAll(
+            "SELECT COALESCE(NULLIF(type_document, ''), 'Autre') AS categorie, COUNT(*) AS nb
+             FROM documents {$statsWhere}
+             GROUP BY COALESCE(NULLIF(type_document, ''), 'Autre')
+             ORDER BY nb DESC"
+        );
+
+        return [
+            'documents' => $documents,
+            'total' => $total,
+            'total_fichiers' => $totalFiles,
+            'taille_totale_octets' => $totalSize,
+            'par_categorie' => $byCategory,
+        ];
+    }
+
     public function findMetadata(int $documentId): ?array
     {
         return $this->db->fetchOne(
@@ -91,4 +170,19 @@ class DocumentRepository
             ['limit' => $limit]
         );
     }
+
+    public function statistics(bool $admin): array
+    {
+        $visibility = $admin ? '' : 'WHERE est_public = 1';
+        $monthVisibility = $admin ? 'WHERE ' : 'WHERE est_public = 1 AND ';
+        return [
+            'total' => (int) $this->db->fetchColumn("SELECT COUNT(*) FROM documents {$visibility}"),
+            'total_size' => (int) $this->db->fetchColumn("SELECT COALESCE(SUM(taille_fichier), 0) FROM documents {$visibility}"),
+            'public_count' => (int) $this->db->fetchColumn("SELECT COUNT(*) FROM documents WHERE est_public = 1"),
+            'current_month_count' => (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM documents {$monthVisibility}MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())"
+            ),
+        ];
+    }
+
 }

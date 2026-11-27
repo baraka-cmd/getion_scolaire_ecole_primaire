@@ -1,0 +1,36 @@
+name: Phase 4 MVC smoke tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [refactor/phase-4-students-records]
+
+jobs:
+  php-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: Lint phase 4 PHP files
+        run: |
+          set -e
+          for file in \
+            src/controllers/EleveController.php \
+            src/controllers/DocumentController.php \
+            src/policies/StudentAccessPolicy.php \
+            src/repositories/StudentAccessRepository.php \
+            src/repositories/StudentRecordRepository.php \
+            src/repositories/DocumentRepository.php \
+            src/services/StudentRecordService.php \
+            src/services/DocumentService.php \
+            tests/student_records_mvc_smoke.php
+          do
+            php -l "$file"
+          done
+      - name: Run phase 4 repository/service smoke contracts
+        run: php tests/student_records_mvc_smoke.php
