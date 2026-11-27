@@ -55,6 +55,36 @@ class RoleRepository
         );
     }
 
+
+    /**
+     * Remplace les permissions d'un rôle atomiquement.
+     * En cas d'échec, les associations précédentes restent intactes.
+     */
+    public function replacePermissions(int $roleId, array $permissionIds): bool
+    {
+        try {
+            $this->db->beginTransaction();
+            $this->db->delete(
+                'DELETE FROM role_permission WHERE role_id = :role_id',
+                ['role_id' => $roleId]
+            );
+
+            foreach ($permissionIds as $permissionId) {
+                $this->db->query(
+                    'INSERT INTO role_permission (role_id, permission_id) VALUES (:role_id, :perm_id)',
+                    ['role_id' => $roleId, 'perm_id' => (int) $permissionId]
+                );
+            }
+
+            $this->db->commit();
+            return true;
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            error_log('Erreur replaceRolePermissions: ' . $e->getMessage());
+            return false;
+        }
+    }
+
     public function existsByName(string $name): bool
     {
         return $this->db->exists(
