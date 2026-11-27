@@ -43,7 +43,7 @@ class ClasseService
         return $this->repository->countEvaluations($classId);
     }
 
-    public function findTeacherClass(int $teacherId): ?array
+    public function findTeacherClass(int $teacherId): ?int
     {
         return $this->repository->findTeacherClass($teacherId);
     }
