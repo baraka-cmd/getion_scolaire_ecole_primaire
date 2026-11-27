@@ -9,18 +9,21 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../services/AcademicResultsService.php';
+require_once __DIR__ . '/../services/ResultsBulletinService.php';
 require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
 
 class BulletinController
 {
     private Database $db;
     private AcademicResultsService $academicResults;
+    private ResultsBulletinService $resultsBulletinService;
     private StudentAccessPolicy $studentAccessPolicy;
 
     public function __construct()
     {
         $this->db = Database::getInstance();
         $this->academicResults = new AcademicResultsService();
+        $this->resultsBulletinService = new ResultsBulletinService();
         $this->studentAccessPolicy = new StudentAccessPolicy($this->db);
     }
 
@@ -76,9 +79,7 @@ class BulletinController
 
         // Si pas d'année, prendre l'année active
         if ($anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn(
-                "SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1"
-            );
+            $anneeId = $this->resultsBulletinService->getActiveSchoolYearId();
         }
 
         $classe = $this->db->fetchOne(
@@ -277,21 +278,11 @@ class BulletinController
         }
 
         if ($anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn(
-                "SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1"
-            );
+            $anneeId = $this->resultsBulletinService->getActiveSchoolYearId();
         }
 
         // Récupérer les infos de l'élève
-        $eleve = $this->db->fetchOne(
-            "SELECT e.*, c.nom AS classe_nom, c.niveau AS classe_niveau, c.id AS classe_id
-             FROM eleves e
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             INNER JOIN classes c ON i.classe_id = c.id
-             WHERE e.id = :eid AND i.annee_scolaire_id = :aid
-               AND c.annee_scolaire_id = i.annee_scolaire_id",
-            ['eid' => $eleveId, 'aid' => $anneeId]
-        );
+        $eleve = $this->resultsBulletinService->getStudentForBulletin($eleveId, $anneeId);
 
         if (!$eleve) jsonResponse(false, 'Élève introuvable.', [], 404);
 
@@ -301,8 +292,8 @@ class BulletinController
         // Construire le bulletin
         $bulletin = [
             'eleve'     => $eleve,
-            'annee'     => $this->db->fetchOne("SELECT * FROM annees_scolaires WHERE id = :id", ['id' => $anneeId]),
-            'ecole'     => $this->db->fetchOne("SELECT * FROM parametres_ecole LIMIT 1"),
+            'annee'     => $this->resultsBulletinService->getSchoolYear($anneeId),
+            'ecole'     => $this->resultsBulletinService->getSchoolParameters(),
             'groupes'   => [],
             'totaux'    => [
                 'T1' => ['max' => 0, 'obt' => 0, 'p1' => ['max' => 0, 'obt' => 0], 'p2' => ['max' => 0, 'obt' => 0], 'ex' => ['max' => 0, 'obt' => 0]],
