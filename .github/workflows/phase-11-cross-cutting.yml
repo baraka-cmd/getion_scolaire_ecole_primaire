@@ -26,7 +26,7 @@ jobs:
       - name: PHP syntax validation
         run: |
           set -e
-          for file in src/controllers/LogController.php src/services/LogService.php src/repositories/LogRepository.php tests/phase11_logs_mvc_smoke.php tests/documents_messages_notifications_service_smoke.php; do
+          for file in src/controllers/LogController.php src/services/LogService.php src/repositories/LogRepository.php tests/phase11_logs_mvc_smoke.php tests/phase11_document_security_smoke.php tests/documents_messages_notifications_service_smoke.php; do
             php -l "$file"
           done
       - name: Activity log MVC boundary
