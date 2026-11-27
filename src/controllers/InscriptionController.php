@@ -7,16 +7,19 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../services/AcademicResultsService.php';
+require_once __DIR__ . '/../services/InscriptionService.php';
 
 class InscriptionController
 {
     private Database $db;
     private AcademicResultsService $academicResults;
+    private InscriptionService $inscriptionService;
 
     public function __construct()
     {
         $this->db = Database::getInstance();
         $this->academicResults = new AcademicResultsService();
+        $this->inscriptionService = new InscriptionService();
     }
 
     /**
@@ -73,75 +76,21 @@ class InscriptionController
 
     private function getListe(): void
     {
-        $page      = max(1, (int) post('page', 1));
-        $recherche = post('recherche', '');
-        $classeId  = (int) post('classe_id', 0);
-        $anneeId   = (int) post('annee_id', 0);
-        $statut    = post('statut', '');
-        $parPage   = ITEMS_PER_PAGE;
-
-        $where = [];
-        $params = [];
-
-        // Par défaut, année active
-        if ($anneeId > 0) {
-            $where[] = "i.annee_scolaire_id = :annee";
-            $params['annee'] = $anneeId;
-        } else {
-            $where[] = "i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)";
-        }
-
-        if (!empty($recherche)) {
-            $where[] = "(e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3)";
-            $params['r1'] = "%{$recherche}%";
-            $params['r2'] = "%{$recherche}%";
-            $params['r3'] = "%{$recherche}%";
-        }
-
-        if ($classeId > 0) {
-            $where[] = "i.classe_id = :classe";
-            $params['classe'] = $classeId;
-        }
-
-        if (!empty($statut)) {
-            $where[] = "i.statut = :statut";
-            $params['statut'] = $statut;
-        }
-
-        $whereClause = 'WHERE ' . implode(' AND ', $where);
-
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions i
-             INNER JOIN eleves e ON i.eleve_id = e.id
-             INNER JOIN classes c ON i.classe_id = c.id
-             {$whereClause}",
-            $params
-        );
-
-        $offset = ($page - 1) * $parPage;
-        $inscriptions = $this->db->fetchAll(
-            "SELECT i.*, e.matricule, e.nom, e.prenom, e.sexe,
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    c.nom AS classe_nom, c.niveau AS classe_niveau,
-                    a.libelle AS annee_libelle,
-                    DATE_FORMAT(i.date_inscription, '%d/%m/%Y') AS date_inscription_format
-             FROM inscriptions i
-             INNER JOIN eleves e ON i.eleve_id = e.id
-             INNER JOIN classes c ON i.classe_id = c.id
-             INNER JOIN annees_scolaires a ON i.annee_scolaire_id = a.id
-             {$whereClause}
-             ORDER BY i.date_inscription DESC
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, ['limit' => $parPage, 'offset' => $offset])
-        );
-
+$page = max(1, (int) post('page', 1));
+        $filters = [
+            'recherche' => post('recherche', ''),
+            'classe_id' => (int) post('classe_id', 0),
+            'annee_id' => (int) post('annee_id', 0),
+            'statut' => post('statut', ''),
+        ];
+        $result = $this->inscriptionService->paginate($filters, $page, ITEMS_PER_PAGE);
         jsonResponse(true, 'Liste récupérée.', [
-            'inscriptions' => $inscriptions,
-            'total'        => $total,
-            'page'         => $page,
-            'pages'        => ceil($total / $parPage)
+            'inscriptions' => $result['inscriptions'],
+            'total' => $result['total'],
+            'page' => $page,
+            'pages' => ceil($result['total'] / ITEMS_PER_PAGE)
         ]);
-    }
+    
 
     // ============================================================
     // INSCRIPTION INDIVIDUELLE
@@ -646,53 +595,24 @@ class InscriptionController
 
     private function getHistorique(): void
     {
-        $eleveId = (int) post('eleve_id', 0);
+$eleveId = (int) post('eleve_id', 0);
         if ($eleveId <= 0) jsonResponse(false, 'ID élève invalide.', [], 400);
-
-        $historique = $this->db->fetchAll(
-            "SELECT i.*, c.nom AS classe_nom, c.niveau AS classe_niveau,
-                    a.libelle AS annee_libelle,
-                    DATE_FORMAT(i.date_inscription, '%d/%m/%Y') AS date_inscription_format
-             FROM inscriptions i
-             INNER JOIN classes c ON i.classe_id = c.id
-             INNER JOIN annees_scolaires a ON i.annee_scolaire_id = a.id
-             WHERE i.eleve_id = :eid
-             ORDER BY a.date_debut DESC, i.date_inscription DESC",
-            ['eid' => $eleveId]
-        );
-
-        $eleve = $this->db->fetchOne(
-            "SELECT id, matricule, nom, prenom FROM eleves WHERE id = :id",
-            ['id' => $eleveId]
-        );
-
+        $result = $this->inscriptionService->getStudentHistory($eleveId);
         jsonResponse(true, 'Historique récupéré.', [
-            'eleve'      => $eleve,
-            'historique' => $historique
+            'eleve' => $result['eleve'],
+            'historique' => $result['historique']
         ]);
-    }
+    
 
     /**
      * Récupère les classes disponibles (avec capacité)
      */
     private function getClassesDisponibles(): void
     {
-        $anneeId = (int) post('annee_id', 0);
-        if ($anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-        }
-
-        $classes = $this->db->fetchAll(
-            "SELECT c.id, c.nom, c.niveau, c.capacite_max,
-                    (SELECT COUNT(*) FROM inscriptions WHERE classe_id = c.id AND statut = 'Actif') AS nb_inscrits
-             FROM classes c
-             WHERE c.annee_scolaire_id = :aid
-             ORDER BY c.niveau",
-            ['aid' => $anneeId]
-        );
-
+$anneeId = (int) post('annee_id', 0);
+        $classes = $this->inscriptionService->getAvailableClasses($anneeId);
         jsonResponse(true, 'Classes récupérées.', ['classes' => $classes]);
-    }
+    
 
     // ============================================================
     // MÉTHODES PUBLIQUES (pour les vues)
@@ -703,71 +623,38 @@ class InscriptionController
      */
     public function getAnneesScolaires(): array
     {
-        return $this->db->fetchAll("SELECT * FROM annees_scolaires ORDER BY date_debut DESC");
-    }
+return $this->inscriptionService->getSchoolYears();
+    
 
     /**
      * Récupère les classes de l'année active
      */
     public function getClassesActives(): array
     {
-        return $this->db->fetchAll(
-            "SELECT c.*, 
-                    (SELECT COUNT(*) FROM inscriptions WHERE classe_id = c.id AND statut = 'Actif') AS nb_inscrits
-             FROM classes c
-             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY c.niveau"
-        );
-    }
+return $this->inscriptionService->getActiveClasses();
+    
 
     /**
      * Récupère les élèves non inscrits (disponibles pour inscription)
      */
     public function getElevesNonInscrits(): array
     {
-        $anneeActive = $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-
-        return $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe, e.date_naissance
-             FROM eleves e
-             WHERE e.est_actif = 1
-             AND e.id NOT IN (
-                 SELECT eleve_id FROM inscriptions WHERE annee_scolaire_id = :aid AND statut = 'Actif'
-             )
-             ORDER BY e.nom, e.prenom",
-            ['aid' => $anneeActive]
-        );
-    }
+return $this->inscriptionService->getUnenrolledStudents();
+    
 
     /**
      * Récupère une inscription par ID
      */
     public function getInscriptionById(int $id): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT i.*, e.matricule, e.nom, e.prenom, c.nom AS classe_nom, a.libelle AS annee_libelle
-             FROM inscriptions i
-             INNER JOIN eleves e ON i.eleve_id = e.id
-             INNER JOIN classes c ON i.classe_id = c.id
-             INNER JOIN annees_scolaires a ON i.annee_scolaire_id = a.id
-             WHERE i.id = :id",
-            ['id' => $id]
-        );
-    }
+return $this->inscriptionService->findEnrollment($id);
+    
 
     /**
      * Récupère l'historique complet d'un élève
      */
     public function getHistoriqueEleve(int $eleveId): array
     {
-        return $this->db->fetchAll(
-            "SELECT i.*, c.nom AS classe_nom, c.niveau, a.libelle AS annee_libelle
-             FROM inscriptions i
-             INNER JOIN classes c ON i.classe_id = c.id
-             INNER JOIN annees_scolaires a ON i.annee_scolaire_id = a.id
-             WHERE i.eleve_id = :eid
-             ORDER BY a.date_debut DESC",
-            ['eid' => $eleveId]
-        );
-    }
+return $this->inscriptionService->getEnrollmentHistory($eleveId);
+    
 }
