@@ -9,6 +9,85 @@ final class InMemoryEvaluationNoteRepository extends EvaluationNoteRepository
 {
     public mixed $existingId = null;
     public array $calls = [];
+    public array $entryContext = ['id' => 5, 'classe_id' => 2, 'groupe_id' => 8, 'type_evaluation' => 'Examen', 'annee_scolaire_id' => 3];
+    public array $studentIds = [10, 11];
+    public array $maxima = [4 => 40.0];
+    public array $studentNotes = [['valeur' => 17.0]];
+    public function isClassAndTermConsistent(int $classId, int $termId): bool
+    {
+        $this->calls[] = ['class-term', $classId, $termId];
+        return true;
+    }
+
+    public function evaluationExists(int $termId, int $classId, int $groupId, string $type): bool
+    {
+        $this->calls[] = ['duplicate', $termId, $classId, $groupId, $type];
+        return false;
+    }
+
+    public function insertEvaluation(int $termId, int $groupId, int $classId, string $type, string $date): int
+    {
+        $this->calls[] = ['create-evaluation', $termId, $groupId, $classId, $type, $date];
+        return 42;
+    }
+
+    public function evaluationIdExists(int $evaluationId): bool
+    {
+        $this->calls[] = ['evaluation-exists', $evaluationId];
+        return true;
+    }
+
+    public function countNotesForEvaluation(int $evaluationId): int
+    {
+        $this->calls[] = ['note-count', $evaluationId];
+        return 0;
+    }
+
+    public function updateEvaluationDate(int $evaluationId, string $date): void
+    {
+        $this->calls[] = ['evaluation-date', $evaluationId, $date];
+    }
+
+    public function deleteEvaluation(int $evaluationId): void
+    {
+        $this->calls[] = ['delete-evaluation', $evaluationId];
+    }
+
+    public function findEvaluationList(array $filters): array
+    {
+        $this->calls[] = ['evaluation-list', $filters];
+        return [['id' => 5]];
+    }
+
+    public function findEvaluationDetails(int $evaluationId): ?array
+    {
+        $this->calls[] = ['evaluation-details', $evaluationId];
+        return ['id' => $evaluationId, 'classe_id' => 2];
+    }
+
+    public function findEvaluationEntryContext(int $evaluationId): ?array
+    {
+        $this->calls[] = ['context', $evaluationId];
+        return $this->entryContext;
+    }
+
+    public function findActiveStudentIdsForEvaluation(int $classId, int $yearId): array
+    {
+        $this->calls[] = ['students', $classId, $yearId];
+        return $this->studentIds;
+    }
+
+    public function findActiveSubjectMaximaForEvaluation(int $classId, int $groupId, string $evaluationType): array
+    {
+        $this->calls[] = ['maxima', $classId, $groupId, $evaluationType];
+        return $this->maxima;
+    }
+
+    public function findStudentNotes(int $studentId, int $trimesterId = 0): array
+    {
+        $this->calls[] = ['student-notes', $studentId, $trimesterId];
+        return $this->studentNotes;
+    }
 
     public function __construct()
     {
@@ -44,6 +123,27 @@ final class InMemoryEvaluationNoteRepository extends EvaluationNoteRepository
 $repository = new InMemoryEvaluationNoteRepository();
 $service = new EvaluationNoteService($repository);
 
+if ($service->getEvaluationList(['classe_id' => 2]) !== [['id' => 5]]
+    || $service->getEvaluationDetails(5) !== ['id' => 5, 'classe_id' => 2]
+    || $service->getEntryContext(5) !== $repository->entryContext
+    || $service->getActiveStudentIds(2, 3) !== [10, 11]
+    || $service->getSubjectMaxima(2, 8, 'Examen') !== [4 => 40.0]
+    || $service->getStudentNotes(10, 2) !== [['valeur' => 17.0]]) {
+    throw new RuntimeException('Evaluation reads were not delegated through the service.');
+}
+
+$repository->calls = [];
+if (!$service->classAndTermAreConsistent(2, 3)
+    || $service->evaluationAlreadyExists(3, 2, 8, 'Examen')
+    || $service->createEvaluation(3, 8, 2, 'Examen', '2026-11-20') !== 42
+    || !$service->evaluationExists(42)
+    || $service->countEvaluationNotes(42) !== 0) {
+    throw new RuntimeException('Evaluation CRUD service contract failed.');
+}
+$service->updateEvaluationDate(42, '2026-11-21');
+$service->deleteEvaluation(42);
+
+$repository->calls = [];
 $repository->existingId = 7;
 if (!$service->saveCell(2, 3, 4, 12.5, 0, 9) || $repository->calls[0] !== ['update', 7, 12.5, 0]) {
     throw new RuntimeException('An existing note was not updated.');

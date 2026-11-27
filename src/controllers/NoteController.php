@@ -100,62 +100,13 @@ class NoteController
         $groupeId    = (int) post('groupe_id', 0);
         $type        = post('type_evaluation', '');
 
-        $where = [];
-        $params = [];
-
-        if ($anneeId > 0) {
-            $where[] = "t.annee_scolaire_id = :aid";
-            $params['aid'] = $anneeId;
-        }
-
-        if ($trimestreId > 0) {
-            $where[] = "ev.trimestre_id = :tid";
-            $params['tid'] = $trimestreId;
-        }
-
-        if ($classeId > 0) {
-            $where[] = "ev.classe_id = :cid";
-            $params['cid'] = $classeId;
-        }
-
-        if ($groupeId > 0) {
-            $where[] = "ev.groupe_id = :gid";
-            $params['gid'] = $groupeId;
-        }
-
-        if (in_array($type, ['Période 1', 'Période 2', 'Examen'], true)) {
-            $where[] = "ev.type_evaluation = :type";
-            $params['type'] = $type;
-        }
-
-        $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
-
-        $evaluations = $this->db->fetchAll(
-            "SELECT ev.*, 
-                    t.libelle AS trimestre_libelle, 
-                    t.numero AS trimestre_numero,
-                    t.est_actif AS trimestre_actif,
-                    c.nom AS classe_nom, 
-                    c.niveau AS classe_niveau,
-                    m.libelle AS groupe_libelle,
-                    m.code AS groupe_code,
-                    (SELECT COUNT(*) FROM notes n WHERE n.evaluation_id = ev.id) AS nb_notes_saisies,
-                    (SELECT COUNT(*) FROM inscriptions i
-                     WHERE i.classe_id = ev.classe_id AND i.annee_scolaire_id = c.annee_scolaire_id
-                       AND i.statut = 'Actif')
-                    * (SELECT COUNT(*)
-                       FROM classe_matieres cm
-                       INNER JOIN matieres sm ON sm.id = cm.matiere_id
-                       WHERE cm.classe_id = ev.classe_id AND cm.est_active = 1
-                         AND sm.parent_id = ev.groupe_id AND sm.est_groupe = 0 AND sm.est_actif = 1) AS nb_notes_attendues
-             FROM evaluations ev
-             INNER JOIN trimestres t ON ev.trimestre_id = t.id
-             INNER JOIN classes c ON ev.classe_id = c.id AND c.annee_scolaire_id = t.annee_scolaire_id
-             INNER JOIN matieres m ON ev.groupe_id = m.id
-             {$whereClause}
-             ORDER BY t.numero, c.niveau, FIELD(ev.type_evaluation, 'Période 1', 'Période 2', 'Examen')",
-            $params
-        );
+        $evaluations = $this->evaluationNoteService->getEvaluationList([
+            'annee_id' => $anneeId,
+            'trimestre_id' => $trimestreId,
+            'classe_id' => $classeId,
+            'groupe_id' => $groupeId,
+            'type_evaluation' => $type,
+        ]);
 
         jsonResponse(true, 'Liste récupérée.', ['evaluations' => $evaluations]);
     }
@@ -169,18 +120,7 @@ class NoteController
         $id = (int) post('id', 0);
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $evaluation = $this->db->fetchOne(
-            "SELECT ev.*, 
-                    t.libelle AS trimestre_libelle, 
-                    c.nom AS classe_nom,
-                    m.libelle AS groupe_libelle
-             FROM evaluations ev
-             INNER JOIN trimestres t ON ev.trimestre_id = t.id
-             INNER JOIN classes c ON ev.classe_id = c.id AND c.annee_scolaire_id = t.annee_scolaire_id
-             INNER JOIN matieres m ON ev.groupe_id = m.id
-             WHERE ev.id = :id",
-            ['id' => $id]
-        );
+        $evaluation = $this->evaluationNoteService->getEvaluationDetails($id);
 
         if (!$evaluation) jsonResponse(false, 'Évaluation introuvable.', [], 404);
         if (!$this->canCurrentUserManageEvaluation($id)) {
@@ -215,13 +155,7 @@ class NoteController
         if (isBlank($dateEval)) $errors['date_evaluation'] = 'Date obligatoire.';
 
         if ($classeId > 0 && $trimestreId > 0) {
-            $trimestreValide = $this->db->fetchColumn(
-                "SELECT COUNT(*)
-                 FROM classes c
-                 INNER JOIN trimestres t ON t.annee_scolaire_id = c.annee_scolaire_id
-                 WHERE c.id = :cid AND t.id = :tid",
-                ['cid' => $classeId, 'tid' => $trimestreId]
-            );
+            $trimestreValide = $this->evaluationNoteService->classAndTermAreConsistent($classeId, $trimestreId) ? 1 : 0;
             if ((int) $trimestreValide !== 1) {
                 $errors['trimestre_id'] = 'Le trimestre doit appartenir à l’année scolaire de la classe.';
             }
@@ -229,11 +163,7 @@ class NoteController
 
         // Vérifier l'unicité : une seule évaluation par groupe/classe/trimestre/type
         if ($groupeId > 0 && $classeId > 0 && $trimestreId > 0 && !empty($type)) {
-            $existe = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM evaluations 
-                 WHERE trimestre_id = :tid AND classe_id = :cid AND groupe_id = :gid AND type_evaluation = :type",
-                ['tid' => $trimestreId, 'cid' => $classeId, 'gid' => $groupeId, 'type' => $type]
-            );
+            $existe = $this->evaluationNoteService->evaluationAlreadyExists($trimestreId, $classeId, $groupeId, $type) ? 1 : 0;
             if ($existe > 0) {
                 $errors['type_evaluation'] = 'Cette évaluation existe déjà pour ce groupe, cette classe et ce trimestre.';
             }
@@ -244,17 +174,7 @@ class NoteController
         }
 
         try {
-            $id = $this->db->insert(
-                "INSERT INTO evaluations (trimestre_id, groupe_id, classe_id, type_evaluation, date_evaluation)
-                 VALUES (:tid, :gid, :cid, :type, :date_eval)",
-                [
-                    'tid'       => $trimestreId,
-                    'gid'       => $groupeId,
-                    'cid'       => $classeId,
-                    'type'      => $type,
-                    'date_eval' => $dateEval
-                ]
-            );
+            $id = $this->evaluationNoteService->createEvaluation($trimestreId, $groupeId, $classeId, $type, $dateEval);
 
             logActivity('Création', 'evaluations', $id, "Évaluation créée : groupe {$groupeId}, classe {$classeId}, {$type}");
 
@@ -280,14 +200,11 @@ class NoteController
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
         if (isBlank($dateEval)) jsonResponse(false, 'Date obligatoire.', [], 422);
 
-        $existe = $this->db->fetchOne("SELECT id FROM evaluations WHERE id = :id", ['id' => $id]);
+        $existe = $this->evaluationNoteService->evaluationExists($id);
         if (!$existe) jsonResponse(false, 'Évaluation introuvable.', [], 404);
 
         try {
-            $this->db->update(
-                "UPDATE evaluations SET date_evaluation = :date_eval WHERE id = :id",
-                ['date_eval' => $dateEval, 'id' => $id]
-            );
+            $this->evaluationNoteService->updateEvaluationDate($id, $dateEval);
 
             logActivity('Modification', 'evaluations', $id, 'Date modifiée');
             jsonResponse(true, 'Date modifiée avec succès.');
@@ -310,17 +227,14 @@ class NoteController
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
         // Vérifier si des notes existent
-        $nbNotes = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM notes WHERE evaluation_id = :eid",
-            ['eid' => $id]
-        );
+        $nbNotes = $this->evaluationNoteService->countEvaluationNotes($id);
 
         if ($nbNotes > 0) {
             jsonResponse(false, "Impossible de supprimer : {$nbNotes} note(s) saisie(s). Supprimez d'abord les notes.", [], 409);
         }
 
         try {
-            $this->db->delete("DELETE FROM evaluations WHERE id = :id", ['id' => $id]);
+            $this->evaluationNoteService->deleteEvaluation($id);
             logActivity('Suppression', 'evaluations', $id, 'Évaluation supprimée');
             jsonResponse(true, 'Évaluation supprimée avec succès.');
         } catch (Exception $e) {
@@ -344,24 +258,13 @@ class NoteController
             jsonResponse(false, 'Classe et trimestre obligatoires.', [], 400);
         }
 
-        $trimestre = $this->db->fetchOne(
-            "SELECT t.*
-             FROM trimestres t
-             INNER JOIN classes c ON c.annee_scolaire_id = t.annee_scolaire_id
-             WHERE t.id = :tid AND c.id = :cid",
-            ['tid' => $trimestreId, 'cid' => $classeId]
-        );
+        $trimestre = $this->evaluationNoteService->getTermForGeneration($classeId, $trimestreId);
         if (!$trimestre) {
             jsonResponse(false, 'Le trimestre ne correspond pas à l’année scolaire de cette classe.', [], 422);
         }
 
         // Récupérer tous les groupes actifs
-        $groupes = $this->db->fetchAll(
-            "SELECT m.id, m.libelle 
-             FROM matieres m 
-             WHERE m.est_groupe = 1 AND m.est_actif = 1
-             ORDER BY m.id"
-        );
+        $groupes = $this->evaluationNoteService->getActiveGroupsForEvaluationGeneration();
 
         $types = ['Période 1', 'Période 2', 'Examen'];
         $crees = 0;
@@ -370,11 +273,7 @@ class NoteController
         foreach ($groupes as $groupe) {
             foreach ($types as $type) {
                 // Vérifier si l'évaluation existe déjà
-                $existe = $this->db->fetchColumn(
-                    "SELECT COUNT(*) FROM evaluations 
-                     WHERE trimestre_id = :tid AND classe_id = :cid AND groupe_id = :gid AND type_evaluation = :type",
-                    ['tid' => $trimestreId, 'cid' => $classeId, 'gid' => $groupe['id'], 'type' => $type]
-                );
+                $existe = $this->evaluationNoteService->evaluationAlreadyExists($trimestreId, $classeId, (int) $groupe['id'], $type);
 
                 if ($existe > 0) {
                     $ignores++;
@@ -384,17 +283,7 @@ class NoteController
                 // Calculer la date suggérée
                 $dateSuggeree = $this->calculerDateSuggestion($trimestre, $type);
 
-                $this->db->insert(
-                    "INSERT INTO evaluations (trimestre_id, groupe_id, classe_id, type_evaluation, date_evaluation)
-                     VALUES (:tid, :gid, :cid, :type, :date_eval)",
-                    [
-                        'tid'       => $trimestreId,
-                        'gid'       => $groupe['id'],
-                        'cid'       => $classeId,
-                        'type'      => $type,
-                        'date_eval' => $dateSuggeree
-                    ]
-                );
+                $this->evaluationNoteService->createEvaluation($trimestreId, (int) $groupe['id'], $classeId, $type, $dateSuggeree);
 
                 $crees++;
             }
@@ -415,22 +304,7 @@ class NoteController
         if ($evaluationId <= 0) jsonResponse(false, 'ID évaluation invalide.', [], 400);
 
         // Récupérer l'évaluation
-        $evaluation = $this->db->fetchOne(
-            "SELECT ev.*, 
-                    t.libelle AS trimestre_libelle, 
-                    t.numero AS trimestre_numero,
-                    c.nom AS classe_nom, 
-                    c.niveau AS classe_niveau,
-                    c.annee_scolaire_id,
-                    m.libelle AS groupe_libelle,
-                    m.id AS groupe_id
-             FROM evaluations ev
-             INNER JOIN trimestres t ON ev.trimestre_id = t.id
-             INNER JOIN classes c ON ev.classe_id = c.id AND c.annee_scolaire_id = t.annee_scolaire_id
-             INNER JOIN matieres m ON ev.groupe_id = m.id
-             WHERE ev.id = :id",
-            ['id' => $evaluationId]
-        );
+        $evaluation = $this->evaluationNoteService->getEvaluationGridContext($evaluationId);
 
         if (!$evaluation) jsonResponse(false, 'Évaluation introuvable.', [], 404);
         if (!$this->canCurrentUserManageEvaluation($evaluationId)) {
@@ -438,37 +312,13 @@ class NoteController
         }
 
         // Récupérer les sous-matières du groupe avec leurs maxima
-        $sousMatieres = $this->db->fetchAll(
-            "SELECT m.id, m.libelle, m.code, 
-                    COALESCE(cm.maxima_override, m.maxima) AS maxima
-             FROM matieres m
-             INNER JOIN classe_matieres cm ON m.id = cm.matiere_id AND cm.classe_id = :cid AND cm.est_active = 1
-             WHERE m.parent_id = :gid 
-             AND m.est_groupe = 0 
-             AND m.est_actif = 1
-             ORDER BY m.id",
-            ['gid' => $evaluation['groupe_id'], 'cid' => $evaluation['classe_id']]
-        );
+        $sousMatieres = $this->evaluationNoteService->getActiveSubjectsForClassGroup((int) $evaluation['classe_id'], (int) $evaluation['groupe_id']);
 
         // Récupérer les élèves de la classe
-        $eleves = $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe
-             FROM inscriptions i
-             INNER JOIN eleves e ON i.eleve_id = e.id
-             INNER JOIN classes c ON c.id = i.classe_id AND c.annee_scolaire_id = i.annee_scolaire_id
-             WHERE i.classe_id = :cid AND i.annee_scolaire_id = :aid
-               AND i.statut = 'Actif' AND e.est_actif = 1
-             ORDER BY e.nom, e.prenom",
-            ['cid' => $evaluation['classe_id'], 'aid' => $evaluation['annee_scolaire_id']]
-        );
+        $eleves = $this->evaluationNoteService->getActiveStudentsForClassYear((int) $evaluation['classe_id'], (int) $evaluation['annee_scolaire_id']);
 
         // Récupérer les notes existantes
-        $notes = $this->db->fetchAll(
-            "SELECT n.id, n.eleve_id, n.sous_matiere_id, n.valeur, n.absence
-             FROM notes n
-             WHERE n.evaluation_id = :eid",
-            ['eid' => $evaluationId]
-        );
+        $notes = $this->evaluationNoteService->getNotesForEvaluationGrid($evaluationId);
 
         // Organiser les notes en grille [eleve_id][sous_matiere_id]
         $notesGrid = [];
@@ -516,45 +366,20 @@ class NoteController
             jsonResponse(false, 'Aucune note à enregistrer (JSON invalide).', [], 400);
         }
 
-        $evaluation = $this->db->fetchOne(
-            "SELECT ev.id, ev.classe_id, ev.groupe_id, ev.type_evaluation,
-                    c.annee_scolaire_id
-             FROM evaluations ev
-             INNER JOIN trimestres t ON t.id = ev.trimestre_id
-             INNER JOIN classes c ON c.id = ev.classe_id
-                 AND c.annee_scolaire_id = t.annee_scolaire_id
-             WHERE ev.id = :id",
-            ['id' => $evaluationId]
-        );
+        $evaluation = $this->evaluationNoteService->getEntryContext($evaluationId);
         if (!$evaluation || !$this->canCurrentUserManageEvaluation($evaluationId)) {
             jsonResponse(false, 'Évaluation introuvable.', [], 404);
         }
 
-        $studentIds = array_map('intval', array_column(
-            $this->db->fetchAll(
-                "SELECT i.eleve_id
-                 FROM inscriptions i
-                 INNER JOIN eleves e ON e.id = i.eleve_id AND e.est_actif = 1
-                 WHERE i.classe_id = :class_id
-                   AND i.annee_scolaire_id = :year_id
-                   AND i.statut = 'Actif'",
-                ['class_id' => $evaluation['classe_id'], 'year_id' => $evaluation['annee_scolaire_id']]
-            ),
-            'eleve_id'
-        ));
-        $subjectRows = $this->db->fetchAll(
-            "SELECT sm.id, COALESCE(cm.maxima_override, sm.maxima) AS maxima
-             FROM matieres sm
-             INNER JOIN classe_matieres cm ON cm.matiere_id = sm.id
-                 AND cm.classe_id = :class_id AND cm.est_active = 1
-             WHERE sm.parent_id = :group_id AND sm.est_groupe = 0 AND sm.est_actif = 1",
-            ['class_id' => $evaluation['classe_id'], 'group_id' => $evaluation['groupe_id']]
+        $studentIds = $this->evaluationNoteService->getActiveStudentIds(
+            (int) $evaluation['classe_id'],
+            (int) $evaluation['annee_scolaire_id']
         );
-        $subjectMaxima = [];
-        foreach ($subjectRows as $subject) {
-            $subjectMaxima[(int) $subject['id']] = (float) $subject['maxima']
-                * ($evaluation['type_evaluation'] === 'Examen' ? 2 : 1);
-        }
+        $subjectMaxima = $this->evaluationNoteService->getSubjectMaxima(
+            (int) $evaluation['classe_id'],
+            (int) $evaluation['groupe_id'],
+            (string) $evaluation['type_evaluation']
+        );
         $allowedStudents = array_fill_keys($studentIds, true);
         $normalizedNotes = [];
         $seenCells = [];
@@ -648,33 +473,7 @@ class NoteController
             jsonResponse(false, 'Élève introuvable.', [], 404);
         }
 
-        $where = [];
-        $params = ['eid' => $eleveId];
-
-        if ($trimestreId > 0) {
-            $where[] = "ev.trimestre_id = :tid";
-            $params['tid'] = $trimestreId;
-        }
-
-        $whereClause = !empty($where) ? 'AND ' . implode(' AND ', $where) : '';
-
-        $notes = $this->db->fetchAll(
-            "SELECT n.valeur, n.absence, 
-                    ev.type_evaluation, 
-                    DATE_FORMAT(ev.date_evaluation, '%d/%m/%Y') AS date_eval,
-                    sm.libelle AS sous_matiere,
-                    sm.maxima,
-                    m.libelle AS groupe,
-                    t.libelle AS trimestre
-             FROM notes n
-             INNER JOIN evaluations ev ON n.evaluation_id = ev.id
-             INNER JOIN matieres sm ON n.sous_matiere_id = sm.id
-             INNER JOIN matieres m ON ev.groupe_id = m.id
-             INNER JOIN trimestres t ON ev.trimestre_id = t.id
-             WHERE n.eleve_id = :eid {$whereClause}
-             ORDER BY t.numero, m.libelle, sm.libelle, FIELD(ev.type_evaluation, 'Période 1', 'Période 2', 'Examen')",
-            $params
-        );
+        $notes = $this->evaluationNoteService->getStudentNotes($eleveId, $trimestreId);
 
         jsonResponse(true, 'Notes récupérées.', ['notes' => $notes]);
     }
@@ -685,39 +484,13 @@ class NoteController
             return false;
         }
 
-        $evaluation = $this->db->fetchOne(
-            "SELECT ev.classe_id, t.annee_scolaire_id
-             FROM evaluations ev
-             INNER JOIN trimestres t ON t.id = ev.trimestre_id
-             INNER JOIN classes c ON c.id = ev.classe_id
-                 AND c.annee_scolaire_id = t.annee_scolaire_id
-             WHERE ev.id = :id",
-            ['id' => $evaluationId]
-        );
+        $evaluation = $this->evaluationNoteService->getEvaluationAccessContext($evaluationId);
         if (!$evaluation) {
             return false;
         }
 
         if (hasRole('Enseignant')) {
-            return (bool) $this->db->fetchColumn(
-                "SELECT EXISTS (
-                    SELECT 1
-                    FROM enseignants ens
-                    INNER JOIN classes c ON c.id = ens.classe_id
-                    WHERE ens.utilisateur_id = :user_id
-                      AND ens.est_actif = 1
-                      AND c.id = :class_id
-                      AND c.annee_scolaire_id = :year_id
-                      AND c.annee_scolaire_id = (
-                          SELECT annee_scolaire_active_id FROM parametres_ecole WHERE id = 1
-                      )
-                )",
-                [
-                    'user_id' => (int) ($_SESSION['utilisateur_id'] ?? 0),
-                    'class_id' => $evaluation['classe_id'],
-                    'year_id' => $evaluation['annee_scolaire_id'],
-                ]
-            );
+            return $this->evaluationNoteService->teacherHasClassAssignment((int) ($_SESSION['utilisateur_id'] ?? 0), (int) $evaluation['classe_id'], (int) $evaluation['annee_scolaire_id']);
         }
 
         return can('notes.saisir');
@@ -736,13 +509,7 @@ class NoteController
             jsonResponse(false, 'Classe et trimestre obligatoires.', [], 400);
         }
 
-        $anneeCoherente = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*)
-             FROM classes c
-             INNER JOIN trimestres t ON t.annee_scolaire_id = c.annee_scolaire_id
-             WHERE c.id = :cid AND t.id = :tid",
-            ['cid' => $classeId, 'tid' => $trimestreId]
-        );
+        $anneeCoherente = $this->evaluationNoteService->classAndTermAreConsistent($classeId, $trimestreId) ? 1 : 0;
         if ($anneeCoherente !== 1) {
             jsonResponse(false, 'La classe et le trimestre doivent appartenir à la même année scolaire.', [], 400);
         }
@@ -751,11 +518,7 @@ class NoteController
 
         $types = ['Période 1', 'Période 2', 'Examen'];
         foreach ($types as $type) {
-            $evaluations = $this->db->fetchAll(
-                "SELECT id FROM evaluations 
-                 WHERE trimestre_id = :tid AND classe_id = :cid AND type_evaluation = :type",
-                ['tid' => $trimestreId, 'cid' => $classeId, 'type' => $type]
-            );
+            $evaluations = $this->evaluationNoteService->getEvaluationIdsForProgression($trimestreId, $classeId, $type);
 
             $nbNotes = 0;
             $nbAttendues = 0;
@@ -764,32 +527,15 @@ class NoteController
                 $evalIds = array_column($evaluations, 'id');
                 $placeholders = implode(',', array_fill(0, count($evalIds), '?'));
 
-                $nbNotes = (int) $this->db->fetchColumn(
-                    "SELECT COUNT(*) FROM notes WHERE evaluation_id IN ({$placeholders})",
-                    $evalIds
-                );
+                $nbNotes = $this->evaluationNoteService->countNotesForEvaluationIds($evalIds);
 
-                $nbEleves = (int) $this->db->fetchColumn(
-                    "SELECT COUNT(*)
-                     FROM inscriptions i
-                     INNER JOIN classes c ON c.id = i.classe_id AND c.annee_scolaire_id = i.annee_scolaire_id
-                     WHERE i.classe_id = :cid AND i.statut = 'Actif'",
-                    ['cid' => $classeId]
-                );
+                $nbEleves = $this->evaluationNoteService->countActiveStudentsInClass($classeId);
 
                 $totalSousMatieres = 0;
                 foreach ($evalIds as $eid) {
-                    $eval = $this->db->fetchOne("SELECT groupe_id FROM evaluations WHERE id = :id", ['id' => $eid]);
+                    $eval = $this->evaluationNoteService->getEvaluationDetails((int) $eid);
                     if ($eval) {
-                        $nbSM = (int) $this->db->fetchColumn(
-                            "SELECT COUNT(*)
-                             FROM classe_matieres cm
-                             INNER JOIN matieres sm ON sm.id = cm.matiere_id
-                             WHERE cm.classe_id = :cid AND cm.est_active = 1
-                               AND sm.parent_id = :gid AND sm.est_groupe = 0 AND sm.est_actif = 1",
-                            ['cid' => $classeId, 'gid' => $eval['groupe_id']]
-                        );
-                        $totalSousMatieres += $nbSM;
+                        $totalSousMatieres += $this->evaluationNoteService->countActiveSubjectsForClassGroup($classeId, (int) $eval['groupe_id']);
                     }
                 }
 
@@ -840,11 +586,8 @@ class NoteController
      */
     public function getClassesActives(): array
     {
-        return $this->db->fetchAll(
-            "SELECT c.* FROM classes c
-             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY c.niveau"
-        );
+        return $this->evaluationNoteService->getActiveClasses();
+
     }
 
     /**
@@ -852,11 +595,8 @@ class NoteController
      */
     public function getTrimestresActifs(): array
     {
-        return $this->db->fetchAll(
-            "SELECT t.* FROM trimestres t
-             WHERE t.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY t.numero"
-        );
+        return $this->evaluationNoteService->getActiveTerms();
+
     }
 
     /**
@@ -864,12 +604,8 @@ class NoteController
      */
     public function getTrimestreActif(): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT t.* FROM trimestres t
-             WHERE t.est_actif = 1 
-             AND t.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             LIMIT 1"
-        );
+        return $this->evaluationNoteService->getCurrentActiveTerm();
+
     }
 
     /**
@@ -877,13 +613,8 @@ class NoteController
      */
     public function getGroupesActifs(): array
     {
-        return $this->db->fetchAll(
-            "SELECT m.*, 
-                    (SELECT COUNT(*) FROM matieres sm WHERE sm.parent_id = m.id AND sm.est_groupe = 0 AND sm.est_actif = 1) AS nb_sous_matieres
-             FROM matieres m
-             WHERE m.est_groupe = 1 AND m.est_actif = 1
-             ORDER BY m.libelle"
-        );
+        return $this->evaluationNoteService->getActiveGroupsWithSubjectCounts();
+
     }
 
     /**
@@ -891,17 +622,8 @@ class NoteController
      */
     public function getSousMatieresByGroupe(int $groupeId, int $classeId): array
     {
-        return $this->db->fetchAll(
-            "SELECT m.id, m.libelle, m.code, 
-                    COALESCE(cm.maxima_override, m.maxima) AS maxima
-             FROM matieres m
-             INNER JOIN classe_matieres cm ON m.id = cm.matiere_id AND cm.classe_id = :cid AND cm.est_active = 1
-             WHERE m.parent_id = :gid 
-             AND m.est_groupe = 0 
-             AND m.est_actif = 1
-             ORDER BY m.id",
-            ['gid' => $groupeId, 'cid' => $classeId]
-        );
+        return $this->evaluationNoteService->getSubjectsForClassGroup($groupeId, $classeId);
+
     }
 
     /**
@@ -909,17 +631,7 @@ class NoteController
      */
     public function getEvaluationById(int $id): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT ev.*, 
-                    t.libelle AS trimestre_libelle,
-                    c.nom AS classe_nom,
-                    m.libelle AS groupe_libelle
-             FROM evaluations ev
-             INNER JOIN trimestres t ON ev.trimestre_id = t.id
-             INNER JOIN classes c ON ev.classe_id = c.id
-             INNER JOIN matieres m ON ev.groupe_id = m.id
-             WHERE ev.id = :id",
-            ['id' => $id]
-        );
+        return $this->evaluationNoteService->getEvaluationById($id);
+
     }
 }
