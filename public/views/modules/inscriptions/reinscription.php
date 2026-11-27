@@ -12,12 +12,12 @@ requirePermission('inscriptions.creer');
 
 global $db;
 
-// Charger le contrôleur
-require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'InscriptionController.php';
-$inscriptionController = new InscriptionController();
+// Charger le service de lecture des années scolaires
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'InscriptionService.php';
+$inscriptionService = new InscriptionService();
 
 // Récupérer les années scolaires
-$annees = $inscriptionController->getAnneesScolaires();
+$annees = $inscriptionService->getSchoolYears();
 
 // Récupérer les classes de toutes les années pour le sélecteur source
 $classesToutes = $db->fetchAll(
