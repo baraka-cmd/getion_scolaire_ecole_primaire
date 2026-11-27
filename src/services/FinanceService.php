@@ -104,6 +104,11 @@ class FinanceService
         $this->repository->deleteFee($feeId);
     }
 
+    public function getFeeForStatus(int $feeId): ?array
+    {
+        return $this->repository->findFee($feeId);
+    }
+
     public function toggleFeeStatus(int $feeId): int
     {
         $fee = $this->repository->findFee($feeId);
