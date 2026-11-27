@@ -208,4 +208,33 @@ class StudentRecordRepository
             ['eid' => $studentId]
         );
     }
+
+    /**
+     * Statistiques d'effectifs affichées sur la page de liste.
+     * Les requêtes restent ici afin que la vue ne dépende pas de SQL.
+     */
+    public function summaryStats(): array
+    {
+        return [
+            'total_actifs' => (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) AND statut = 'Actif'"
+            ),
+            'total_garcons' => (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM inscriptions i
+                 INNER JOIN eleves e ON i.eleve_id = e.id
+                 WHERE i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
+                   AND i.statut = 'Actif' AND e.sexe = 'M'"
+            ),
+            'total_filles' => (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM inscriptions i
+                 INNER JOIN eleves e ON i.eleve_id = e.id
+                 WHERE i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
+                   AND i.statut = 'Actif' AND e.sexe = 'F'"
+            ),
+            'nouvelles_inscriptions' => (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM inscriptions WHERE MONTH(date_inscription) = MONTH(CURDATE()) AND YEAR(date_inscription) = YEAR(CURDATE())"
+            ),
+        ];
+    }
+
 }
