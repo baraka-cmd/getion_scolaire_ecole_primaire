@@ -71,6 +71,60 @@ class MatiereRepository
         return ['total' => $total, 'groupes' => $groups];
     }
 
+    public function countActiveLabel(string $label, ?int $excludeId = null): int
+    {
+        $sql = 'SELECT COUNT(*) FROM matieres WHERE libelle = :label AND est_actif = 1';
+        $params = ['label' => $label];
+        if ($excludeId !== null) {
+            $sql .= ' AND id != :exclude_id';
+            $params['exclude_id'] = $excludeId;
+        }
+        return (int) $this->db->fetchColumn($sql, $params);
+    }
+
+    public function countCode(string $code, ?int $excludeId = null): int
+    {
+        $sql = 'SELECT COUNT(*) FROM matieres WHERE code = :code';
+        $params = ['code' => $code];
+        if ($excludeId !== null) {
+            $sql .= ' AND id != :exclude_id';
+            $params['exclude_id'] = $excludeId;
+        }
+        return (int) $this->db->fetchColumn($sql, $params);
+    }
+
+    public function isActiveGroup(int $groupId): bool
+    {
+        return $this->db->fetchOne(
+            'SELECT id FROM matieres WHERE id = :id AND est_groupe = 1 AND est_actif = 1',
+            ['id' => $groupId]
+        ) !== null;
+    }
+
+    public function countActiveChildren(int $groupId): int
+    {
+        return (int) $this->db->fetchColumn(
+            'SELECT COUNT(*) FROM matieres WHERE parent_id = :parent_id AND est_actif = 1',
+            ['parent_id' => $groupId]
+        );
+    }
+
+    public function countEvaluationsForSubject(int $subjectId): int
+    {
+        return (int) $this->db->fetchColumn(
+            'SELECT COUNT(*) FROM evaluations WHERE matiere_id = :subject_id',
+            ['subject_id' => $subjectId]
+        );
+    }
+
+    public function countTimetableEntriesForSubject(int $subjectId): int
+    {
+        return (int) $this->db->fetchColumn(
+            'SELECT COUNT(*) FROM emploi_du_temps WHERE matiere_id = :subject_id',
+            ['subject_id' => $subjectId]
+        );
+    }
+
     public function findGroups(): array
     {
         return $this->db->fetchAll(
