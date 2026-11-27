@@ -169,4 +169,58 @@ class AnneeScolaireRepository
             ['id' => $id]
         );
     }
+
+    /** Persist school-year mutations; the controller/service owns the encompassing transaction. */
+    public function createYear(array $data): int
+    {
+        return $this->db->insert(
+            'INSERT INTO annees_scolaires (libelle, date_debut, date_fin, est_active, est_cloturee)
+             VALUES (:libelle, :debut, :fin, 0, 0)',
+            ['libelle' => $data['libelle'], 'debut' => $data['debut'], 'fin' => $data['fin']]
+        );
+    }
+
+    public function updateYear(array $data): void
+    {
+        $this->db->update(
+            'UPDATE annees_scolaires SET libelle = :libelle, date_debut = :debut, date_fin = :fin WHERE id = :id',
+            ['libelle' => $data['libelle'], 'debut' => $data['debut'], 'fin' => $data['fin'], 'id' => $data['id']]
+        );
+    }
+
+    public function deactivateAllYears(): void
+    {
+        $this->db->update('UPDATE annees_scolaires SET est_active = 0');
+    }
+
+    public function activateYear(int $yearId): void
+    {
+        $this->db->update('UPDATE annees_scolaires SET est_active = 1 WHERE id = :id', ['id' => $yearId]);
+    }
+
+    public function setActiveYearInSchoolSettings(int $yearId): void
+    {
+        $this->db->update(
+            'UPDATE parametres_ecole SET annee_scolaire_active_id = :id WHERE id = 1',
+            ['id' => $yearId]
+        );
+    }
+
+    public function findValidActiveYearForUpdate(int $yearId): ?array
+    {
+        return $this->db->fetchOne(
+            'SELECT id FROM annees_scolaires WHERE id = :id AND est_active = 1 AND est_cloturee = 0 FOR UPDATE',
+            ['id' => $yearId]
+        );
+    }
+
+    public function closeYear(int $yearId): void
+    {
+        $this->db->update(
+            'UPDATE annees_scolaires SET est_cloturee = 1, est_active = 0
+             WHERE id = :id AND est_active = 0 AND est_cloturee = 0',
+            ['id' => $yearId]
+        );
+    }
+
 }
