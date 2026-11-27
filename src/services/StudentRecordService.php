@@ -53,4 +53,9 @@ class StudentRecordService
             'paiements' => $this->repository->payments($studentId),
         ];
     }
+    public function summaryStats(): array
+    {
+        return $this->repository->summaryStats();
+    }
+
 }
