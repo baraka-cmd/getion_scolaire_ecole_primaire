@@ -9,124 +9,22 @@
 defined('ACCESS') or define('ACCESS', true);
 
 require_once __DIR__ . '/../../../src/config/app.php';
-require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AuthRateLimitService.php';
-require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'EmailService.php';
+require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'PasswordResetController.php';
 
-// Si déjà connecté, rediriger vers le dashboard
 if (isLoggedIn()) {
     redirect('/dashboard');
 }
 
-$successMessage = '';
-$errorMessage   = '';
-$errors         = [];
-$oldEmail       = '';
-
-// Récupérer les paramètres de l'école
 $ecoleParams = $_SESSION['ecole_params'] ?? [];
 $ecoleNom = $ecoleParams['nom_ecole'] ?? ECOLE_NOM;
 $ecoleLogo = $ecoleParams['logo'] ?? '';
 
-// Traitement du formulaire
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $oldEmail = post('email', '');
-
-    if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {
-        http_response_code(419);
-        $errorMessage = 'Session expirée. Actualisez la page puis réessayez.';
-    } elseif (isBlank($oldEmail)) {
-        $errors['email'] = 'Veuillez saisir votre adresse email.';
-    } elseif (!isValidEmail($oldEmail)) {
-        $errors['email'] = 'Veuillez saisir une adresse email valide.';
-    }
-
-    if (empty($errors) && $errorMessage === '') {
-        $successMessage = 'Si cette adresse est associée à un compte actif, un lien de réinitialisation sera envoyé. Ce lien expirera dans 30 minutes.';
-        $rateLimiter = new AuthRateLimitService($db);
-        $clientIp = AuthRateLimitService::clientIp();
-        $normalizedEmail = mb_strtolower(trim($oldEmail));
-
-        try {
-            $blocked = $rateLimiter->isBlocked('password_reset', $clientIp)
-                || $rateLimiter->isBlocked('password_reset', $normalizedEmail, 'email');
-            if (!$blocked) {
-                $blocked = $rateLimiter->recordFailure('password_reset', $clientIp, 5, 900, 900)
-                    || $rateLimiter->recordFailure('password_reset', $normalizedEmail, 3, 3600, 3600, 'email');
-            }
-            if (!$blocked) {
-                $utilisateur = $db->fetchOne(
-                    "SELECT id, nom, prenom, email
-                     FROM utilisateurs
-                     WHERE email = :email AND est_actif = 1
-                     LIMIT 1",
-                    ['email' => $normalizedEmail]
-                );
-
-                if ($utilisateur) {
-                    $canonicalUrl = APP_CANONICAL_URL;
-                    if (
-                        $canonicalUrl === ''
-                        && ENVIRONMENT === 'development'
-                        && in_array((string) ($_SERVER['REMOTE_ADDR'] ?? ''), ['127.0.0.1', '::1'], true)
-                    ) {
-                        $canonicalUrl = BASE_URL;
-                    }
-
-                    $canonicalParts = parse_url($canonicalUrl);
-                    $canonicalHost = is_array($canonicalParts) ? strtolower((string) ($canonicalParts['host'] ?? '')) : '';
-                    $isSecureCanonicalUrl = is_array($canonicalParts)
-                        && strtolower((string) ($canonicalParts['scheme'] ?? '')) === 'https';
-                    $isLocalCanonicalUrl = ENVIRONMENT === 'development'
-                        && strtolower((string) ($canonicalParts['scheme'] ?? '')) === 'http'
-                        && in_array($canonicalHost, ['localhost', '127.0.0.1', '::1'], true);
-                    $canonicalUrlValid = filter_var($canonicalUrl, FILTER_VALIDATE_URL) !== false
-                        && ($isSecureCanonicalUrl || $isLocalCanonicalUrl)
-                        && !isset($canonicalParts['user'])
-                        && !isset($canonicalParts['pass'])
-                        && !isset($canonicalParts['query'])
-                        && !isset($canonicalParts['fragment']);
-
-                    if (!$canonicalUrlValid) {
-                        error_log('Réinitialisation mot de passe désactivée : APP_CANONICAL_URL doit être configurée en HTTPS.');
-                    } else {
-                        $token = bin2hex(random_bytes(32));
-                        $tokenHash = hash('sha256', $token);
-                        $db->query(
-                            "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-                             VALUES (:user_id, :token_hash, DATE_ADD(NOW(), INTERVAL 30 MINUTE))
-                             ON DUPLICATE KEY UPDATE
-                                 token_hash = VALUES(token_hash),
-                                 expires_at = VALUES(expires_at),
-                                 created_at = NOW()",
-                            ['user_id' => $utilisateur['id'], 'token_hash' => $tokenHash]
-                        );
-
-                        $resetUrl = rtrim($canonicalUrl, '/') . '/reset-password?token=' . rawurlencode($token);
-                        $content = '<p>Bonjour ' . e($utilisateur['prenom'] . ' ' . $utilisateur['nom']) . ',</p>'
-                            . '<p>Une demande de réinitialisation a été faite pour votre compte sur '
-                            . e($ecoleNom) . '.</p>'
-                            . '<p><a href="' . e($resetUrl) . '">Choisir un nouveau mot de passe</a></p>'
-                            . '<p>Ce lien est à usage unique et expire dans 30 minutes. Si vous n’avez pas demandé cette réinitialisation, ignorez ce message.</p>';
-
-                        if (!(new EmailService())->envoyerTemplate(
-                            $utilisateur['email'],
-                            'Réinitialisation de votre mot de passe — ' . $ecoleNom,
-                            $content
-                        )) {
-                            $db->delete(
-                                'DELETE FROM password_reset_tokens WHERE user_id = :user_id AND token_hash = :token_hash',
-                                ['user_id' => $utilisateur['id'], 'token_hash' => $tokenHash]
-                            );
-                            error_log('Échec SMTP pendant une demande de réinitialisation de mot de passe.');
-                        }
-                    }
-                }
-            }
-        } catch (Throwable $e) {
-            error_log('Échec du traitement de réinitialisation de mot de passe (' . get_class($e) . ').');
-        }
-    }
-}
+$resetController = new PasswordResetController();
+$resetState = $resetController->handleForgotPassword($ecoleNom);
+$successMessage = $resetState['successMessage'];
+$errorMessage = $resetState['errorMessage'];
+$errors = $resetState['errors'];
+$oldEmail = $resetState['oldEmail'];
 ?>
 <!DOCTYPE html>
 <html lang="fr">
