@@ -65,6 +65,12 @@ if (!str_contains($attendanceController, 'validateCsrf')
     throw new RuntimeException('Attendance write CSRF/access checks were removed.');
 }
 $repository = file_get_contents(__DIR__ . '/../src/repositories/AttendanceRegisterRepository.php');
+$retardRepository = file_get_contents(__DIR__ . '/../src/repositories/RetardRepository.php');
+foreach (['beginTransaction', 'FOR UPDATE', 'commit', 'rollback'] as $guard) {
+    if (!str_contains($retardRepository, $guard)) {
+        throw new RuntimeException('Duplicate tardiness protection missing: ' . $guard);
+    }
+}
 foreach (['beginTransaction', 'FOR UPDATE', 'commit', 'rollback', 'enrollment_changed'] as $guard) {
     if (!str_contains($repository, $guard)) {
         throw new RuntimeException('Atomic attendance safeguard missing: ' . $guard);
