@@ -1,0 +1,76 @@
+<?php
+/**
+ * Smoke contract sans base pour la délégation du dossier élève.
+ * Exécuter : php tests/student_records_mvc_smoke.php
+ */
+define('ACCESS', true);
+require_once __DIR__ . '/../src/repositories/StudentRecordRepository.php';
+require_once __DIR__ . '/../src/services/StudentRecordService.php';
+require_once __DIR__ . '/../src/repositories/StudentAccessRepository.php';
+require_once __DIR__ . '/../src/policies/StudentAccessPolicy.php';
+
+function studentAssert(bool $condition, string $message): void
+{
+    if (!$condition) {
+        fwrite(STDERR, "ÉCHEC: {$message}\n");
+        exit(1);
+    }
+}
+
+class StudentRecordRepositoryFake extends StudentRecordRepository
+{
+    public array $received = [];
+
+    public function __construct() {}
+
+    public function paginate(array $filters, int $page, int $perPage, string $role, int $userId): array
+    {
+        $this->received = compact('filters', 'page', 'perPage', 'role', 'userId');
+        return ['rows' => [['id' => 17]], 'total' => 1];
+    }
+
+    public function findRecord(int $studentId): ?array
+    {
+        return $studentId === 17 ? ['id' => 17] : null;
+    }
+
+    public function recentGrades(int $studentId): array { return [['valeur' => 15]]; }
+    public function recentAbsences(int $studentId): array { return []; }
+    public function payments(int $studentId): array { return []; }
+}
+
+class StudentAccessRepositoryFake extends StudentAccessRepository
+{
+    public string $role = 'Parent';
+    public bool $linked = false;
+    public bool $teacherAssigned = false;
+
+    public function __construct() {}
+    public function findActiveRole(int $userId): ?string { return $userId === 9 ? $this->role : null; }
+    public function parentLinkedToStudent(int $userId, int $studentId): bool { return $this->linked; }
+    public function teacherAssignedToStudent(int $userId, int $studentId): bool { return $this->teacherAssigned; }
+}
+
+$repository = new StudentRecordRepositoryFake();
+$service = new StudentRecordService($repository);
+$page = $service->paginate(['recherche' => 'A'], 0, 25, 'Parent', 9);
+studentAssert($repository->received['page'] === 1, 'page minimum protégée');
+studentAssert($repository->received['perPage'] === 25, 'pagination transmise');
+studentAssert($repository->received['userId'] === 9, 'identité serveur transmise');
+studentAssert($page['rows'][0]['id'] === 17 && $page['total'] === 1, 'résultat de liste inchangé');
+studentAssert($service->findRecord(17)['id'] === 17, 'fiche récupérée');
+studentAssert($service->findRecord(0) === null, 'ID invalide rejeté');
+$history = $service->getAcademicAndAttendanceHistory(17);
+studentAssert(isset($history['notes'], $history['absences'], $history['paiements']), 'structure historique stable');
+
+$accessRepository = new StudentAccessRepositoryFake();
+$policy = new StudentAccessPolicy($accessRepository);
+$_SESSION['utilisateur_id'] = 9;
+studentAssert(!$policy->canCurrentUserAccessStudent(17), 'parent non lié refusé');
+$accessRepository->linked = true;
+studentAssert($policy->canCurrentUserAccessStudent(17), 'parent lié autorisé');
+$accessRepository->role = 'Admin';
+studentAssert($policy->canCurrentUserAccessStudent(17), 'administrateur autorisé');
+studentAssert(!$policy->canCurrentUserAccessStudent(0), 'ID invalide refusé');
+
+echo "OK - contrats MVC dossiers élèves\n";
