@@ -77,96 +77,28 @@ class DocumentController
 
     private function getListe(): void
     {
-        $page       = max(1, (int) post('page', 1));
-        $categorie  = post('categorie', '');
-        $visibilite = post('visibilite', '');
-        $recherche  = post('recherche', '');
-        $parPage    = ITEMS_PER_PAGE;
-
-        $where = [];
-        $params = [];
-
-        // Filtre par visibilité selon le rôle
+        $page = max(1, (int) post('page', 1));
+        $filters = [
+            'categorie' => post('categorie', ''),
+            'visibilite' => post('visibilite', ''),
+            'recherche' => post('recherche', ''),
+        ];
         $isAdmin = hasRole(['Admin', 'Directeur']);
-
-        if (!$isAdmin) {
-            // Les non-admins ne voient que les documents publics
-            $where[] = "d.est_public = 1";
-        }
-
-        if (!empty($categorie)) {
-            $where[] = $categorie === 'Autre'
-                ? "(d.type_document = :cat OR d.type_document = '')"
-                : "d.type_document = :cat";
-            $params['cat'] = $categorie;
-        }
-
-        if ($visibilite !== '' && $isAdmin) {
-            $where[] = "d.est_public = :vis";
-            $params['vis'] = (int) $visibilite;
-        }
-
-        if (!empty($recherche)) {
-            $where[] = "(d.titre LIKE :r1 OR d.description LIKE :r2 OR d.nom_fichier LIKE :r3 OR d.extension LIKE :r4)";
-            $params['r1'] = "%{$recherche}%";
-            $params['r2'] = "%{$recherche}%";
-            $params['r3'] = "%{$recherche}%";
-            $params['r4'] = "%{$recherche}%";
-        }
-
-        $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
-
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM documents d {$whereClause}",
-            $params
-        );
-
-        $offset = ($page - 1) * $parPage;
-
-        $documents = $this->db->fetchAll(
-            "SELECT d.*, 
-                    DATE_FORMAT(d.created_at, '%d/%m/%Y') AS date_format,
-                    TIME_FORMAT(d.created_at, '%H:%i') AS heure_format,
-                    CONCAT(u.prenom, ' ', u.nom) AS upload_par_nom,
-                    ROUND(d.taille_fichier / 1024, 1) AS taille_ko,
-                    CASE 
-                        WHEN d.taille_fichier > 1048576 THEN CONCAT(ROUND(d.taille_fichier / 1048576, 1), ' Mo')
-                        WHEN d.taille_fichier > 1024 THEN CONCAT(ROUND(d.taille_fichier / 1024, 1), ' Ko')
-                        ELSE CONCAT(d.taille_fichier, ' o')
-                    END AS taille_formatee,
-                    d.extension AS type_fichier,
-                    d.nom_fichier AS nom_original,
-                    COALESCE(NULLIF(d.type_document, ''), 'Autre') AS categorie,
-                    0 AS nb_telechargements
-             FROM documents d
-             LEFT JOIN utilisateurs u ON d.utilisateur_id = u.id
-             {$whereClause}
-             ORDER BY d.created_at DESC
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, ['limit' => $parPage, 'offset' => $offset])
-        );
-
-        // Les statistiques suivent les mêmes règles de visibilité que la liste.
-        $statsWhere = $isAdmin ? '' : 'WHERE est_public = 1';
-        $totalFichiers = (int) $this->db->fetchColumn("SELECT COUNT(*) FROM documents {$statsWhere}");
-        $tailleTotale = (int) $this->db->fetchColumn("SELECT COALESCE(SUM(taille_fichier), 0) FROM documents {$statsWhere}");
-        $nbParCategorie = $this->db->fetchAll(
-            "SELECT COALESCE(NULLIF(type_document, ''), 'Autre') AS categorie, COUNT(*) AS nb
-             FROM documents {$statsWhere}
-             GROUP BY COALESCE(NULLIF(type_document, ''), 'Autre')
-             ORDER BY nb DESC"
-        );
+        $result = $this->documentService->paginateVisible($filters, $page, ITEMS_PER_PAGE, $isAdmin);
+        $tailleTotale = (int) $result['taille_totale_octets'];
 
         jsonResponse(true, 'Liste récupérée.', [
-            'documents'      => $documents,
-            'total'          => $total,
-            'page'           => $page,
-            'pages'          => ceil($total / $parPage),
-            'stats'          => [
-                'total_fichiers' => $totalFichiers,
-                'taille_totale'  => $tailleTotale > 1048576 ? round($tailleTotale / 1048576, 1) . ' Mo' : round($tailleTotale / 1024, 1) . ' Ko',
-                'par_categorie'  => $nbParCategorie
-            ]
+            'documents' => $result['documents'],
+            'total' => $result['total'],
+            'page' => $page,
+            'pages' => ceil($result['total'] / ITEMS_PER_PAGE),
+            'stats' => [
+                'total_fichiers' => $result['total_fichiers'],
+                'taille_totale' => $tailleTotale > 1048576
+                    ? round($tailleTotale / 1048576, 1) . ' Mo'
+                    : round($tailleTotale / 1024, 1) . ' Ko',
+                'par_categorie' => $result['par_categorie'],
+            ],
         ]);
     }
 
