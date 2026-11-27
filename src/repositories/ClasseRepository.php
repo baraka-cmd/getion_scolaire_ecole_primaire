@@ -112,9 +112,13 @@ class ClasseRepository
         return (int) $this->db->fetchColumn('SELECT COUNT(*) FROM evaluations WHERE classe_id = :class_id', ['class_id' => $classId]);
     }
 
-    public function findTeacherClass(int $teacherId): ?array
+    public function findTeacherClass(int $teacherId): ?int
     {
-        return $this->db->fetchOne('SELECT classe_id FROM enseignants WHERE id = :teacher_id', ['teacher_id' => $teacherId]);
+        $classId = $this->db->fetchColumn(
+            'SELECT classe_id FROM enseignants WHERE id = :teacher_id',
+            ['teacher_id' => $teacherId]
+        );
+        return $classId === false || $classId === null ? null : (int) $classId;
     }
 
     public function findForAjax(int $id): ?array
