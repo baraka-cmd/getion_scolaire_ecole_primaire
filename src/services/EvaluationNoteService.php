@@ -132,4 +132,24 @@ class EvaluationNoteService
         );
         return true;
     }
+
+    public function getEvaluationGridContext(int $evaluationId): ?array
+    {
+        return $evaluationId > 0 ? $this->repository->findEvaluationGridContext($evaluationId) : null;
+    }
+
+    public function getActiveSubjectsForClassGroup(int $classId, int $groupId): array
+    {
+        return $classId > 0 && $groupId > 0 ? $this->repository->findActiveSubjectsForClassGroup($classId, $groupId) : [];
+    }
+
+    public function getActiveStudentsForClassYear(int $classId, int $yearId): array
+    {
+        return $classId > 0 && $yearId > 0 ? $this->repository->findActiveStudentsForClassYear($classId, $yearId) : [];
+    }
+
+    public function getNotesForEvaluationGrid(int $evaluationId): array
+    {
+        return $evaluationId > 0 ? $this->repository->findNotesForEvaluationGrid($evaluationId) : [];
+    }
 }
