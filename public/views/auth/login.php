@@ -4,6 +4,7 @@ defined('ACCESS') or define('ACCESS', true);
 
 // Charger la configuration
 require_once __DIR__ . '/../../../src/config/app.php';
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'SchoolParametersService.php';
 
 // Traitement du formulaire de connexion (POST AJAX)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
@@ -95,14 +96,12 @@ if (is_string($googleErrorCode) && isset($googleErrors[$googleErrorCode])) {
                 <div class="login-brand">
                     <div class="login-brand-icon">
                         <?php 
-                        // Récupération des paramètres BDD
+                        // Récupération des paramètres école via le service de présentation
                         if (empty($_SESSION['ecole_params'])) {
                             try {
-                                if (class_exists('Database')) {
-                                    $params = Database::getInstance()->fetchOne("SELECT * FROM parametres_ecole LIMIT 1");
-                                    if ($params) {
-                                        $_SESSION['ecole_params'] = $params;
-                                    }
+                                $params = (new SchoolParametersService())->getSchoolParameters();
+                                if ($params) {
+                                    $_SESSION['ecole_params'] = $params;
                                 }
                             } catch (Exception $e) {
                                 $_SESSION['ecole_params'] = [];
