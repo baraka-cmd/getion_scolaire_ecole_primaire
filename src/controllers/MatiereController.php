@@ -11,12 +11,10 @@ require_once __DIR__ . '/../services/MatiereService.php';
 
 class MatiereController
 {
-    private Database $db;
     private MatiereService $matiereService;
 
     public function __construct(?MatiereService $matiereService = null)
     {
-        $this->db = Database::getInstance();
         $this->matiereService = $matiereService ?? new MatiereService();
     }
 
@@ -195,35 +193,18 @@ class MatiereController
     }
 
     try {
-        $this->db->beginTransaction();
-
-        // Les groupes ne portent pas de maxima, mais la colonne refuse NULL.
-        $maximaValue = $estGroupe ? 0 : $maxima;
-
-        $matiereId = $this->db->insert(
-            "INSERT INTO matieres (code, libelle, description, maxima, coefficient, est_groupe, parent_id, est_actif)
-             VALUES (:code, :libelle, :desc, :maxima, 1, :est_groupe, :parent_id, 1)",
+        // Le service garantit l'atomicité de la création et des associations.
+        $matiereId = $this->matiereService->createSubject(
             [
-                'code'       => !empty($code) ? mb_strtoupper(trim($code)) : null,
-                'libelle'    => formatNom($libelle),
-                'desc'       => $description ?: null,
-                'maxima'     => $maximaValue,
-                'est_groupe' => $estGroupe,
-                'parent_id'  => $estGroupe ? null : ($parentId > 0 ? $parentId : null)
-            ]
+                'code'        => !empty($code) ? mb_strtoupper(trim($code)) : null,
+                'libelle'     => formatNom($libelle),
+                'description' => $description ?: null,
+                'maxima'      => $estGroupe ? 0 : $maxima,
+                'est_groupe'  => $estGroupe,
+                'parent_id'   => $estGroupe ? null : ($parentId > 0 ? $parentId : null),
+            ],
+            !$estGroupe && is_array($_POST['classes'] ?? null) ? $_POST['classes'] : []
         );
-
-        // Si c'est une sous-matière, associer aux classes sélectionnées
-        if (!$estGroupe && !empty($_POST['classes'])) {
-            foreach ($_POST['classes'] as $classeId) {
-                $classeId = (int) $classeId;
-                if ($classeId > 0) {
-                    $this->matiereService->createClassAssociationIfMissing($matiereId, $classeId);
-                }
-            }
-        }
-
-        $this->db->commit();
 
         logActivity('Création', 'matieres', $matiereId, "Matière créée : {$libelle}");
 
@@ -231,7 +212,6 @@ class MatiereController
         jsonResponse(true, "{$typeMsg} créé(e) avec succès.", ['id' => $matiereId]);
 
     } catch (Exception $e) {
-        $this->db->rollback();
         error_log('Erreur création matière: ' . $e->getMessage());
         jsonResponse(false, 'Erreur lors de la création.');
     }
@@ -281,11 +261,9 @@ class MatiereController
         if (!$existant['est_groupe'] && $parentId <= 0) {
             $errors['parent_id'] = 'Veuillez sélectionner le groupe parent.';
         } elseif (!$existant['est_groupe']) {
-            $parentExiste = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM matieres WHERE id = :id AND est_groupe = 1 AND est_actif = 1",
-                ['id' => $parentId]
-            );
-            if ($parentExiste == 0) $errors['parent_id'] = 'Groupe parent invalide.';
+            if (!$this->matiereService->isActiveGroup($parentId)) {
+                $errors['parent_id'] = 'Groupe parent invalide.';
+            }
         }
 
         if (!empty($errors)) {
@@ -353,10 +331,7 @@ class MatiereController
         }
 
         try {
-            // Supprimer les associations
-            $this->db->delete("DELETE FROM classe_matieres WHERE matiere_id = :mid", ['mid' => $id]);
-            // Supprimer la matière
-            $this->db->delete("DELETE FROM matieres WHERE id = :id", ['id' => $id]);
+            $this->matiereService->deleteSubjectWithAssociations($id);
 
             logActivity('Suppression', 'matieres', $id, "Matière supprimée : {$matiere['libelle']}");
 

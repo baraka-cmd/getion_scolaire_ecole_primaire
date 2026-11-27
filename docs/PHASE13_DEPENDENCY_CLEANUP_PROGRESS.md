@@ -30,6 +30,7 @@ Contrôleurs à examiner et à traiter par lots ciblés :
 - [x] Inventaire initial des contrôleurs contenant des responsabilités DB commencé.
 - [ ] Tracer chaque dépendance à travers le dépôt (références, appels, routes, vues).
 - [x] Lot contrôlé ClasseController : écritures classe/titulaire/planning déléguées au repository via service ; transactions centralisées ; dépendance DB directe retirée.
+- [x] Lot MatiereController : création/suppression et validation du groupe parent déléguées au service/repository ; transactions atomiques ; dépendance DB directe supprimée.
 - [ ] Continuer le traçage et l'extraction des autres contrôleurs listés, sans déplacement mécanique.
 - [x] Ajouter un smoke test de contrat MVC et un workflow CI ciblé pour le lot ClasseController.
 - [ ] Ajouter/adapter les tests de comportement des autres domaines.
@@ -37,4 +38,4 @@ Contrôleurs à examiner et à traiter par lots ciblés :
 - [ ] Fusionner uniquement après validation de tous les critères.
 
 ## État
-**Phase 13 non clôturée.** Ce document établit la méthode et l'inventaire initial ; il ne prétend pas que les dépendances ont déjà été retirées. Les phases 12 et 13 ne doivent être déclarées terminées qu'après migration réelle des vues restantes de Phase 12 et audit/remplacement prouvé des responsabilités de Phase 13.
+**Phase 13 non clôturée après ce lot.** Ce document établit la méthode et l'inventaire initial ; il ne prétend pas que les dépendances ont déjà été retirées. Les phases 12 et 13 ne doivent être déclarées terminées qu'après migration réelle des vues restantes de Phase 12 et audit/remplacement prouvé des responsabilités de Phase 13.

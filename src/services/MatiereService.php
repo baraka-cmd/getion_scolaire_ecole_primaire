@@ -13,6 +13,16 @@ class MatiereService
         $this->repository = $repository ?? new MatiereRepository();
     }
 
+    public function createSubject(array $data, array $classIds = []): int
+    {
+        return $this->repository->createSubject($data, $classIds);
+    }
+
+    public function deleteSubjectWithAssociations(int $subjectId): void
+    {
+        $this->repository->deleteSubjectWithAssociations($subjectId);
+    }
+
     public function countActiveLabel(string $label, ?int $excludeId = null): int
     {
         return $this->repository->countActiveLabel($label, $excludeId);

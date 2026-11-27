@@ -71,6 +71,46 @@ class MatiereRepository
         return ['total' => $total, 'groupes' => $groups];
     }
 
+    public function createSubject(array $data, array $classIds = []): int
+    {
+        $this->db->beginTransaction();
+        try {
+            $subjectId = $this->db->insert(
+                'INSERT INTO matieres (code, libelle, description, maxima, coefficient, est_groupe, parent_id, est_actif)
+                 VALUES (:code, :libelle, :description, :maxima, 1, :est_groupe, :parent_id, 1)',
+                $data
+            );
+            foreach ($classIds as $classId) {
+                $classId = filter_var($classId, FILTER_VALIDATE_INT);
+                if ($classId !== false && $classId > 0) {
+                    $this->createClassAssociationIfMissing($subjectId, (int) $classId);
+                }
+            }
+            $this->db->commit();
+            return $subjectId;
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
+            throw $exception;
+        }
+    }
+
+    public function deleteSubjectWithAssociations(int $subjectId): void
+    {
+        $this->db->beginTransaction();
+        try {
+            $this->db->delete('DELETE FROM classe_matieres WHERE matiere_id = :subject_id', ['subject_id' => $subjectId]);
+            $this->db->delete('DELETE FROM matieres WHERE id = :subject_id', ['subject_id' => $subjectId]);
+            $this->db->commit();
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
+            throw $exception;
+        }
+    }
+
     public function countActiveLabel(string $label, ?int $excludeId = null): int
     {
         $sql = 'SELECT COUNT(*) FROM matieres WHERE libelle = :label AND est_actif = 1';

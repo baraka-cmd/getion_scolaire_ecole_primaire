@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'src/controllers/ClasseController.php'
+      - 'src/controllers/MatiereController.php'
+      - 'src/services/MatiereService.php'
+      - 'src/repositories/MatiereRepository.php'
+      - 'tests/phase13_matiere_controller_mvc_smoke.php'
       - 'src/services/ClasseService.php'
       - 'src/repositories/ClasseRepository.php'
       - 'tests/phase13_class_controller_mvc_smoke.php'
@@ -22,8 +26,10 @@ jobs:
       - name: PHP syntax validation
         run: |
           set -e
-          for file in src/controllers/ClasseController.php src/services/ClasseService.php src/repositories/ClasseRepository.php tests/phase13_class_controller_mvc_smoke.php; do
+          for file in src/controllers/ClasseController.php src/services/ClasseService.php src/repositories/ClasseRepository.php src/controllers/MatiereController.php src/services/MatiereService.php src/repositories/MatiereRepository.php tests/phase13_class_controller_mvc_smoke.php tests/phase13_matiere_controller_mvc_smoke.php; do
             php -l "$file"
           done
       - name: Class controller MVC contract smoke
         run: php tests/phase13_class_controller_mvc_smoke.php
+      - name: Subject controller MVC contract smoke
+        run: php tests/phase13_matiere_controller_mvc_smoke.php
