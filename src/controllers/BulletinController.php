@@ -9,18 +9,21 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../services/AcademicResultsService.php';
+require_once __DIR__ . '/../services/ResultsBulletinService.php';
 require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
 
 class BulletinController
 {
     private Database $db;
     private AcademicResultsService $academicResults;
+    private ResultsBulletinService $resultsBulletinService;
     private StudentAccessPolicy $studentAccessPolicy;
 
     public function __construct()
     {
         $this->db = Database::getInstance();
         $this->academicResults = new AcademicResultsService();
+        $this->resultsBulletinService = new ResultsBulletinService();
         $this->studentAccessPolicy = new StudentAccessPolicy($this->db);
     }
 
@@ -76,12 +79,10 @@ class BulletinController
 
         // Si pas d'année, prendre l'année active
         if ($anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn(
-                "SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1"
-            );
+            $anneeId = $this->resultsBulletinService->getActiveSchoolYearId();
         }
 
-        $classe = $this->db->fetchOne(
+        $classe = $this->resultsBulletinService->fetchOne(
             "SELECT id, annee_scolaire_id FROM classes WHERE id = :cid",
             ['cid' => $classeId]
         );
@@ -90,7 +91,7 @@ class BulletinController
         }
 
         if ($trimestreId > 0) {
-            $trimestreValide = $this->db->fetchColumn(
+            $trimestreValide = $this->resultsBulletinService->fetchColumn(
                 "SELECT COUNT(*) FROM trimestres
                  WHERE id = :tid AND annee_scolaire_id = :aid",
                 ['tid' => $trimestreId, 'aid' => $anneeId]
@@ -101,7 +102,7 @@ class BulletinController
         }
 
         // Récupérer les élèves de la classe
-        $eleves = $this->db->fetchAll(
+        $eleves = $this->resultsBulletinService->fetchAll(
             "SELECT e.id, e.matricule, e.nom, e.prenom
              FROM inscriptions i
              INNER JOIN eleves e ON i.eleve_id = e.id
@@ -123,7 +124,7 @@ class BulletinController
             foreach ($eleves as $eleve) {
                 // Vérifier si le bulletin existe déjà pour ce trimestre
                 if ($trimestreId > 0) {
-                    $existe = $this->db->fetchColumn(
+                    $existe = $this->resultsBulletinService->fetchColumn(
                         "SELECT COUNT(*) FROM bulletins 
                          WHERE eleve_id = :eid AND trimestre_id = :tid",
                         ['eid' => $eleve['id'], 'tid' => $trimestreId]
@@ -138,14 +139,14 @@ class BulletinController
                 // Récupérer les résultats calculés
                 $resultats = [];
                 if ($trimestreId > 0) {
-                    $resultats = $this->db->fetchAll(
+                    $resultats = $this->resultsBulletinService->fetchAll(
                         "SELECT * FROM resultats_trimestriels 
                          WHERE eleve_id = :eid AND classe_id = :cid AND trimestre_id = :tid",
                         ['eid' => $eleve['id'], 'cid' => $classeId, 'tid' => $trimestreId]
                     );
                 } else {
                     // Tous les trimestres
-                    $resultats = $this->db->fetchAll(
+                    $resultats = $this->resultsBulletinService->fetchAll(
                         "SELECT * FROM resultats_trimestriels 
                          WHERE eleve_id = :eid AND classe_id = :cid
                          AND trimestre_id IN (SELECT id FROM trimestres WHERE annee_scolaire_id = :aid)
@@ -163,7 +164,7 @@ class BulletinController
                 foreach ($resultats as $resultat) {
                     $numeroBulletin = 'BUL-' . $eleve['matricule'] . '-T' . $resultat['trimestre_id'] . '-' . date('Y');
 
-                    $bulletinId = $this->db->insert(
+                    $bulletinId = $this->resultsBulletinService->insert(
                         "INSERT INTO bulletins (eleve_id, trimestre_id, numero_bulletin, date_edition, 
                          edite_par, commentaire_enseignant, est_imprime)
                          VALUES (:eid, :tid, :numero, CURDATE(), :uid, :commentaire, 0)",
@@ -207,14 +208,14 @@ class BulletinController
 
         if ($classeId <= 0) jsonResponse(false, 'ID classe invalide.', [], 400);
 
-        $classe = $this->db->fetchOne(
+        $classe = $this->resultsBulletinService->fetchOne(
             "SELECT id, annee_scolaire_id FROM classes WHERE id = :cid",
             ['cid' => $classeId]
         );
         if (!$classe) jsonResponse(false, 'Classe introuvable.', [], 404);
 
         if ($trimestreId > 0) {
-            $trimestreValide = $this->db->fetchColumn(
+            $trimestreValide = $this->resultsBulletinService->fetchColumn(
                 "SELECT COUNT(*) FROM trimestres
                  WHERE id = :tid AND annee_scolaire_id = :aid",
                 ['tid' => $trimestreId, 'aid' => $classe['annee_scolaire_id']]
@@ -234,7 +235,7 @@ class BulletinController
 
         $whereClause = !empty($where) ? 'AND ' . implode(' AND ', $where) : '';
 
-        $bulletins = $this->db->fetchAll(
+        $bulletins = $this->resultsBulletinService->fetchAll(
             "SELECT b.*, e.matricule, e.nom, e.prenom, e.sexe,
                     c.nom AS classe_nom, t.libelle AS trimestre_libelle,
                     DATE_FORMAT(b.date_edition, '%d/%m/%Y %H:%i') AS date_edition_format,
@@ -277,21 +278,11 @@ class BulletinController
         }
 
         if ($anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn(
-                "SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1"
-            );
+            $anneeId = $this->resultsBulletinService->getActiveSchoolYearId();
         }
 
         // Récupérer les infos de l'élève
-        $eleve = $this->db->fetchOne(
-            "SELECT e.*, c.nom AS classe_nom, c.niveau AS classe_niveau, c.id AS classe_id
-             FROM eleves e
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             INNER JOIN classes c ON i.classe_id = c.id
-             WHERE e.id = :eid AND i.annee_scolaire_id = :aid
-               AND c.annee_scolaire_id = i.annee_scolaire_id",
-            ['eid' => $eleveId, 'aid' => $anneeId]
-        );
+        $eleve = $this->resultsBulletinService->getStudentForBulletin($eleveId, $anneeId);
 
         if (!$eleve) jsonResponse(false, 'Élève introuvable.', [], 404);
 
@@ -301,8 +292,8 @@ class BulletinController
         // Construire le bulletin
         $bulletin = [
             'eleve'     => $eleve,
-            'annee'     => $this->db->fetchOne("SELECT * FROM annees_scolaires WHERE id = :id", ['id' => $anneeId]),
-            'ecole'     => $this->db->fetchOne("SELECT * FROM parametres_ecole LIMIT 1"),
+            'annee'     => $this->resultsBulletinService->getSchoolYear($anneeId),
+            'ecole'     => $this->resultsBulletinService->getSchoolParameters(),
             'groupes'   => [],
             'totaux'    => [
                 'T1' => ['max' => 0, 'obt' => 0, 'p1' => ['max' => 0, 'obt' => 0], 'p2' => ['max' => 0, 'obt' => 0], 'ex' => ['max' => 0, 'obt' => 0]],
@@ -406,7 +397,7 @@ class BulletinController
             jsonResponse(false, 'Classe et trimestre obligatoires.', [], 400);
         }
 
-        $trimestreValide = $this->db->fetchColumn(
+        $trimestreValide = $this->resultsBulletinService->fetchColumn(
             "SELECT COUNT(*)
              FROM classes c
              INNER JOIN trimestres t ON t.annee_scolaire_id = c.annee_scolaire_id
@@ -428,7 +419,7 @@ class BulletinController
             'mentions'        => []
         ];
 
-        $resultats = $this->db->fetchAll(
+        $resultats = $this->resultsBulletinService->fetchAll(
             "SELECT moyenne_generale, mention, decision
              FROM resultats_trimestriels
              WHERE classe_id = :cid AND trimestre_id = :tid",
@@ -513,7 +504,7 @@ class BulletinController
      */
     public function getClassesActives(): array
     {
-        return $this->db->fetchAll(
+        return $this->resultsBulletinService->fetchAll(
             "SELECT c.* FROM classes c
              WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
              ORDER BY c.niveau"
@@ -525,7 +516,7 @@ class BulletinController
      */
     public function getTrimestresActifs(): array
     {
-        return $this->db->fetchAll(
+        return $this->resultsBulletinService->fetchAll(
             "SELECT t.* FROM trimestres t
              WHERE t.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
              ORDER BY t.numero"
@@ -537,7 +528,7 @@ class BulletinController
      */
     public function getAnneesScolaires(): array
     {
-        return $this->db->fetchAll("SELECT * FROM annees_scolaires ORDER BY date_debut DESC");
+        return $this->resultsBulletinService->fetchAll("SELECT * FROM annees_scolaires ORDER BY date_debut DESC");
     }
 
     /**
@@ -545,7 +536,7 @@ class BulletinController
      */
     public function getBulletinById(int $id): ?array
     {
-        return $this->db->fetchOne(
+        return $this->resultsBulletinService->fetchOne(
             "SELECT b.*, e.matricule, e.nom, e.prenom, e.sexe,
                     c.nom AS classe_nom, t.libelle AS trimestre_libelle,
                     DATE_FORMAT(b.date_edition, '%d/%m/%Y %H:%i') AS date_edition_format
