@@ -449,12 +449,10 @@ class AuthController
                     $this->accountService->linkGoogleId((int) $utilisateur['id'], $googleId);
                 } else {
                     // 3. Aucun compte n'existe : CRÉATION AUTOMATIQUE (Inscription)
-                    $this->db->beginTransaction();
-
                     $login  = $this->generateUniqueLogin($nom, $prenom);
                     $roleId = 6; // ID du rôle par défaut
 
-                    $userId = $this->accountService->createGoogleUser([
+                    $userId = $this->accountService->createGoogleUserTransactional([
                         'nom'       => formatNom($nom),
                         'prenom'    => formatNom($prenom),
                         'email'     => $email,
@@ -464,7 +462,6 @@ class AuthController
                         'role_id'   => $roleId,
                     ]);
 
-                    $this->db->commit();
                     logActivity('Création via Google', 'utilisateurs', $userId, "Nouvelle inscription Google : {$email}");
 
                     // Récupérer les données complètes avec le rôle
@@ -487,9 +484,6 @@ class AuthController
             exit();
 
         } catch (Exception $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollback();
-            }
             error_log('Erreur handleGoogleCallback : ' . $e->getMessage());
             header('Location: ' . $loginUrl . '?error=technical');
             exit();
