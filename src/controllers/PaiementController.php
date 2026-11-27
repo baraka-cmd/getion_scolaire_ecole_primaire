@@ -10,16 +10,19 @@ defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../services/FinanceService.php';
 require_once __DIR__ . '/EleveController.php';
+require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
 
 class PaiementController
 {
     private Database $db;
     private FinanceService $finance;
+    private StudentAccessPolicy $studentAccessPolicy;
 
     public function __construct()
     {
         $this->db = Database::getInstance();
         $this->finance = new FinanceService($this->db);
+        $this->studentAccessPolicy = new StudentAccessPolicy($this->db);
     }
 
     /**
@@ -771,29 +774,7 @@ public function toggleStatutFrais(): void
         $paiementId = (int) post('paiement_id', 0);
 
         if ($versementId > 0) {
-            $recu = $this->db->fetchOne(
-                "SELECT v.*, e.id AS eleve_id, e.matricule, e.nom, e.prenom, e.sexe,
-                        c.nom AS classe_nom, c.niveau AS classe_niveau,
-                        DATE_FORMAT(v.date_versement, '%d/%m/%Y') AS date_format,
-                        TIME_FORMAT(v.date_versement, '%H:%i') AS heure_format,
-                        cr.libelle_snapshot AS frais_libelle, cr.periode_code,
-                        cr.montant_du AS montant_total, cr.devise AS devise_creance,
-                        a.montant_affecte,
-                        CONCAT(u.prenom, ' ', u.nom) AS emis_par_nom,
-                        an.type AS type_correction, an.motif AS motif_correction,
-                        an.numero_contre_ecriture
-                 FROM finance_versements v
-                 INNER JOIN finance_affectations a ON a.versement_id = v.id
-                 INNER JOIN finance_creances cr ON cr.id = a.creance_id
-                 INNER JOIN eleves e ON e.id = v.eleve_id
-                 INNER JOIN inscriptions i ON i.eleve_id = e.id
-                     AND i.annee_scolaire_id = cr.annee_scolaire_id
-                 INNER JOIN classes c ON c.id = i.classe_id
-                 LEFT JOIN utilisateurs u ON u.id = v.enregistre_par
-                 LEFT JOIN finance_annulations an ON an.versement_id = v.id
-                 WHERE v.id = :id",
-                ['id' => $versementId]
-            );
+            $recu = $this->finance->getStudentReceipt($versementId);
             $this->requireReceiptStudentAccess($recu);
             jsonResponse($recu !== null, $recu ? 'Reçu récupéré.' : 'Reçu introuvable.', ['recu' => $recu], $recu ? 200 : 404);
         } elseif ($factureId > 0) {
@@ -847,7 +828,7 @@ public function toggleStatutFrais(): void
         if (
             !$receipt
             || empty($receipt['eleve_id'])
-            || !(new EleveController())->canCurrentUserAccessStudent((int) $receipt['eleve_id'])
+            || !$this->studentAccessPolicy->canCurrentUserAccessStudent((int) $receipt['eleve_id'])
         ) {
             jsonResponse(false, 'Reçu introuvable.', [], 404);
         }
@@ -902,32 +883,13 @@ public function toggleStatutFrais(): void
         $recherche = post('recherche', '');
         $anneeId = (int) post('annee_id', 0);
         if ($anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn(
-                "SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1"
-            );
+            $anneeId = $this->finance->getActiveYearId();
         }
 
         if (trim((string) $recherche) === '') {
             jsonResponse(false, 'Veuillez entrer un nom, prénom ou matricule.', [], 400);
         }
-
-        $eleves = $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe,
-                    c.nom AS classe_nom
-             FROM eleves e
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.annee_scolaire_id = :annee
-             INNER JOIN classes c ON i.classe_id = c.id
-             WHERE e.est_actif = 1
-             AND (e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3)
-             ORDER BY e.nom, e.prenom
-             LIMIT 10",
-            [
-                'annee' => $anneeId,
-                'r1' => "%{$recherche}%",
-                'r2' => "%{$recherche}%",
-                'r3' => "%{$recherche}%",
-            ]
-        );
+        $eleves = $this->finance->searchStudents($anneeId, (string) $recherche);
 
         jsonResponse(true, 'Élèves trouvés.', ['eleves' => $eleves]);
     }
@@ -992,32 +954,20 @@ public function toggleStatutFrais(): void
             }
         }
 
-        $inscrit = $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions
-             WHERE eleve_id = :eleve AND annee_scolaire_id = :annee",
-            ['eleve' => $eleveId, 'annee' => $anneeId]
-        );
-        if (!(int) $inscrit) {
+        if (!$this->finance->isStudentEnrolled($eleveId, $anneeId)) {
             jsonResponse(false, 'Cet élève n’est pas inscrit pour cette année scolaire.', [], 404);
         }
-
-        $id = $this->db->insert(
-            "INSERT INTO finance_suivis
-                (eleve_id, annee_scolaire_id, type_suivi, contact_parent, date_relance,
-                 motif, suite_donnee, statut, saisi_par)
-             VALUES (:eleve, :annee, :type, :contact, :relance, :motif, :suite, :statut, :user)",
-            [
-                'eleve' => $eleveId,
-                'annee' => $anneeId,
-                'type' => $type,
-                'contact' => $contact !== '' ? $contact : null,
-                'relance' => $dateRelance !== '' ? $dateRelance : null,
-                'motif' => $motif,
-                'suite' => $suite !== '' ? $suite : null,
-                'statut' => $statut,
-                'user' => (int) ($_SESSION['utilisateur_id'] ?? 0),
-            ]
-        );
+        $id = $this->finance->createFinancialFollowUp([
+            'eleve_id' => $eleveId,
+            'annee_id' => $anneeId,
+            'type' => $type,
+            'contact_parent' => $contact !== '' ? $contact : null,
+            'date_relance' => $dateRelance !== '' ? $dateRelance : null,
+            'motif' => $motif,
+            'suite_donnee' => $suite !== '' ? $suite : null,
+            'statut' => $statut,
+            'utilisateur_id' => (int) ($_SESSION['utilisateur_id'] ?? 0),
+        ]);
         logActivity('Suivi financier', 'finance_suivis', $id, "{$type} — {$motif}");
         jsonResponse(true, 'Suivi financier enregistré.', ['id' => $id]);
     }
@@ -1029,28 +979,14 @@ public function toggleStatutFrais(): void
     public function getClassesActives(?int $anneeId = null): array
     {
         if ($anneeId === null || $anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn(
-                "SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1"
-            );
+            $anneeId = $this->finance->getActiveYearId();
         }
-        return $this->db->fetchAll(
-            "SELECT c.* FROM classes c
-             WHERE c.annee_scolaire_id = :annee
-             ORDER BY c.niveau",
-            ['annee' => $anneeId]
-        );
+        return $this->finance->getActiveClasses($anneeId);
     }
 
     public function getFraisActifs(): array
     {
-        return $this->db->fetchAll(
-            "SELECT f.*, cfg.categorie, cfg.devise, cfg.periodicite, cfg.jour_echeance
-             FROM frais_scolaires f
-             INNER JOIN finance_frais_config cfg ON cfg.frais_scolaire_id = f.id
-             WHERE f.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             AND f.est_actif = 1
-             ORDER BY f.est_obligatoire DESC, f.libelle"
-        );
+        return $this->finance->getActiveFees();
     }
 
     public function getStatsDashboard(): array

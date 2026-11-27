@@ -6,15 +6,19 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/RolePermissionService.php';
+
 class RoleController
 {
     private Database $db;
     private Security $security;
+    private RolePermissionService $roleService;
 
-    public function __construct()
+    public function __construct(?RolePermissionService $roleService = null)
     {
         $this->db = Database::getInstance();
         $this->security = Security::getInstance();
+        $this->roleService = $roleService ?? new RolePermissionService();
     }
 
     /**
@@ -63,8 +67,7 @@ class RoleController
     public function index(): array
     {
         requirePermission('roles.consulter');
-
-        return $this->security->getAllRoles();
+        return $this->roleService->getAllRoles();
     }
 
     /**
@@ -153,12 +156,7 @@ class RoleController
         } elseif (mb_strlen($nom) > 50) {
             $errors['nom'] = 'Maximum 50 caractères.';
         } else {
-            // Vérifier l'unicité
-            $exists = $this->db->exists(
-                "SELECT id FROM roles WHERE nom = :nom",
-                ['nom' => $nom]
-            );
-            if ($exists) {
+            if ($this->roleService->nameExists($nom)) {
                 $errors['nom'] = 'Ce rôle existe déjà.';
             }
         }
@@ -175,7 +173,7 @@ class RoleController
             jsonResponse(false, 'Veuillez corriger les erreurs.', ['errors' => $errors], 422);
         }
 
-        $roleId = $this->security->createRole($nom, $description, $niveauAcces);
+        $roleId = $this->roleService->createRole($nom, $description, $niveauAcces);
 
         if ($roleId) {
             logActivity('Création', 'roles', $roleId, "Rôle créé : {$nom}");
@@ -204,10 +202,7 @@ class RoleController
         }
 
         // Vérifier si des utilisateurs utilisent ce rôle
-        $usersCount = $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM utilisateurs WHERE role_id = :role_id",
-            ['role_id' => $roleId]
-        );
+        $usersCount = $this->roleService->countUsers($roleId);
 
         if ($usersCount > 0) {
             jsonResponse(false, "Impossible de supprimer ce rôle : {$usersCount} utilisateur(s) l'utilisent.", [], 409);

@@ -7,17 +7,20 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'NotificationPushService.php';
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'NotificationService.php';
 
 class NotificationController
 {
     private Database $db;
+    private NotificationService $notificationService;
 
     private const TYPES_NOTIFICATION = ['Information', 'Alerte', 'Rappel', 'Urgence', 'Succès'];
     private const STATUTS_INSCRIPTION_ELIGIBLES = "'Actif','Redoublant'";
 
-    public function __construct()
+    public function __construct(?NotificationService $notificationService = null)
     {
         $this->db = Database::getInstance();
+        $this->notificationService = $notificationService ?? new NotificationService();
     }
 
     public function handleAjax(): void
@@ -274,20 +277,10 @@ class NotificationController
         }
 
         $userId = (int) ($_SESSION['utilisateur_id'] ?? 0);
-        $updated = $this->db->update(
-            "UPDATE notifications
-             SET est_lue = 1, date_lecture = NOW()
-             WHERE id = :id AND utilisateur_id = :uid AND est_lue = 0",
-            ['id' => $notificationId, 'uid' => $userId]
-        );
-        if ($updated === 0) {
-            $owned = $this->db->fetchColumn(
-                'SELECT COUNT(*) FROM notifications WHERE id = :id AND utilisateur_id = :uid',
-                ['id' => $notificationId, 'uid' => $userId]
-            );
-            if (!(int) $owned) {
-                jsonResponse(false, 'Notification introuvable.', [], 404);
-            }
+        try {
+            $this->notificationService->markRead($notificationId, $userId);
+        } catch (DomainException $e) {
+            jsonResponse(false, $e->getMessage(), [], 404);
         }
 
         jsonResponse(true, 'Notification marquée comme lue.');
@@ -312,12 +305,13 @@ class NotificationController
             jsonResponse(false, 'ID notification invalide.', [], 400);
         }
 
-        $deleted = $this->db->delete(
-            'DELETE FROM notifications WHERE id = :id AND utilisateur_id = :uid',
-            ['id' => $notificationId, 'uid' => (int) ($_SESSION['utilisateur_id'] ?? 0)]
-        );
-        if ($deleted === 0) {
-            jsonResponse(false, 'Notification introuvable ou accès refusé.', [], 404);
+        try {
+            $this->notificationService->delete(
+                $notificationId,
+                (int) ($_SESSION['utilisateur_id'] ?? 0)
+            );
+        } catch (DomainException $e) {
+            jsonResponse(false, $e->getMessage(), [], 404);
         }
 
         jsonResponse(true, 'Notification supprimée.');
@@ -364,11 +358,7 @@ class NotificationController
         }
 
         $creatorId = (int) ($_SESSION['utilisateur_id'] ?? 0);
-        $existingCampaign = $this->db->fetchOne(
-            "SELECT id, nb_destinataires FROM notification_campaigns
-             WHERE created_by = :creator AND request_key = :request_key",
-            ['creator' => $creatorId, 'request_key' => $requestKey]
-        );
+        $existingCampaign = $this->notificationService->findCampaign($creatorId, $requestKey);
         if ($existingCampaign) {
             jsonResponse(true, 'Cet envoi a déjà été pris en compte.', [
                 'campaign_id' => (int) $existingCampaign['id'],
@@ -377,46 +367,22 @@ class NotificationController
             ]);
         }
 
-        $activeYearId = (int) $this->db->fetchColumn(
-            'SELECT annee_scolaire_active_id FROM parametres_ecole WHERE id = 1'
-        );
+        $activeYearId = $this->notificationService->getActiveYearId();
         if ($activeYearId <= 0) {
             jsonResponse(false, 'Aucune année scolaire active n’est configurée.', [], 409);
         }
 
-        $params = ['year_id' => $activeYearId];
-        $classCondition = '';
         if ($destinataireType !== 'tous') {
-            $class = $this->db->fetchOne(
-                'SELECT id FROM classes WHERE id = :class_id AND annee_scolaire_id = :year_id',
-                ['class_id' => $classeId, 'year_id' => $activeYearId]
-            );
-            if (!$class) {
+            if (!$this->notificationService->activeClassExists($classeId, $activeYearId)) {
                 jsonResponse(false, 'La classe sélectionnée ne fait pas partie de l’année active.', [], 422);
             }
-            $classCondition = ' AND i.classe_id = :class_id';
-            $params['class_id'] = $classeId;
         }
 
-        $recipientCondition = '';
-        if ($destinataireType === 'parent') {
-            $recipientCondition = ' AND pt.id = :parent_id';
-            $params['parent_id'] = $parentId;
-        }
-
-        $recipients = $this->db->fetchAll(
-            "SELECT u.id, MAX(pt.email) AS email
-             FROM utilisateurs u
-             INNER JOIN parents_tuteurs pt ON pt.utilisateur_id = u.id
-             INNER JOIN eleve_parent ep ON ep.parent_id = pt.id
-             INNER JOIN inscriptions i ON i.eleve_id = ep.eleve_id
-             WHERE u.est_actif = 1
-               AND i.annee_scolaire_id = :year_id
-               AND i.statut IN (" . self::STATUTS_INSCRIPTION_ELIGIBLES . ")
-               {$classCondition}
-               {$recipientCondition}
-             GROUP BY u.id",
-            $params
+        $recipients = $this->notificationService->findRecipients(
+            $activeYearId,
+            $destinataireType,
+            $classeId,
+            $parentId
         );
 
         if ($recipients === []) {

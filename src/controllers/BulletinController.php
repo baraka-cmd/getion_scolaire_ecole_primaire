@@ -18,7 +18,7 @@ class BulletinController
     public function __construct()
     {
         $this->db = Database::getInstance();
-        $this->academicResults = new AcademicResultsService($this->db);
+        $this->academicResults = new AcademicResultsService();
     }
 
     /**

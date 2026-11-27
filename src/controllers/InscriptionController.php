@@ -6,15 +6,17 @@
 
 defined('ACCESS') or die('Accès interdit');
 
-require_once __DIR__ . '/ResultatController.php';
+require_once __DIR__ . '/../services/AcademicResultsService.php';
 
 class InscriptionController
 {
     private Database $db;
+    private AcademicResultsService $academicResults;
 
     public function __construct()
     {
         $this->db = Database::getInstance();
+        $this->academicResults = new AcademicResultsService();
     }
 
     /**
@@ -350,7 +352,7 @@ class InscriptionController
             ['cid' => $classeSourceId, 'aid' => $anneeSourceId]
         );
 
-        $resultatsAnnuels = (new ResultatController())->getResultatsAnnuelsClasse(
+        $resultatsAnnuels = $this->academicResults->getAnnualResultsForClass(
             $classeSourceId,
             $anneeSourceId
         );
@@ -438,7 +440,7 @@ class InscriptionController
             jsonResponse(false, 'L’année de destination doit être postérieure à l’année source.', [], 422);
         }
 
-        $resultatsAnnuels = (new ResultatController())->getResultatsAnnuelsClasse(
+        $resultatsAnnuels = $this->academicResults->getAnnualResultsForClass(
             $classeSourceId,
             $anneeSourceId
         );

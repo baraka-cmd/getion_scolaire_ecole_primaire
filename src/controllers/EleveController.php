@@ -6,13 +6,23 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/ParentStudentService.php';
+require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
+
 class EleveController
 {
     private Database $db;
+    private ParentStudentService $parentStudentService;
+    private StudentAccessPolicy $studentAccessPolicy;
 
-    public function __construct()
+    public function __construct(
+        ?ParentStudentService $parentStudentService = null,
+        ?StudentAccessPolicy $studentAccessPolicy = null
+    )
     {
         $this->db = Database::getInstance();
+        $this->parentStudentService = $parentStudentService ?? new ParentStudentService();
+        $this->studentAccessPolicy = $studentAccessPolicy ?? new StudentAccessPolicy($this->db);
     }
 
     /**
@@ -193,15 +203,7 @@ class EleveController
         if (!$eleve) jsonResponse(false, 'Élève introuvable.', [], 404);
 
         // Récupérer les parents
-        $parents = $this->db->fetchAll(
-            "SELECT pt.id, pt.nom, pt.prenom, pt.lien, pt.telephone_principal, pt.email, pt.profession,
-                    ep.est_tuteur_principal
-             FROM parents_tuteurs pt
-             INNER JOIN eleve_parent ep ON pt.id = ep.parent_id
-             WHERE ep.eleve_id = :eid
-             ORDER BY ep.est_tuteur_principal DESC",
-            ['eid' => $id]
-        );
+        $parents = $this->parentStudentService->getStudentParentsForDetail($id);
 
         // Récupérer les dernières notes
         $notes = $this->db->fetchAll(
@@ -571,13 +573,7 @@ class EleveController
             jsonResponse(false, 'Élève introuvable.', [], 404);
         }
 
-        $parents = $this->db->fetchAll(
-            "SELECT pt.*, ep.est_tuteur_principal
-             FROM parents_tuteurs pt
-             INNER JOIN eleve_parent ep ON pt.id = ep.parent_id
-             WHERE ep.eleve_id = :eid",
-            ['eid' => $eleveId]
-        );
+        $parents = $this->parentStudentService->getStudentParentsForAjax($eleveId);
 
         jsonResponse(true, 'Parents récupérés.', ['parents' => $parents]);
     }
@@ -727,26 +723,13 @@ class EleveController
      */
     private function creerOuTrouverParent(string $nom, string $prenom, string $lien, string $tel, ?string $email = null, ?string $profession = null): int
     {
-        // Chercher par téléphone
-        $parent = $this->db->fetchOne(
-            "SELECT id FROM parents_tuteurs WHERE telephone_principal = :tel LIMIT 1",
-            ['tel' => $tel]
-        );
-
-        if ($parent) return (int) $parent['id'];
-
-        // Créer le parent
-        return $this->db->insert(
-            "INSERT INTO parents_tuteurs (nom, prenom, lien, profession, telephone_principal, email, est_contact_urgence)
-             VALUES (:nom, :prenom, :lien, :prof, :tel, :email, 1)",
-            [
-                'nom'   => formatNom($nom),
-                'prenom'=> formatNom($prenom),
-                'lien'  => $lien ?: 'Tuteur',
-                'prof'  => $profession ?: null,
-                'tel'   => $tel,
-                'email' => $email ?: null
-            ]
+        return $this->parentStudentService->createOrFindParent(
+            $nom,
+            $prenom,
+            $lien,
+            $tel,
+            $email,
+            $profession
         );
     }
 
@@ -755,17 +738,7 @@ class EleveController
      */
     private function lierParent(int $eleveId, int $parentId, bool $estPrincipal): void
     {
-        $existe = $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM eleve_parent WHERE eleve_id = :eid AND parent_id = :pid",
-            ['eid' => $eleveId, 'pid' => $parentId]
-        );
-
-        if ($existe == 0) {
-            $this->db->query(
-                "INSERT INTO eleve_parent (eleve_id, parent_id, est_tuteur_principal) VALUES (:eid, :pid, :principal)",
-                ['eid' => $eleveId, 'pid' => $parentId, 'principal' => $estPrincipal ? 1 : 0]
-            );
-        }
+        $this->parentStudentService->linkIfMissing($eleveId, $parentId, $estPrincipal);
     }
 
     // ============================================================
@@ -790,57 +763,7 @@ class EleveController
      */
     public function canCurrentUserAccessStudent(int $studentId): bool
     {
-        $userId = (int) ($_SESSION['utilisateur_id'] ?? 0);
-        if ($studentId <= 0 || $userId <= 0) {
-            return false;
-        }
-
-        $user = $this->db->fetchOne(
-            "SELECT r.nom AS role_nom
-             FROM utilisateurs u
-             INNER JOIN roles r ON r.id = u.role_id
-             WHERE u.id = :user_id AND u.est_actif = 1 AND r.est_actif = 1",
-            ['user_id' => $userId]
-        );
-        if (!$user) {
-            return false;
-        }
-
-        if (in_array($user['role_nom'], ['Admin', 'Directeur'], true)) {
-            return true;
-        }
-
-        if ($user['role_nom'] === 'Parent') {
-            return (bool) $this->db->fetchColumn(
-                "SELECT EXISTS (
-                    SELECT 1
-                    FROM parents_tuteurs pt
-                    INNER JOIN eleve_parent ep ON ep.parent_id = pt.id
-                    WHERE pt.utilisateur_id = :user_id AND ep.eleve_id = :student_id
-                )",
-                ['user_id' => $userId, 'student_id' => $studentId]
-            );
-        }
-
-        if ($user['role_nom'] === 'Enseignant') {
-            return (bool) $this->db->fetchColumn(
-                "SELECT EXISTS (
-                    SELECT 1
-                    FROM enseignants ens
-                    INNER JOIN inscriptions i ON i.classe_id = ens.classe_id
-                    WHERE ens.utilisateur_id = :user_id
-                      AND ens.est_actif = 1
-                      AND i.eleve_id = :student_id
-                      AND i.annee_scolaire_id = (
-                          SELECT annee_scolaire_active_id FROM parametres_ecole WHERE id = 1
-                      )
-                      AND i.statut IN ('Actif', 'Redoublant')
-                )",
-                ['user_id' => $userId, 'student_id' => $studentId]
-            );
-        }
-
-        return can('eleves.consulter');
+        return $this->studentAccessPolicy->canCurrentUserAccessStudent($studentId);
     }
 
     public function getEleveDetail(int $id): ?array
@@ -867,14 +790,7 @@ class EleveController
      */
     public function getParentsEleve(int $eleveId): array
     {
-        return $this->db->fetchAll(
-            "SELECT pt.*, ep.est_tuteur_principal
-             FROM parents_tuteurs pt
-             INNER JOIN eleve_parent ep ON pt.id = ep.parent_id
-             WHERE ep.eleve_id = :eid
-             ORDER BY ep.est_tuteur_principal DESC",
-            ['eid' => $eleveId]
-        );
+        return $this->parentStudentService->getStudentParents($eleveId);
     }
 
     /**

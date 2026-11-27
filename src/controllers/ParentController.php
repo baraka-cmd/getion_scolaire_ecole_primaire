@@ -6,13 +6,17 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/ParentStudentService.php';
+
 class ParentController
 {
     private Database $db;
+    private ParentStudentService $parentStudentService;
 
-    public function __construct()
+    public function __construct(?ParentStudentService $parentStudentService = null)
     {
         $this->db = Database::getInstance();
+        $this->parentStudentService = $parentStudentService ?? new ParentStudentService();
     }
 
     /**
@@ -147,20 +151,7 @@ class ParentController
         if (!$parent) jsonResponse(false, 'Parent introuvable.', [], 404);
 
         // Récupérer les enfants
-        $enfants = $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe,
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age,
-                    c.nom AS classe_nom, c.niveau AS classe_niveau,
-                    ep.est_tuteur_principal
-             FROM eleve_parent ep
-             INNER JOIN eleves e ON ep.eleve_id = e.id AND e.est_actif = 1
-             LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             LEFT JOIN classes c ON i.classe_id = c.id
-             WHERE ep.parent_id = :pid
-             ORDER BY ep.est_tuteur_principal DESC, e.nom",
-            ['pid' => $id]
-        );
+        $enfants = $this->parentStudentService->getParentChildrenForDetail($id);
 
         jsonResponse(true, 'Parent récupéré.', [
             'parent'  => $parent,
@@ -176,18 +167,7 @@ class ParentController
         $parentId = (int) post('parent_id', 0);
         if ($parentId <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $enfants = $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe,
-                    c.nom AS classe_nom,
-                    ep.est_tuteur_principal
-             FROM eleve_parent ep
-             INNER JOIN eleves e ON ep.eleve_id = e.id AND e.est_actif = 1
-             LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             LEFT JOIN classes c ON i.classe_id = c.id
-             WHERE ep.parent_id = :pid
-             ORDER BY e.nom",
-            ['pid' => $parentId]
-        );
+        $enfants = $this->parentStudentService->getParentChildren($parentId);
 
         jsonResponse(true, 'Enfants récupérés.', ['enfants' => $enfants]);
     }
@@ -199,29 +179,7 @@ class ParentController
     {
         $parentId = (int) post('parent_id', 0);
 
-        if ($parentId > 0) {
-            $eleves = $this->db->fetchAll(
-                "SELECT e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe,
-                        c.nom AS classe_nom
-                 FROM eleves e
-                 LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-                 LEFT JOIN classes c ON i.classe_id = c.id
-                 WHERE e.est_actif = 1
-                 AND e.id NOT IN (SELECT eleve_id FROM eleve_parent WHERE parent_id = :pid)
-                 ORDER BY e.nom",
-                ['pid' => $parentId]
-            );
-        } else {
-            $eleves = $this->db->fetchAll(
-                "SELECT e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe,
-                        c.nom AS classe_nom
-                 FROM eleves e
-                 LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-                 LEFT JOIN classes c ON i.classe_id = c.id
-                 WHERE e.est_actif = 1
-                 ORDER BY e.nom"
-            );
-        }
+        $eleves = $this->parentStudentService->getAvailableStudents($parentId > 0 ? $parentId : null);
 
         jsonResponse(true, 'Élèves disponibles.', ['eleves' => $eleves]);
     }
@@ -327,17 +285,11 @@ class ParentController
                 foreach ($elevesArray as $index => $eleveId) {
                     $eleveId = (int) trim($eleveId);
                     if ($eleveId > 0) {
-                        $existe = $this->db->fetchColumn(
-                            "SELECT COUNT(*) FROM eleve_parent WHERE eleve_id = :eid AND parent_id = :pid",
-                            ['eid' => $eleveId, 'pid' => $parentId]
+                        $this->parentStudentService->linkIfMissing(
+                            $eleveId,
+                            $parentId,
+                            $index === 0
                         );
-                        if ($existe == 0) {
-                            $this->db->query(
-                                "INSERT INTO eleve_parent (eleve_id, parent_id, est_tuteur_principal) 
-                                 VALUES (:eid, :pid, :principal)",
-                                ['eid' => $eleveId, 'pid' => $parentId, 'principal' => $index === 0 ? 1 : 0]
-                            );
-                        }
                     }
                 }
             }
@@ -482,27 +434,9 @@ class ParentController
 
         if ($parentId <= 0 || $eleveId <= 0) jsonResponse(false, 'Paramètres invalides.', [], 400);
 
-        $existe = $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM eleve_parent WHERE eleve_id = :eid AND parent_id = :pid",
-            ['eid' => $eleveId, 'pid' => $parentId]
-        );
-
-        if ($existe > 0) {
+        if (!$this->parentStudentService->linkParentToStudent($parentId, $eleveId, $principal)) {
             jsonResponse(false, 'Cet élève est déjà lié à ce parent.', [], 409);
         }
-
-        // Si principal, retirer le statut principal des autres
-        if ($principal) {
-            $this->db->update(
-                "UPDATE eleve_parent SET est_tuteur_principal = 0 WHERE parent_id = :pid",
-                ['pid' => $parentId]
-            );
-        }
-
-        $this->db->query(
-            "INSERT INTO eleve_parent (eleve_id, parent_id, est_tuteur_principal) VALUES (:eid, :pid, :principal)",
-            ['eid' => $eleveId, 'pid' => $parentId, 'principal' => $principal]
-        );
 
         logActivity('Liaison', 'eleve_parent', null, "Élève {$eleveId} lié au parent {$parentId}");
 
@@ -519,20 +453,9 @@ class ParentController
 
         if ($parentId <= 0 || $eleveId <= 0) jsonResponse(false, 'Paramètres invalides.', [], 400);
 
-        // Vérifier que ce n'est pas le seul parent de l'élève
-        $nbParents = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM eleve_parent WHERE eleve_id = :eid",
-            ['eid' => $eleveId]
-        );
-
-        if ($nbParents <= 1) {
+        if (!$this->parentStudentService->unlinkParentFromStudent($parentId, $eleveId)) {
             jsonResponse(false, 'Impossible de dissocier : l\'élève doit avoir au moins un parent.', [], 409);
         }
-
-        $this->db->delete(
-            "DELETE FROM eleve_parent WHERE eleve_id = :eid AND parent_id = :pid",
-            ['eid' => $eleveId, 'pid' => $parentId]
-        );
 
         logActivity('Dissociation', 'eleve_parent', null, "Élève {$eleveId} dissocié du parent {$parentId}");
 
@@ -591,19 +514,6 @@ class ParentController
      */
     public function getEnfantsByParent(int $parentId): array
     {
-        return $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe,
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age,
-                    c.nom AS classe_nom, c.niveau AS classe_niveau,
-                    ep.est_tuteur_principal
-             FROM eleve_parent ep
-             INNER JOIN eleves e ON ep.eleve_id = e.id AND e.est_actif = 1
-             LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             LEFT JOIN classes c ON i.classe_id = c.id
-             WHERE ep.parent_id = :pid
-             ORDER BY ep.est_tuteur_principal DESC, e.nom",
-            ['pid' => $parentId]
-        );
+        return $this->parentStudentService->getActiveChildrenForParent($parentId);
     }
 }

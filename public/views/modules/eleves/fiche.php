@@ -21,8 +21,9 @@ if ($eleveId <= 0) {
 
 // Charger le contrôleur
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'EleveController.php';
+require_once SRC_PATH . 'policies' . DIRECTORY_SEPARATOR . 'StudentAccessPolicy.php';
 $eleveController = new EleveController();
-if (!$eleveController->canCurrentUserAccessStudent($eleveId)) {
+if (!(new StudentAccessPolicy($db))->canCurrentUserAccessStudent($eleveId)) {
     http_response_code(404);
     exit('Élève introuvable.');
 }

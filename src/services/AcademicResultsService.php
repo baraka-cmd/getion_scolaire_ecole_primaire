@@ -2,14 +2,16 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../repositories/AcademicResultsRepository.php';
+
 class AcademicResultsService
 {
-    private Database $db;
+    private AcademicResultsRepository $repository;
     private array $quarterNotesCache = [];
 
-    public function __construct(?Database $db = null)
+    public function __construct(?AcademicResultsRepository $repository = null)
     {
-        $this->db = $db ?? Database::getInstance();
+        $this->repository = $repository ?? new AcademicResultsRepository();
     }
 
     public static function getDisplayPeriodMapping(string $label): ?array
@@ -62,16 +64,8 @@ class AcademicResultsService
 
     public function getTrimestresByYear(int $anneeId): array
     {
-        $rows = $this->db->fetchAll(
-            "SELECT id, annee_scolaire_id, numero, libelle, date_debut, date_fin
-             FROM trimestres
-             WHERE annee_scolaire_id = :aid
-             ORDER BY numero",
-            ['aid' => $anneeId]
-        );
-
         $trimestres = [];
-        foreach ($rows as $row) {
+        foreach ($this->repository->findTermsByYear($anneeId) as $row) {
             $trimestres[(int) $row['numero']] = $row;
         }
 
@@ -80,22 +74,8 @@ class AcademicResultsService
 
     public function getSubjectGroupsForClass(int $classeId): array
     {
-        $rows = $this->db->fetchAll(
-            "SELECT g.id AS groupe_id, g.libelle AS groupe_libelle, g.code AS groupe_code,
-                    m.id AS sous_matiere_id, m.libelle AS sous_matiere_libelle,
-                    m.code AS sous_matiere_code,
-                    COALESCE(cm.maxima_override, m.maxima) AS maxima_periode
-             FROM classe_matieres cm
-             INNER JOIN matieres m ON m.id = cm.matiere_id
-             INNER JOIN matieres g ON g.id = m.parent_id AND g.est_groupe = 1 AND g.est_actif = 1
-             WHERE cm.classe_id = :cid AND cm.est_active = 1
-               AND m.est_groupe = 0 AND m.est_actif = 1
-             ORDER BY g.id, m.id",
-            ['cid' => $classeId]
-        );
-
         $groups = [];
-        foreach ($rows as $row) {
+        foreach ($this->repository->findSubjectGroupRows($classeId) as $row) {
             $groupId = (int) $row['groupe_id'];
             if (!isset($groups[$groupId])) {
                 $groups[$groupId] = [
@@ -132,38 +112,11 @@ class AcademicResultsService
             return ['expected' => $expected, 'students' => $completedByStudent];
         }
 
-        $trimesterPlaceholders = [];
-        $params = ['cid' => $classeId];
-        foreach (array_values($trimestreIds) as $index => $trimestreId) {
-            $placeholder = 'tid_' . $index;
-            $trimesterPlaceholders[] = ':' . $placeholder;
-            $params[$placeholder] = (int) $trimestreId;
-        }
-        $groupPlaceholders = [];
-        foreach (array_values(array_unique($subjectGroupIds)) as $index => $groupId) {
-            $placeholder = 'gid_' . $index;
-            $groupPlaceholders[] = ':' . $placeholder;
-            $params[$placeholder] = (int) $groupId;
-        }
-
-        $rows = $this->db->fetchAll(
-            "SELECT n.eleve_id,
-                    COUNT(DISTINCT CONCAT(ev.trimestre_id, ':', ev.type_evaluation, ':', m.id)) AS notes_completees
-             FROM evaluations ev
-             INNER JOIN notes n ON n.evaluation_id = ev.id
-             INNER JOIN matieres m ON m.id = n.sous_matiere_id
-                 AND m.parent_id = ev.groupe_id AND m.est_groupe = 0 AND m.est_actif = 1
-             INNER JOIN classe_matieres cm ON cm.classe_id = ev.classe_id
-                 AND cm.matiere_id = m.id AND cm.est_active = 1
-             WHERE ev.classe_id = :cid
-               AND ev.trimestre_id IN (" . implode(', ', $trimesterPlaceholders) . ")
-               AND ev.groupe_id IN (" . implode(', ', $groupPlaceholders) . ")
-               AND ev.type_evaluation IN ('Période 1', 'Période 2', 'Examen')
-               AND (n.absence = 1 OR n.valeur IS NOT NULL)
-             GROUP BY n.eleve_id",
-            $params
+        $rows = $this->repository->findAnnualGradeCoverageRows(
+            $classeId,
+            $trimestreIds,
+            $subjectGroupIds
         );
-
         foreach ($rows as $row) {
             $completedByStudent[(int) $row['eleve_id']] = min($expected, (int) $row['notes_completees']);
         }
@@ -173,12 +126,7 @@ class AcademicResultsService
 
     public function resolveAssessment(int $selectedTrimestreId, string $displayType): ?array
     {
-        $selected = $this->db->fetchOne(
-            "SELECT id, annee_scolaire_id, numero, libelle
-             FROM trimestres
-             WHERE id = :tid",
-            ['tid' => $selectedTrimestreId]
-        );
+        $selected = $this->repository->findTerm($selectedTrimestreId);
         if (!$selected) {
             return null;
         }
@@ -216,21 +164,7 @@ class AcademicResultsService
     ): array {
         $cacheKey = $classeId . ':' . $trimestreId;
         if (!array_key_exists($cacheKey, $this->quarterNotesCache)) {
-            $rows = $this->db->fetchAll(
-                "SELECT n.eleve_id, n.sous_matiere_id,
-                        COALESCE(MAX(CASE WHEN ev.type_evaluation = 'Période 1'
-                            THEN CASE WHEN n.absence = 0 THEN COALESCE(n.valeur, 0) ELSE 0 END END), 0) AS p1,
-                        COALESCE(MAX(CASE WHEN ev.type_evaluation = 'Période 2'
-                            THEN CASE WHEN n.absence = 0 THEN COALESCE(n.valeur, 0) ELSE 0 END END), 0) AS p2,
-                        COALESCE(MAX(CASE WHEN ev.type_evaluation = 'Examen'
-                            THEN CASE WHEN n.absence = 0 THEN COALESCE(n.valeur, 0) ELSE 0 END END), 0) AS examen
-                 FROM evaluations ev
-                 INNER JOIN notes n ON n.evaluation_id = ev.id
-                 WHERE ev.trimestre_id = :tid AND ev.classe_id = :cid
-                 GROUP BY n.eleve_id, n.sous_matiere_id",
-                ['tid' => $trimestreId, 'cid' => $classeId]
-            );
-
+            $rows = $this->repository->findQuarterScoreRows($trimestreId, $classeId);
             $this->quarterNotesCache[$cacheKey] = [];
             foreach ($rows as $row) {
                 $this->quarterNotesCache[$cacheKey][(int) $row['eleve_id']][(int) $row['sous_matiere_id']] = [
@@ -315,6 +249,137 @@ class AcademicResultsService
             'total_obt' => $totalObtained,
             'pourcentage' => self::calculatePercentage($totalObtained, $totalMaximum),
             'trimestre' => $targetTrimester,
+        ];
+    }
+
+    public static function determineMention(float $percentage): string
+    {
+        if ($percentage >= 90) return 'Excellent';
+        if ($percentage >= 80) return 'Très Bien';
+        if ($percentage >= 70) return 'Bien';
+        if ($percentage >= 60) return 'Assez Bien';
+        if ($percentage >= 50) return 'Passable';
+        return 'Insuffisant';
+    }
+
+    public function getAnnualResultsForClass(int $classId, int $yearId): array
+    {
+        $empty = [
+            'resultats' => [],
+            'effectif' => 0,
+            'total_garcons' => 0,
+            'total_filles' => 0,
+        ];
+        if (!$this->repository->findClassForYear($classId, $yearId)) {
+            return $empty;
+        }
+
+        $students = $this->repository->findAnnualStudents($classId, $yearId);
+        if ($students === []) {
+            return $empty;
+        }
+
+        $terms = $this->getTrimestresByYear($yearId);
+        $groups = $this->getSubjectGroupsForClass($classId);
+        $termIds = [];
+        foreach ([1, 2, 3] as $number) {
+            if (!empty($terms[$number]['id'])) {
+                $termIds[] = (int) $terms[$number]['id'];
+            }
+        }
+        $coverage = $this->getAnnualGradeCoverage($classId, $termIds, $groups);
+
+        $participation = [];
+        foreach ($this->repository->findAnnualParticipation($classId, $termIds) as $row) {
+            if ((int) $row['notes_present'] > 0) {
+                $participation[(int) $row['eleve_id']] = 'present';
+            } elseif ((int) $row['notes_absence'] > 0) {
+                $participation[(int) $row['eleve_id']] = 'absent';
+            }
+        }
+
+        $results = [];
+        $boys = 0;
+        $girls = 0;
+        foreach ($students as $student) {
+            $studentId = (int) $student['id'];
+            $completed = (int) ($coverage['students'][$studentId] ?? 0);
+            $expected = (int) $coverage['expected'];
+            $complete = $expected > 0 && $completed >= $expected;
+            $maximum = 0.0;
+            $obtained = 0.0;
+
+            foreach ($groups as $group) {
+                foreach ($group['sous_matieres'] as $subject) {
+                    $subjectMaximum = (float) $subject['maxima_periode'];
+                    foreach ([1, 2, 3] as $number) {
+                        $termId = (int) ($terms[$number]['id'] ?? 0);
+                        $quarter = $termId > 0
+                            ? $this->calculateSubjectQuarter(
+                                $studentId,
+                                $classId,
+                                (int) $subject['id'],
+                                $termId,
+                                $subjectMaximum
+                            )
+                            : self::emptySubjectQuarter($subjectMaximum);
+                        $maximum += $quarter['total_max'];
+                        $obtained += $quarter['total_obt'];
+                    }
+                }
+            }
+
+            $percentage = self::calculatePercentage($obtained, $maximum);
+            $decision = self::determineAnnualDecision($obtained, $maximum, $complete);
+            $results[] = [
+                'eleve_id' => $studentId,
+                'matricule' => $student['matricule'],
+                'nom' => $student['nom'],
+                'prenom' => $student['prenom'],
+                'sexe' => $student['sexe'],
+                'total_max' => $maximum,
+                'total_obt' => $obtained,
+                'pourcentage' => $percentage,
+                'mention' => self::determineMention($percentage),
+                'decision' => $decision,
+                'is_admis' => $decision === 'Passe',
+                'participation' => $participation[$studentId] ?? 'non_evalue',
+                'bulletin_complet' => $complete,
+                'notes_completees' => $completed,
+                'notes_attendues' => $expected,
+                'taux_completude' => $expected > 0
+                    ? round(($completed / $expected) * 100, 1)
+                    : 0.0,
+            ];
+            if ($student['sexe'] === 'M') {
+                $boys++;
+            } else {
+                $girls++;
+            }
+        }
+
+        usort($results, static function (array $a, array $b): int {
+            $percentage = round((float) $b['pourcentage'], 1) <=> round((float) $a['pourcentage'], 1);
+            if ($percentage !== 0) return $percentage;
+            foreach (['nom', 'prenom', 'matricule'] as $field) {
+                $name = strnatcasecmp((string) ($a[$field] ?? ''), (string) ($b[$field] ?? ''));
+                if ($name !== 0) return $name;
+            }
+            return (int) $a['eleve_id'] <=> (int) $b['eleve_id'];
+        });
+
+        $effectif = count($results);
+        foreach ($results as $index => &$result) {
+            $result['rang'] = $index + 1;
+            $result['effectif'] = $effectif;
+        }
+        unset($result);
+
+        return [
+            'resultats' => $results,
+            'effectif' => $effectif,
+            'total_garcons' => $boys,
+            'total_filles' => $girls,
         ];
     }
 }

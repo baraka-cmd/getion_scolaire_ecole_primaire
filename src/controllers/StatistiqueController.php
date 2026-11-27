@@ -6,13 +6,17 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/StatisticsService.php';
+
 class StatistiqueController
 {
     private Database $db;
+    private StatisticsService $statisticsService;
 
-    public function __construct()
+    public function __construct(?StatisticsService $statisticsService = null)
     {
         $this->db = Database::getInstance();
+        $this->statisticsService = $statisticsService ?? new StatisticsService();
     }
 
     public function handleAjax(): void
@@ -27,10 +31,7 @@ class StatistiqueController
         $action = post('action', '');
         if ($action === 'getFilterOptions') {
             $yearId = filter_var(post('annee_id', ''), FILTER_VALIDATE_INT);
-            $year = $yearId ? $this->db->fetchOne(
-                "SELECT id FROM annees_scolaires WHERE id = :id",
-                ['id' => $yearId]
-            ) : null;
+            $year = $yearId ? $this->statisticsService->getYear((int) $yearId) : null;
             if (!$year) {
                 jsonResponse(false, 'Année scolaire invalide.', [], 400);
             }
@@ -73,23 +74,7 @@ class StatistiqueController
 
     public function getFilterOptions(): array
     {
-        $annees = $this->db->fetchAll(
-            "SELECT id, libelle, date_debut, date_fin, est_active
-             FROM annees_scolaires ORDER BY date_debut DESC"
-        );
-        $anneeId = $this->getAnneeActiveId();
-        if ($annees && !$this->findYear($annees, $anneeId)) {
-            $anneeId = (int) $annees[0]['id'];
-        }
-        $trimestreActif = $this->getTrimestreActifId($anneeId);
-
-        return [
-            'annees' => $annees,
-            'annee_id' => $anneeId,
-            'classes' => $anneeId > 0 ? $this->getClasses($anneeId) : [],
-            'trimestres' => $anneeId > 0 ? $this->getTrimestres($anneeId) : [],
-            'trimestre_id' => $trimestreActif,
-        ];
+        return $this->statisticsService->getFilterOptions();
     }
 
     private function getKPIs(array $filters): void
@@ -507,21 +492,15 @@ class StatistiqueController
     private function readFilters(): array
     {
         $yearRaw = post('annee_id', '');
-        $yearId = $yearRaw === '' ? $this->getAnneeActiveId() : filter_var($yearRaw, FILTER_VALIDATE_INT);
-        $year = $yearId ? $this->db->fetchOne(
-            "SELECT id, libelle, date_debut, date_fin FROM annees_scolaires WHERE id = :id",
-            ['id' => $yearId]
-        ) : null;
+        $yearId = $yearRaw === '' ? $this->statisticsService->getActiveYearId() : filter_var($yearRaw, FILTER_VALIDATE_INT);
+        $year = $yearId ? $this->statisticsService->getYear((int) $yearId) : null;
         if (!$year) {
             jsonResponse(false, 'Année scolaire invalide.', [], 400);
         }
 
         $classRaw = post('classe_id', '');
         $classId = $classRaw === '' ? null : filter_var($classRaw, FILTER_VALIDATE_INT);
-        if ($classRaw !== '' && (!$classId || !$this->db->fetchOne(
-            "SELECT id FROM classes WHERE id = :cid AND annee_scolaire_id = :aid",
-            ['cid' => $classId, 'aid' => $year['id']]
-        ))) {
+        if ($classRaw !== '' && (!$classId || !$this->statisticsService->validateClass((int) $classId, (int) $year['id']))) {
             jsonResponse(false, 'La classe sélectionnée ne correspond pas à cette année scolaire.', [], 400);
         }
 
@@ -529,10 +508,7 @@ class StatistiqueController
         $termId = $termRaw === '' ? null : filter_var($termRaw, FILTER_VALIDATE_INT);
         $term = null;
         if ($termRaw !== '') {
-            $term = $termId ? $this->db->fetchOne(
-                "SELECT id, libelle FROM trimestres WHERE id = :tid AND annee_scolaire_id = :aid",
-                ['tid' => $termId, 'aid' => $year['id']]
-            ) : null;
+            $term = $termId ? $this->statisticsService->getTerm((int) $termId, (int) $year['id']) : null;
             if (!$term) {
                 jsonResponse(false, 'Le trimestre sélectionné ne correspond pas à cette année scolaire.', [], 400);
             }
@@ -557,40 +533,22 @@ class StatistiqueController
 
     private function getAnneeActiveId(): int
     {
-        $id = $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-        if (!$id) {
-            $id = $this->db->fetchColumn("SELECT id FROM annees_scolaires WHERE est_active = 1 LIMIT 1");
-        }
-        return (int) ($id ?? 0);
+        return $this->statisticsService->getActiveYearId();
     }
 
     private function getTrimestreActifId(int $anneeId): ?int
     {
-        if ($anneeId <= 0) {
-            return null;
-        }
-        $id = $this->db->fetchColumn(
-            "SELECT id FROM trimestres WHERE annee_scolaire_id = :aid AND est_actif = 1 LIMIT 1",
-            ['aid' => $anneeId]
-        );
-        return $id ? (int) $id : null;
+        return $this->statisticsService->getActiveTermId($anneeId);
     }
 
     private function getClasses(int $anneeId): array
     {
-        return $this->db->fetchAll(
-            "SELECT id, nom FROM classes WHERE annee_scolaire_id = :aid ORDER BY niveau, nom",
-            ['aid' => $anneeId]
-        );
+        return $this->statisticsService->getClasses($anneeId);
     }
 
     private function getTrimestres(int $anneeId): array
     {
-        return $this->db->fetchAll(
-            "SELECT id, libelle, numero FROM trimestres
-             WHERE annee_scolaire_id = :aid ORDER BY numero",
-            ['aid' => $anneeId]
-        );
+        return $this->statisticsService->getTerms($anneeId);
     }
 
     private function findYear(array $years, int $id): bool

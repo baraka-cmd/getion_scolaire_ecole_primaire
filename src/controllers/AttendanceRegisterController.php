@@ -2,13 +2,17 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/AttendanceRegisterService.php';
+
 class AttendanceRegisterController
 {
     private Database $db;
+    private AttendanceRegisterService $attendanceRegisterService;
 
-    public function __construct()
+    public function __construct(?AttendanceRegisterService $attendanceRegisterService = null)
     {
         $this->db = Database::getInstance();
+        $this->attendanceRegisterService = $attendanceRegisterService ?? new AttendanceRegisterService();
     }
 
     public function handleAjax(): void
@@ -114,13 +118,13 @@ class AttendanceRegisterController
         );
         $fermeture = $appel && $appel['statut'] === 'conge'
             ? $appel['motif_conge']
-            : $this->getCalendarClosure(
+            : $this->attendanceRegisterService->getClosureForDate(
                 (int) $annee['annee_scolaire_id'],
                 $date,
                 $classeId,
                 $annee['nom']
             );
-        $jourPlanifie = $this->getJourPlanifie(
+        $jourPlanifie = $this->attendanceRegisterService->isScheduledDay(
             $classeId,
             (int) $annee['annee_scolaire_id'],
             $date
@@ -198,13 +202,10 @@ class AttendanceRegisterController
             $appelsParDate[$appel['date_appel']] = $appel;
         }
 
-        $evenements = $this->db->fetchAll(
-            "SELECT titre, type_evenement, date_debut, date_fin, concerne_classes
-             FROM calendrier_scolaire
-             WHERE annee_scolaire_id = :annee
-               AND type_evenement IN ('Vacances', 'Jour férié')
-               AND date_debut <= :fin AND date_fin >= :debut",
-            ['annee' => $anneeId, 'debut' => $classe['date_debut'], 'fin' => $classe['date_fin']]
+        $evenements = $this->attendanceRegisterService->getClosuresInRange(
+            $anneeId,
+            $classe['date_debut'],
+            $classe['date_fin']
         );
 
         $absences = $this->db->fetchAll(
@@ -225,12 +226,7 @@ class AttendanceRegisterController
             $marques[$absence['date_absence']][(int) $absence['eleve_id']] = $absence;
         }
 
-        $joursCours = $this->db->fetchAll(
-            "SELECT DISTINCT jour FROM emploi_du_temps
-             WHERE classe_id = :classe AND annee_scolaire_id = :annee
-               AND COALESCE(type_creneau, 'cours') <> 'recréation'",
-            ['classe' => $classeId, 'annee' => $anneeId]
-        );
+        $joursCours = $this->attendanceRegisterService->getScheduledDayRows($classeId, $anneeId);
         $joursSemaine = [
             'Monday' => 'Lundi', 'Tuesday' => 'Mardi', 'Wednesday' => 'Mercredi',
             'Thursday' => 'Jeudi', 'Friday' => 'Vendredi', 'Saturday' => 'Samedi'
@@ -301,7 +297,12 @@ class AttendanceRegisterController
                 $fermeture = $isInSchoolYear && $appel && $appel['statut'] === 'conge'
                     ? $appel['motif_conge']
                     : ($isInSchoolYear
-                        ? $this->getFermetureEvenement($evenements, $date, $classeId, $classe['nom'])
+                        ? $this->attendanceRegisterService->getClosureFromEvents(
+                            $evenements,
+                            $date,
+                            $classeId,
+                            $classe['nom']
+                        )
                         : null);
                 $estJourPlanifie = $weekday !== null && in_array($weekday, $joursPlanifies, true);
                 $appelValide = $appel && $appel['statut'] === 'valide';
@@ -474,10 +475,19 @@ class AttendanceRegisterController
         }
         $annee = $this->getClassePourDate($classeId, $date);
         $this->requireClassAccess($classeId, (int) $annee['annee_scolaire_id']);
-        if ($this->getCalendarClosure((int) $annee['annee_scolaire_id'], $date, $classeId, $annee['nom']) !== null) {
+        if ($this->attendanceRegisterService->getClosureForDate(
+            (int) $annee['annee_scolaire_id'],
+            $date,
+            $classeId,
+            $annee['nom']
+        ) !== null) {
             jsonResponse(false, 'Cette date est indiquée comme congé dans le calendrier scolaire.', [], 409);
         }
-        $jourPlanifie = $this->getJourPlanifie($classeId, (int) $annee['annee_scolaire_id'], $date);
+        $jourPlanifie = $this->attendanceRegisterService->isScheduledDay(
+            $classeId,
+            (int) $annee['annee_scolaire_id'],
+            $date
+        );
 
         $eleves = $this->getElevesAppel($classeId, (int) $annee['annee_scolaire_id']);
         if (!$eleves) {
@@ -672,49 +682,4 @@ class AttendanceRegisterController
         }
     }
 
-    private function getCalendarClosure(int $anneeId, string $date, int $classeId, string $classeNom): ?string
-    {
-        $events = $this->db->fetchAll(
-            "SELECT titre, date_debut, date_fin, concerne_classes
-             FROM calendrier_scolaire
-             WHERE annee_scolaire_id = :annee
-               AND type_evenement IN ('Vacances', 'Jour férié')
-               AND date_debut <= :date_debut AND date_fin >= :date_fin
-             ORDER BY date_debut",
-            ['annee' => $anneeId, 'date_debut' => $date, 'date_fin' => $date]
-        );
-        return $this->getFermetureEvenement($events, $date, $classeId, $classeNom);
-    }
-
-    private function getJourPlanifie(int $classeId, int $anneeId, string $date): ?bool
-    {
-        $joursPlanifies = $this->db->fetchAll(
-            "SELECT DISTINCT jour FROM emploi_du_temps
-             WHERE classe_id = :classe AND annee_scolaire_id = :annee
-               AND COALESCE(type_creneau, 'cours') <> 'recréation'",
-            ['classe' => $classeId, 'annee' => $anneeId]
-        );
-        if (!$joursPlanifies) return null;
-
-        $joursSemaine = [
-            'Monday' => 'Lundi', 'Tuesday' => 'Mardi', 'Wednesday' => 'Mercredi',
-            'Thursday' => 'Jeudi', 'Friday' => 'Vendredi', 'Saturday' => 'Samedi'
-        ];
-        $jour = $joursSemaine[date('l', strtotime($date))] ?? null;
-        return $jour !== null && in_array($jour, array_column($joursPlanifies, 'jour'), true);
-    }
-
-    private function getFermetureEvenement(array $events, string $date, int $classeId, string $classeNom): ?string
-    {
-        foreach ($events as $event) {
-            if ($date < $event['date_debut'] || $date > $event['date_fin']) continue;
-            $classes = trim((string) ($event['concerne_classes'] ?? ''));
-            if ($classes !== '') {
-                $cibles = array_map('trim', explode(',', $classes));
-                if (!in_array((string) $classeId, $cibles, true) && !in_array($classeNom, $cibles, true)) continue;
-            }
-            return $event['titre'];
-        }
-        return null;
-    }
 }

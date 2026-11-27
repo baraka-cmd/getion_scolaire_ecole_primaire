@@ -8,13 +8,17 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/MessageService.php';
+
 class MessageController
 {
     private Database $db;
+    private MessageService $messageService;
 
-    public function __construct()
+    public function __construct(?MessageService $messageService = null)
     {
         $this->db = Database::getInstance();
+        $this->messageService = $messageService ?? new MessageService();
     }
 
     /**
@@ -274,67 +278,16 @@ class MessageController
         $userId = $_SESSION['utilisateur_id'];
         $destinataires = [];
 
-        switch ($destinataireType) {
-            case 'tous':
-                // Tous les utilisateurs actifs sauf soi-même
-                $destinataires = $this->db->fetchAll(
-                    "SELECT id FROM utilisateurs WHERE est_actif = 1 AND id != :uid",
-                    ['uid' => $userId]
-                );
-                break;
-
-            case 'role':
-                // Tous les utilisateurs d'un rôle spécifique
-                if (empty($roleDestinataire)) {
-                    jsonResponse(false, 'Veuillez sélectionner un rôle.', [], 422);
-                }
-                $destinataires = $this->db->fetchAll(
-                    "SELECT u.id FROM utilisateurs u
-                     INNER JOIN roles r ON u.role_id = r.id
-                     WHERE r.nom = :role AND u.est_actif = 1 AND u.id != :uid",
-                    ['role' => $roleDestinataire, 'uid' => $userId]
-                );
-                break;
-
-            case 'classe':
-                // Tous les parents des élèves d'une classe
-                if ($classeId <= 0) {
-                    jsonResponse(false, 'Veuillez sélectionner une classe.', [], 422);
-                }
-                $destinataires = $this->db->fetchAll(
-                    "SELECT DISTINCT u.id FROM utilisateurs u
-                     INNER JOIN parents_tuteurs pt ON u.id = pt.utilisateur_id
-                     INNER JOIN eleve_parent ep ON pt.id = ep.parent_id
-                     INNER JOIN inscriptions i ON ep.eleve_id = i.eleve_id
-                     INNER JOIN classes c ON c.id = i.classe_id AND c.annee_scolaire_id = i.annee_scolaire_id
-                     WHERE i.classe_id = :cid
-                       AND i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-                       AND i.statut = 'Actif' AND u.est_actif = 1 AND u.id != :uid",
-                    ['cid' => $classeId, 'uid' => $userId]
-                );
-
-                // Ajouter aussi l'enseignant titulaire de la classe
-                $titulaire = $this->db->fetchColumn(
-                    "SELECT u.id FROM utilisateurs u
-                     INNER JOIN enseignants e ON u.id = e.utilisateur_id
-                     WHERE e.classe_id = :cid AND e.est_actif = 1 AND u.est_actif = 1 AND u.id != :uid",
-                    ['cid' => $classeId, 'uid' => $userId]
-                );
-                if ($titulaire) {
-                    $destinataires[] = ['id' => $titulaire];
-                }
-                break;
-
-            case 'utilisateur':
-                // Un seul utilisateur
-                if ($destinataireId <= 0) {
-                    jsonResponse(false, 'Veuillez sélectionner un destinataire.', [], 422);
-                }
-                $destinataires = [['id' => $destinataireId]];
-                break;
-
-            default:
-                jsonResponse(false, 'Type de destinataire invalide.', [], 400);
+        try {
+            $destinataires = $this->messageService->resolveRecipients(
+                $destinataireType,
+                (int) $userId,
+                $roleDestinataire !== '' ? $roleDestinataire : null,
+                $classeId,
+                $destinataireId
+            );
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(false, $e->getMessage(), [], 422);
         }
 
         if (empty($destinataires)) {
@@ -346,16 +299,12 @@ class MessageController
 
             $nbEnvoyes = 0;
             foreach ($destinataires as $dest) {
-                $this->db->insert(
-                    "INSERT INTO messages (expediteur_id, destinataire_id, sujet, contenu, message_parent_id, date_envoi)
-                     VALUES (:exp, :dest, :sujet, :contenu, :parent, NOW())",
-                    [
-                        'exp'     => $userId,
-                        'dest'    => $dest['id'],
-                        'sujet'   => $sujet,
-                        'contenu' => $contenu,
-                        'parent'  => $messageParentId > 0 ? $messageParentId : null
-                    ]
+                $this->messageService->create(
+                    (int) $userId,
+                    (int) $dest['id'],
+                    (string) $sujet,
+                    (string) $contenu,
+                    $messageParentId > 0 ? $messageParentId : null
                 );
                 $nbEnvoyes++;
             }
@@ -445,16 +394,7 @@ class MessageController
 
         $userId = $_SESSION['utilisateur_id'];
 
-        $utilisateurs = $this->db->fetchAll(
-            "SELECT u.id, u.nom, u.prenom, u.login, r.nom AS role_nom
-             FROM utilisateurs u
-             INNER JOIN roles r ON u.role_id = r.id
-             WHERE u.est_actif = 1 AND u.id != :uid
-             AND (CONCAT(u.prenom, ' ', u.nom) LIKE :r1 OR u.login LIKE :r2 OR r.nom LIKE :r3)
-             ORDER BY u.nom
-             LIMIT 20",
-            ['uid' => $userId, 'r1' => "%{$recherche}%", 'r2' => "%{$recherche}%", 'r3' => "%{$recherche}%"]
-        );
+        $utilisateurs = $this->messageService->searchUsers((int) $userId, (string) $recherche);
 
         jsonResponse(true, 'Utilisateurs trouvés.', ['utilisateurs' => $utilisateurs]);
     }
@@ -504,12 +444,7 @@ class MessageController
     {
         $userId = $_SESSION['utilisateur_id'] ?? 0;
 
-        $nbNonLus = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM messages 
-             WHERE destinataire_id = :uid AND est_lu = 0 
-             AND est_supprime_destinataire = 0 AND est_archive_destinataire = 0",
-            ['uid' => $userId]
-        );
+        $nbNonLus = $this->messageService->unreadCount((int) $userId);
 
         jsonResponse(true, 'Compteur récupéré.', ['count' => $nbNonLus]);
     }

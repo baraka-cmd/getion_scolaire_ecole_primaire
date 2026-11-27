@@ -6,13 +6,17 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/AnneeScolaireService.php';
+
 class AnneeController
 {
     private Database $db;
+    private ?AnneeScolaireService $anneeService = null;
 
-    public function __construct()
+    public function __construct(?AnneeScolaireService $anneeService = null)
     {
         $this->db = Database::getInstance();
+        $this->anneeService = $anneeService ?? new AnneeScolaireService();
     }
 
     /**
@@ -62,14 +66,7 @@ class AnneeController
      */
     private function getListe(): void
     {
-        $annees = $this->db->fetchAll(
-            "SELECT a.*,
-                    (SELECT COUNT(*) FROM trimestres t WHERE t.annee_scolaire_id = a.id) AS nb_trimestres,
-                    (SELECT COUNT(*) FROM classes c WHERE c.annee_scolaire_id = a.id) AS nb_classes,
-                    (SELECT COUNT(*) FROM inscriptions i WHERE i.annee_scolaire_id = a.id) AS nb_inscriptions
-             FROM annees_scolaires a
-             ORDER BY a.date_debut DESC"
-        );
+        $annees = $this->getAnneeService()->getListForAjax();
 
         jsonResponse(true, 'Liste récupérée.', ['annees' => $annees]);
     }
@@ -82,27 +79,12 @@ class AnneeController
         $id = (int) post('id', 0);
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $annee = $this->db->fetchOne(
-            "SELECT a.*,
-                    (SELECT COUNT(*) FROM trimestres WHERE annee_scolaire_id = a.id) AS nb_trimestres,
-                    (SELECT COUNT(*) FROM classes WHERE annee_scolaire_id = a.id) AS nb_classes,
-                    (SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = a.id) AS nb_inscriptions
-             FROM annees_scolaires a
-             WHERE a.id = :id",
-            ['id' => $id]
-        );
-
-        if (!$annee) jsonResponse(false, 'Année introuvable.', [], 404);
-
-        // Récupérer les trimestres
-        $trimestres = $this->db->fetchAll(
-            "SELECT * FROM trimestres WHERE annee_scolaire_id = :aid ORDER BY numero",
-            ['aid' => $id]
-        );
+        $details = $this->getAnneeService()->getDetailsForAjax($id);
+        if ($details === null) jsonResponse(false, 'Année introuvable.', [], 404);
 
         jsonResponse(true, 'Année récupérée.', [
-            'annee'      => $annee,
-            'trimestres' => $trimestres
+            'annee'      => $details['annee'],
+            'trimestres' => $details['trimestres']
         ]);
     }
 
@@ -511,135 +493,22 @@ class AnneeController
      */
     public function validerDatesTrimestres(array $input, string $dateDebut, string $dateFin): array
     {
-        if (!is_array($input)) {
-            return ['errors' => ['trimestres' => 'Les dates des trimestres sont invalides.'], 'dates' => []];
-        }
-
-        $errors = [];
-        $dates = [];
-        $libelles = [1 => '1er Trimestre', 2 => '2ème Trimestre', 3 => '3ème Trimestre'];
-
-        for ($numero = 1; $numero <= 3; $numero++) {
-            $trimestre = $input[$numero] ?? [];
-            $debut = is_array($trimestre) && is_scalar($trimestre['date_debut'] ?? null)
-                ? trim((string) $trimestre['date_debut'])
-                : '';
-            $fin = is_array($trimestre) && is_scalar($trimestre['date_fin'] ?? null)
-                ? trim((string) $trimestre['date_fin'])
-                : '';
-
-            if (!isValidDate($debut) || !isValidDate($fin)) {
-                $errors["trimestre_{$numero}"] = "Les dates du {$libelles[$numero]} sont obligatoires et doivent être valides.";
-                continue;
-            }
-            if ($debut > $fin) {
-                $errors["trimestre_{$numero}"] = "La fin du {$libelles[$numero]} doit être après sa date de début.";
-                continue;
-            }
-            if ($debut < $dateDebut || $fin > $dateFin) {
-                $errors["trimestre_{$numero}"] = "Les dates du {$libelles[$numero]} doivent rester dans les limites de l'année scolaire.";
-                continue;
-            }
-
-            $dates[$numero] = [
-                'numero' => $numero,
-                'libelle' => $libelles[$numero],
-                'date_debut' => $debut,
-                'date_fin' => $fin
-            ];
-        }
-
-        if (count($dates) === 3) {
-            for ($numero = 2; $numero <= 3; $numero++) {
-                if ($dates[$numero]['date_debut'] <= $dates[$numero - 1]['date_fin']) {
-                    $errors["trimestre_{$numero}"] = 'Les trimestres doivent suivre l’ordre chronologique et ne pas se chevaucher.';
-                }
-            }
-        }
-
-        return ['errors' => $errors, 'dates' => $dates];
+        return $this->getAnneeService()->validateTermDates($input, $dateDebut, $dateFin);
     }
 
     private function repartirTrimestres(string $dateDebut, string $dateFin): array
     {
-        $debut = new DateTime($dateDebut);
-        $fin = new DateTime($dateFin);
-        $dureeTrimestre = max(1, (int) floor($debut->diff($fin)->days / 3));
-        $libelles = [1 => '1er Trimestre', 2 => '2ème Trimestre', 3 => '3ème Trimestre'];
-        $trimestres = [];
-
-        for ($numero = 1; $numero <= 3; $numero++) {
-            $debutTrimestre = (clone $debut)->modify('+' . (($numero - 1) * $dureeTrimestre) . ' days');
-            $finTrimestre = $numero === 3
-                ? clone $fin
-                : (clone $debutTrimestre)->modify('+' . ($dureeTrimestre - 1) . ' days');
-            if ($finTrimestre > $fin) {
-                $finTrimestre = clone $fin;
-            }
-            $trimestres[$numero] = [
-                'numero' => $numero,
-                'libelle' => $libelles[$numero],
-                'date_debut' => $debutTrimestre->format('Y-m-d'),
-                'date_fin' => $finTrimestre->format('Y-m-d')
-            ];
-        }
-
-        return $trimestres;
+        return $this->getAnneeService()->distributeTerms($dateDebut, $dateFin);
     }
 
     public function enregistrerTrimestres(int $anneeId, array $trimestres): void
     {
-        $existants = $this->db->fetchAll(
-            "SELECT id, numero, est_actif FROM trimestres WHERE annee_scolaire_id = :aid",
-            ['aid' => $anneeId]
-        );
-        $parNumero = [];
-        $aUnActif = false;
-        foreach ($existants as $existant) {
-            $parNumero[(int) $existant['numero']] = $existant;
-            $aUnActif = $aUnActif || (bool) $existant['est_actif'];
-        }
-
-        foreach ($trimestres as $numero => $trimestre) {
-            $actif = ($numero === 1 && !$aUnActif)
-                ? 1
-                : (isset($parNumero[$numero]) ? (int) $parNumero[$numero]['est_actif'] : 0);
-            $params = [
-                'aid' => $anneeId,
-                'num' => $numero,
-                'lib' => $trimestre['libelle'],
-                'debut' => $trimestre['date_debut'],
-                'fin' => $trimestre['date_fin'],
-                'actif' => $actif
-            ];
-
-            if (isset($parNumero[$numero])) {
-                $this->db->update(
-                    "UPDATE trimestres SET libelle = :lib, date_debut = :debut, date_fin = :fin, est_actif = :actif WHERE annee_scolaire_id = :aid AND numero = :num",
-                    $params
-                );
-                if ($actif) {
-                    $aUnActif = true;
-                }
-            } else {
-                $this->db->insert(
-                    "INSERT INTO trimestres (annee_scolaire_id, numero, libelle, date_debut, date_fin, est_actif)
-                     VALUES (:aid, :num, :lib, :debut, :fin, :actif)",
-                    $params
-                );
-                if ($actif) {
-                    $aUnActif = true;
-                }
-            }
-        }
+        $this->getAnneeService()->saveTerms($anneeId, $trimestres);
     }
 
     public function getTrimestresByAnnee(int $anneeId): array
     {
-        return $this->db->fetchAll(
-            "SELECT * FROM trimestres WHERE annee_scolaire_id = :aid ORDER BY numero",
-            ['aid' => $anneeId]
-        );
+        return $this->getAnneeService()->getTerms($anneeId);
     }
 
     // ============================================================
@@ -651,13 +520,7 @@ class AnneeController
      */
     public function getAllAnnees(): array
     {
-        return $this->db->fetchAll(
-            "SELECT a.*,
-                    (SELECT COUNT(*) FROM classes WHERE annee_scolaire_id = a.id) AS nb_classes,
-                    (SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = a.id) AS nb_inscriptions
-             FROM annees_scolaires a
-             ORDER BY a.date_debut DESC"
-        );
+        return $this->getAnneeService()->getAll();
     }
 
     /**
@@ -665,7 +528,7 @@ class AnneeController
      */
     public function getAnneeActive(): ?array
     {
-        return $this->db->fetchOne("SELECT * FROM annees_scolaires WHERE est_active = 1 LIMIT 1");
+        return $this->getAnneeService()->getActive();
     }
 
     /**
@@ -673,6 +536,14 @@ class AnneeController
      */
     public function getAnneeById(int $id): ?array
     {
-        return $this->db->fetchOne("SELECT * FROM annees_scolaires WHERE id = :id", ['id' => $id]);
+        return $this->getAnneeService()->getById($id);
+    }
+
+    private function getAnneeService(): AnneeScolaireService
+    {
+        if ($this->anneeService === null) {
+            $this->anneeService = new AnneeScolaireService();
+        }
+        return $this->anneeService;
     }
 }

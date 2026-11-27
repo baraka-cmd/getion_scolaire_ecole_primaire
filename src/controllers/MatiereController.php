@@ -7,13 +7,17 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/MatiereService.php';
+
 class MatiereController
 {
     private Database $db;
+    private MatiereService $matiereService;
 
-    public function __construct()
+    public function __construct(?MatiereService $matiereService = null)
     {
         $this->db = Database::getInstance();
+        $this->matiereService = $matiereService ?? new MatiereService();
     }
 
     /**
@@ -160,34 +164,13 @@ class MatiereController
         $id = (int) post('id', 0);
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $matiere = $this->db->fetchOne(
-            "SELECT m.*, p.libelle AS parent_libelle
-             FROM matieres m
-             LEFT JOIN matieres p ON m.parent_id = p.id
-             WHERE m.id = :id",
-            ['id' => $id]
-        );
-
-        if (!$matiere) jsonResponse(false, 'Matière introuvable.', [], 404);
-
-        // Si c'est un groupe, récupérer ses sous-matières
-        $sousMatieres = [];
-        if ($matiere['est_groupe']) {
-            $sousMatieres = $this->db->fetchAll(
-                "SELECT * FROM matieres WHERE parent_id = :pid AND est_actif = 1 ORDER BY id",
-                ['pid' => $id]
-            );
-        }
-
-        // Récupérer les groupes disponibles (pour le parent)
-        $groupes = $this->db->fetchAll(
-            "SELECT id, code, libelle FROM matieres WHERE est_groupe = 1 AND est_actif = 1 ORDER BY libelle"
-        );
+        $details = $this->matiereService->getForAjax($id);
+        if ($details === null) jsonResponse(false, 'Matière introuvable.', [], 404);
 
         jsonResponse(true, 'Matière récupérée.', [
-            'matiere'       => $matiere,
-            'sous_matieres' => $sousMatieres,
-            'groupes'       => $groupes
+            'matiere'       => $details['matiere'],
+            'sous_matieres' => $details['sous_matieres'],
+            'groupes'       => $details['groupes']
         ]);
     }
 
@@ -199,20 +182,7 @@ class MatiereController
     {
         $groupeId = (int) post('groupe_id', 0);
 
-        if ($groupeId > 0) {
-            $sousMatieres = $this->db->fetchAll(
-                "SELECT * FROM matieres WHERE parent_id = :pid AND est_groupe = 0 AND est_actif = 1 ORDER BY id",
-                ['pid' => $groupeId]
-            );
-        } else {
-            $sousMatieres = $this->db->fetchAll(
-                "SELECT m.*, p.libelle AS groupe_libelle
-                 FROM matieres m
-                 INNER JOIN matieres p ON m.parent_id = p.id
-                 WHERE m.est_groupe = 0 AND m.est_actif = 1
-                 ORDER BY p.libelle, m.id"
-            );
-        }
+        $sousMatieres = $this->matiereService->getSubSubjectsForAjax($groupeId);
 
         jsonResponse(true, 'Sous-matières récupérées.', ['sous_matieres' => $sousMatieres]);
     }
@@ -500,26 +470,11 @@ class MatiereController
     {
         $matiereId = (int) post('matiere_id', 0);
 
-        $classes = $this->db->fetchAll(
-            "SELECT c.id, c.nom, c.niveau, c.salle,
-                    cm.maxima_override, cm.est_active,
-                    COALESCE(cm.maxima_override, :max_defaut) AS maxima_final
-             FROM classes c
-             LEFT JOIN classe_matieres cm ON c.id = cm.classe_id AND cm.matiere_id = :mid
-             CROSS JOIN (SELECT maxima FROM matieres WHERE id = :mid2) AS m
-             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY c.niveau",
-            ['mid' => $matiereId, 'mid2' => $matiereId, 'max_defaut' => 20]
-        );
-
-        $maximaGlobal = (int) $this->db->fetchColumn(
-            "SELECT maxima FROM matieres WHERE id = :mid",
-            ['mid' => $matiereId]
-        );
+        $details = $this->matiereService->getClassesForSubject($matiereId);
 
         jsonResponse(true, 'Classes récupérées.', [
-            'classes'       => $classes,
-            'maxima_global' => $maximaGlobal
+            'classes'       => $details['classes'],
+            'maxima_global' => $details['maxima_global']
         ]);
     }
 
@@ -541,22 +496,7 @@ class MatiereController
             jsonResponse(false, 'Maxima invalide (1-1000).', [], 422);
         }
 
-        $existe = $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM classe_matieres WHERE matiere_id = :mid AND classe_id = :cid",
-            ['mid' => $matiereId, 'cid' => $classeId]
-        );
-
-        if ($existe > 0) {
-            $this->db->update(
-                "UPDATE classe_matieres SET est_active = 1, maxima_override = :max WHERE matiere_id = :mid AND classe_id = :cid",
-                ['max' => $maximaValue, 'mid' => $matiereId, 'cid' => $classeId]
-            );
-        } else {
-            $this->db->insert(
-                "INSERT INTO classe_matieres (matiere_id, classe_id, maxima_override, est_active) VALUES (:mid, :cid, :max, 1)",
-                ['mid' => $matiereId, 'cid' => $classeId, 'max' => $maximaValue]
-            );
-        }
+        $this->matiereService->associateClass($matiereId, $classeId, $maximaValue);
 
         logActivity('Association', 'classe_matieres', null, "Matière {$matiereId} ↔ Classe {$classeId}");
         jsonResponse(true, 'Association réussie.');
@@ -574,22 +514,11 @@ class MatiereController
         }
 
         // Vérifier les évaluations
-        $nbEvaluations = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM evaluations WHERE matiere_id = :mid AND classe_id = :cid",
-            ['mid' => $matiereId, 'cid' => $classeId]
-        );
+        $hasEvaluations = $this->matiereService->dissociateClass($matiereId, $classeId);
 
-        if ($nbEvaluations > 0) {
-            $this->db->update(
-                "UPDATE classe_matieres SET est_active = 0 WHERE matiere_id = :mid AND classe_id = :cid",
-                ['mid' => $matiereId, 'cid' => $classeId]
-            );
+        if ($hasEvaluations) {
             jsonResponse(true, 'Matière désactivée pour cette classe (évaluations existantes conservées).');
         } else {
-            $this->db->delete(
-                "DELETE FROM classe_matieres WHERE matiere_id = :mid AND classe_id = :cid",
-                ['mid' => $matiereId, 'cid' => $classeId]
-            );
             jsonResponse(true, 'Association supprimée.');
         }
 
@@ -614,10 +543,7 @@ class MatiereController
             jsonResponse(false, 'Maxima invalide (1-1000).', [], 422);
         }
 
-        $this->db->update(
-            "UPDATE classe_matieres SET maxima_override = :max WHERE matiere_id = :mid AND classe_id = :cid",
-            ['max' => $maximaValue, 'mid' => $matiereId, 'cid' => $classeId]
-        );
+        $this->matiereService->updateClassMaxima($matiereId, $classeId, $maximaValue);
 
         jsonResponse(true, 'Maxima mis à jour.');
     }
@@ -631,9 +557,7 @@ class MatiereController
      */
     public function getGroupes(): array
     {
-        return $this->db->fetchAll(
-            "SELECT * FROM matieres WHERE est_groupe = 1 AND est_actif = 1 ORDER BY libelle"
-        );
+        return $this->matiereService->getGroups();
     }
 
     /**
@@ -641,10 +565,7 @@ class MatiereController
      */
     public function getSousMatieresByGroupe(int $groupeId): array
     {
-        return $this->db->fetchAll(
-            "SELECT * FROM matieres WHERE parent_id = :pid AND est_groupe = 0 AND est_actif = 1 ORDER BY id",
-            ['pid' => $groupeId]
-        );
+        return $this->matiereService->getSubSubjectsByGroup($groupeId);
     }
 
     /**
@@ -652,13 +573,7 @@ class MatiereController
      */
     public function getMatiereDetail(int $id): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT m.*, p.libelle AS parent_libelle
-             FROM matieres m
-             LEFT JOIN matieres p ON m.parent_id = p.id
-             WHERE m.id = :id",
-            ['id' => $id]
-        );
+        return $this->matiereService->getDetail($id);
     }
 
     /**
@@ -666,12 +581,7 @@ class MatiereController
      */
     public function getClassesActives(): array
     {
-        return $this->db->fetchAll(
-            "SELECT c.id, c.nom, c.niveau, c.salle
-             FROM classes c
-             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY c.niveau"
-        );
+        return $this->matiereService->getActiveClasses();
     }
 
     /**
@@ -680,13 +590,7 @@ class MatiereController
      */
     public function getTotalMaximaClasse(int $classeId): int
     {
-        return (int) $this->db->fetchColumn(
-            "SELECT COALESCE(SUM(COALESCE(cm.maxima_override, m.maxima)), 0)
-             FROM classe_matieres cm
-             INNER JOIN matieres m ON cm.matiere_id = m.id
-             WHERE cm.classe_id = :cid AND cm.est_active = 1 AND m.est_actif = 1",
-            ['cid' => $classeId]
-        );
+        return $this->matiereService->getTotalMaximaForClass($classeId);
     }
 
     /**
@@ -696,49 +600,6 @@ class MatiereController
      */
     public function calculerMoyenneSousMatiere(int $eleveId, int $matiereId, int $trimestreId): ?array
     {
-        // Récupérer le maxima pour cette sous-matière
-        $matiere = $this->db->fetchOne("SELECT maxima FROM matieres WHERE id = :id", ['id' => $matiereId]);
-        if (!$matiere) return null;
-
-        $maximaPeriode = (int) $matiere['maxima'];
-
-        // Récupérer les notes
-        $noteP1 = $this->db->fetchColumn(
-            "SELECT n.valeur FROM notes n
-             INNER JOIN evaluations ev ON n.evaluation_id = ev.id
-             WHERE n.eleve_id = :eid AND ev.matiere_id = :mid 
-             AND ev.trimestre_id = :tid AND ev.type_evaluation = 'Période 1'",
-            ['eid' => $eleveId, 'mid' => $matiereId, 'tid' => $trimestreId]
-        );
-
-        $noteP2 = $this->db->fetchColumn(
-            "SELECT n.valeur FROM notes n
-             INNER JOIN evaluations ev ON n.evaluation_id = ev.id
-             WHERE n.eleve_id = :eid AND ev.matiere_id = :mid 
-             AND ev.trimestre_id = :tid AND ev.type_evaluation = 'Période 2'",
-            ['eid' => $eleveId, 'mid' => $matiereId, 'tid' => $trimestreId]
-        );
-
-        $noteExamen = $this->db->fetchColumn(
-            "SELECT n.valeur FROM notes n
-             INNER JOIN evaluations ev ON n.evaluation_id = ev.id
-             WHERE n.eleve_id = :eid AND ev.matiere_id = :mid 
-             AND ev.trimestre_id = :tid AND ev.type_evaluation = 'Examen'",
-            ['eid' => $eleveId, 'mid' => $matiereId, 'tid' => $trimestreId]
-        );
-
-        // Si aucune note, retourner null
-        if ($noteP1 === null && $noteP2 === null && $noteExamen === null) {
-            return null;
-        }
-
-        $totalObtenu = (float) ($noteP1 ?? 0) + (float) ($noteP2 ?? 0) + (float) ($noteExamen ?? 0);
-        $totalMaxima = $maximaPeriode * 3; // P1 + P2 + Examen (chaque période a le même maxima)
-
-        return [
-            'total_obtenu' => round($totalObtenu, 2),
-            'total_maxima' => $totalMaxima,
-            'pourcentage'  => $totalMaxima > 0 ? round(($totalObtenu / $totalMaxima) * 100, 1) : 0
-        ];
+        return $this->matiereService->calculateSubSubjectScore($eleveId, $matiereId, $trimestreId);
     }
 }

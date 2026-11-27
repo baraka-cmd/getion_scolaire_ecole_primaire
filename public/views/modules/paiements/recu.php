@@ -10,6 +10,7 @@ defined('ACCESS') or define('ACCESS', true);
 
 require_once __DIR__ . '/../../../../src/config/app.php';
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'EleveController.php';
+require_once SRC_PATH . 'policies' . DIRECTORY_SEPARATOR . 'StudentAccessPolicy.php';
 requireLogin();
 requirePermission('paiements.consulter');
 
@@ -119,7 +120,7 @@ if (!$recu) {
     setFlash('error', 'Reçu introuvable.');
     redirect(APP_BASE_PATH . '/paiements');
 }
-if (!(new EleveController())->canCurrentUserAccessStudent((int) $recu['eleve_id'])) {
+if (!(new StudentAccessPolicy($db))->canCurrentUserAccessStudent((int) $recu['eleve_id'])) {
     http_response_code(404);
     exit('Reçu introuvable.');
 }

@@ -8,13 +8,17 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/RetardService.php';
+
 class RetardController
 {
     private Database $db;
+    private RetardService $retardService;
 
-    public function __construct()
+    public function __construct(?RetardService $retardService = null)
     {
         $this->db = Database::getInstance();
+        $this->retardService = $retardService ?? new RetardService();
     }
 
     /**
@@ -78,50 +82,36 @@ class RetardController
         if (empty($heureArrivee)) jsonResponse(false, 'L\'heure d\'arrivée est obligatoire.', [], 400);
 
         // Calculer la durée du retard en minutes
-        $dureeRetard = $this->calculerDureeRetard($heurePrevue, $heureArrivee);
+        $dureeRetard = $this->retardService->calculateDuration($heurePrevue, $heureArrivee);
 
         if ($dureeRetard <= 0) {
             jsonResponse(false, 'L\'heure d\'arrivée doit être après l\'heure prévue.', [], 400);
         }
 
         // Vérifier que l'élève existe et est inscrit
-        $eleve = $this->db->fetchOne(
-            "SELECT e.id, e.nom, e.prenom FROM eleves e
-             INNER JOIN inscriptions i ON e.id = i.eleve_id
-             WHERE e.id = :eid AND i.statut = 'Actif' AND e.est_actif = 1",
-            ['eid' => $eleveId]
-        );
+        $eleve = $this->retardService->findActiveStudent($eleveId);
 
         if (!$eleve) jsonResponse(false, 'Élève introuvable ou non inscrit.', [], 404);
 
         // Vérifier si un retard existe déjà pour cette date
-        $existant = $this->db->fetchColumn(
-            "SELECT id FROM retards WHERE eleve_id = :eid AND date_retard = :date",
-            ['eid' => $eleveId, 'date' => $dateRetard]
-        );
-
-        if ($existant) {
+        if ($this->retardService->existsForDate($eleveId, $dateRetard)) {
             jsonResponse(false, 'Un retard a déjà été enregistré pour cet élève à cette date.', [], 409);
         }
 
         try {
-            $retardId = $this->db->insert(
-                "INSERT INTO retards (eleve_id, date_retard, heure_arrivee, heure_prevue, duree_retard, motif, est_justifie, saisie_par, created_at)
-                 VALUES (:eid, :date, :arrivee, :prevue, :duree, :motif, :justifie, :uid, NOW())",
-                [
-                    'eid'      => $eleveId,
-                    'date'     => $dateRetard,
-                    'arrivee'  => $heureArrivee,
-                    'prevue'   => $heurePrevue,
-                    'duree'    => $dureeRetard,
-                    'motif'    => $motif ?: null,
-                    'justifie' => $estJustifie,
-                    'uid'      => $_SESSION['utilisateur_id']
-                ]
+            $retardId = $this->retardService->createRetard(
+                $eleveId,
+                $dateRetard,
+                $heureArrivee,
+                $heurePrevue,
+                $dureeRetard,
+                $motif,
+                $estJustifie,
+                (int) $_SESSION['utilisateur_id']
             );
 
             // Vérifier le nombre de retards et alerter si nécessaire
-            $nbRetards = $this->getNbRetardsEleve($eleveId);
+            $nbRetards = $this->retardService->countForStudent($eleveId);
 
             $message = 'Retard enregistré avec succès.';
             $alerte = null;
@@ -335,13 +325,9 @@ class RetardController
         if ($retardId <= 0) jsonResponse(false, 'ID retard invalide.', [], 400);
         if (empty($motif)) jsonResponse(false, 'Le motif est obligatoire.', [], 422);
 
-        $retard = $this->db->fetchOne("SELECT id FROM retards WHERE id = :id", ['id' => $retardId]);
-        if (!$retard) jsonResponse(false, 'Retard introuvable.', [], 404);
-
-        $this->db->update(
-            "UPDATE retards SET est_justifie = 1, motif = :motif WHERE id = :id",
-            ['motif' => $motif, 'id' => $retardId]
-        );
+        if (!$this->retardService->justify($retardId, $motif)) {
+            jsonResponse(false, 'Retard introuvable.', [], 404);
+        }
 
         logActivity('Justification', 'retards', $retardId, 'Retard justifié');
         jsonResponse(true, 'Retard justifié avec succès.');
@@ -398,7 +384,7 @@ class RetardController
         $retardId = (int) post('retard_id', 0);
         if ($retardId <= 0) jsonResponse(false, 'ID retard invalide.', [], 400);
 
-        $this->db->delete("DELETE FROM retards WHERE id = :id", ['id' => $retardId]);
+        $this->retardService->delete($retardId);
         jsonResponse(true, 'Retard supprimé avec succès.');
     }
 
@@ -409,28 +395,6 @@ class RetardController
     /**
      * Calcule la durée du retard en minutes
      */
-    private function calculerDureeRetard(string $heurePrevue, string $heureArrivee): int
-    {
-        $prevue  = strtotime($heurePrevue);
-        $arrivee = strtotime($heureArrivee);
-
-        if ($prevue === false || $arrivee === false) return 0;
-
-        $diff = $arrivee - $prevue;
-        return $diff > 0 ? (int) round($diff / 60) : 0;
-    }
-
-    /**
-     * Récupère le nombre total de retards d'un élève
-     */
-    private function getNbRetardsEleve(int $eleveId): int
-    {
-        return (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM retards WHERE eleve_id = :eid",
-            ['eid' => $eleveId]
-        );
-    }
-
     // ============================================================
     // 8. MÉTHODES PUBLIQUES (pour les vues)
     // ============================================================

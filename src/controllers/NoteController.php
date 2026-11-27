@@ -9,14 +9,20 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/EleveController.php';
+require_once __DIR__ . '/../services/EvaluationNoteService.php';
+require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
 
 class NoteController
 {
     private Database $db;
+    private EvaluationNoteService $evaluationNoteService;
+    private StudentAccessPolicy $studentAccessPolicy;
 
-    public function __construct()
+    public function __construct(?EvaluationNoteService $evaluationNoteService = null)
     {
         $this->db = Database::getInstance();
+        $this->evaluationNoteService = $evaluationNoteService ?? new EvaluationNoteService();
+        $this->studentAccessPolicy = new StudentAccessPolicy($this->db);
     }
 
     /**
@@ -604,49 +610,15 @@ class NoteController
         try {
             $this->db->beginTransaction();
             foreach ($normalizedNotes as $note) {
-                $eleveId = $note['eleve_id'];
-                $sousMatiereId = $note['sous_matiere_id'];
-                $valeur = $note['valeur'];
-                $absence = $note['absence'];
-
-                // Vérifier si une note existe déjà
-                $noteExistante = $this->db->fetchColumn(
-                    "SELECT id FROM notes 
-                     WHERE evaluation_id = :eid AND eleve_id = :elid AND sous_matiere_id = :smid",
-                    ['eid' => $evaluationId, 'elid' => $eleveId, 'smid' => $sousMatiereId]
-                );
-
-                if ($noteExistante) {
-                    if ($valeur !== null || $absence) {
-                        // Mettre à jour
-                        $this->db->update(
-                            "UPDATE notes 
-                             SET valeur = :val, absence = :abs, date_modification = NOW() 
-                             WHERE id = :id",
-                            ['val' => $valeur, 'abs' => $absence, 'id' => $noteExistante]
-                        );
-                        $sauvegardees++;
-                    } else {
-                        // Supprimer si pas de valeur et pas d'absence
-                        $this->db->delete("DELETE FROM notes WHERE id = :id", ['id' => $noteExistante]);
-                    }
-                } else {
-                    // Insérer seulement si valeur ou absence
-                    if ($valeur !== null || $absence) {
-                        $this->db->insert(
-                            "INSERT INTO notes (eleve_id, evaluation_id, sous_matiere_id, valeur, absence, saisie_par, date_saisie)
-                             VALUES (:elid, :eid, :smid, :val, :abs, :uid, NOW())",
-                            [
-                                'elid' => $eleveId,
-                                'eid'  => $evaluationId,
-                                'smid' => $sousMatiereId,
-                                'val'  => $valeur,
-                                'abs'  => $absence,
-                                'uid'  => $userId
-                            ]
-                        );
-                        $sauvegardees++;
-                    }
+                if ($this->evaluationNoteService->saveCell(
+                    $evaluationId,
+                    $note['eleve_id'],
+                    $note['sous_matiere_id'],
+                    $note['valeur'],
+                    $note['absence'],
+                    (int) $userId
+                )) {
+                    $sauvegardees++;
                 }
             }
 
@@ -672,7 +644,7 @@ class NoteController
         $trimestreId = (int) post('trimestre_id', 0);
 
         if ($eleveId <= 0) jsonResponse(false, 'ID élève invalide.', [], 400);
-        if (!(new EleveController())->canCurrentUserAccessStudent($eleveId)) {
+        if (!$this->studentAccessPolicy->canCurrentUserAccessStudent($eleveId)) {
             jsonResponse(false, 'Élève introuvable.', [], 404);
         }
 

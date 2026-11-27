@@ -7,16 +7,19 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AuthRateLimitService.php';
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AuthAccountService.php';
 
 class AuthController
 {
     private Database $db;
     private AuthRateLimitService $rateLimiter;
+    private AuthAccountService $accountService;
 
     public function __construct()
     {
         $this->db = Database::getInstance();
         $this->rateLimiter = new AuthRateLimitService($this->db);
+        $this->accountService = new AuthAccountService();
     }
 
     // ============================================================
@@ -63,15 +66,7 @@ class AuthController
                 jsonResponse(false, 'Trop de tentatives. Réessayez dans quelques minutes.', [], 429);
             }
 
-            $sql = "SELECT u.id, u.nom, u.prenom, u.email, u.login, u.mot_de_passe, 
-                           u.photo, u.est_actif, u.tentatives_echecs, u.bloque_jusqua, u.role_id,
-                           r.nom AS role_nom, r.niveau_acces
-                    FROM utilisateurs u
-                    INNER JOIN roles r ON u.role_id = r.id
-                    WHERE u.email = :email
-                    LIMIT 1";
-
-            $utilisateur = $this->db->fetchOne($sql, ['email' => $email]);
+            $utilisateur = $this->accountService->findByEmail((string) $email);
 
             if (!$utilisateur) {
                 $this->logFailedAttempt(null, $email);
@@ -357,18 +352,9 @@ class AuthController
     {
         $this->resetLoginAttempts($utilisateur['id']);
         $this->rateLimiter->clear('login', AuthRateLimitService::clientIp());
-
-        $this->db->update(
-            "UPDATE utilisateurs 
-             SET derniere_connexion = NOW(), 
-                 derniere_ip = :ip,
-                 tentatives_echecs = 0,
-                 bloque_jusqua = NULL
-             WHERE id = :id",
-            [
-                'ip' => $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
-                'id' => $utilisateur['id']
-            ]
+        $this->accountService->recordSuccessfulLogin(
+            (int) $utilisateur['id'],
+            (string) ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1')
         );
 
         session_regenerate_id(true);
@@ -398,13 +384,10 @@ class AuthController
             $bloqueJusqua = date('Y-m-d H:i:s', time() + LOGIN_BLOCK_DURATION);
         }
 
-        $this->db->update(
-            "UPDATE utilisateurs SET tentatives_echecs = :tentatives, bloque_jusqua = :bloque WHERE id = :id",
-            [
-                'tentatives' => $tentatives,
-                'bloque'     => $bloqueJusqua,
-                'id'         => $utilisateur['id']
-            ]
+        $this->accountService->recordFailedLogin(
+            (int) $utilisateur['id'],
+            $tentatives,
+            $bloqueJusqua
         );
 
         logActivity('Tentative échouée', 'utilisateurs', $utilisateur['id'],
@@ -413,19 +396,12 @@ class AuthController
 
     private function resetLoginAttempts(int $userId): void
     {
-        $this->db->update(
-            "UPDATE utilisateurs SET tentatives_echecs = 0, bloque_jusqua = NULL WHERE id = :id",
-            ['id' => $userId]
-        );
+        $this->accountService->resetLoginAttempts($userId);
     }
 
     private function updatePasswordHash(int $userId, string $password): void
     {
-        $newHash = password_hash($password, PASSWORD_ALGO, ['cost' => PASSWORD_COST]);
-        $this->db->update(
-            "UPDATE utilisateurs SET mot_de_passe = :hash WHERE id = :id",
-            ['hash' => $newHash, 'id' => $userId]
-        );
+        $this->accountService->updatePasswordHash($userId, $password);
     }
 
     private function logFailedAttempt(?int $userId, string $email): void
@@ -476,23 +452,11 @@ class AuthController
 
         try {
             // 1. Chercher si l'utilisateur existe déjà via son google_id
-            $sql = "SELECT u.id, u.nom, u.prenom, u.email, u.login, u.google_id, u.photo, u.est_actif, 
-                           u.tentatives_echecs, u.bloque_jusqua, u.role_id, r.nom AS role_nom, r.niveau_acces
-                    FROM utilisateurs u
-                    LEFT JOIN roles r ON u.role_id = r.id
-                    WHERE u.google_id = :google_id LIMIT 1";
-
-            $utilisateur = $this->db->fetchOne($sql, ['google_id' => $googleId]);
+            $utilisateur = $this->accountService->findByGoogleId($googleId);
 
             // 2. Si non trouvé par google_id, vérifier par adresse email
             if (!$utilisateur) {
-                $sqlByEmail = "SELECT u.id, u.nom, u.prenom, u.email, u.login, u.google_id, u.photo, u.est_actif, 
-                                      u.tentatives_echecs, u.bloque_jusqua, u.role_id, r.nom AS role_nom, r.niveau_acces
-                               FROM utilisateurs u
-                               LEFT JOIN roles r ON u.role_id = r.id
-                               WHERE u.email = :email LIMIT 1";
-
-                $utilisateur = $this->db->fetchOne($sqlByEmail, ['email' => $email]);
+                $utilisateur = $this->accountService->findByEmailForGoogle($email);
 
                 if ($utilisateur) {
                     if (empty($utilisateur['est_actif'])) {
@@ -503,10 +467,7 @@ class AuthController
                         header('Location: ' . $loginUrl . '?error=google_account_conflict');
                         exit();
                     }
-                    $this->db->update(
-                        "UPDATE utilisateurs SET google_id = :google_id WHERE id = :id",
-                        ['google_id' => $googleId, 'id' => $utilisateur['id']]
-                    );
+                    $this->accountService->linkGoogleId((int) $utilisateur['id'], $googleId);
                 } else {
                     // 3. Aucun compte n'existe : CRÉATION AUTOMATIQUE (Inscription)
                     $this->db->beginTransaction();
@@ -514,25 +475,21 @@ class AuthController
                     $login  = $this->generateUniqueLogin($nom, $prenom);
                     $roleId = 6; // ID du rôle par défaut
 
-                    $userId = $this->db->insert(
-                        "INSERT INTO utilisateurs (nom, prenom, email, login, google_id, photo, role_id, est_actif)
-                         VALUES (:nom, :prenom, :email, :login, :google_id, :photo, :role_id, 1)",
-                        [
-                            'nom'       => formatNom($nom),
-                            'prenom'    => formatNom($prenom),
-                            'email'     => $email,
-                            'login'     => $login,
-                            'google_id' => $googleId,
-                            'photo'     => $picture,
-                            'role_id'   => $roleId
-                        ]
-                    );
+                    $userId = $this->accountService->createGoogleUser([
+                        'nom'       => formatNom($nom),
+                        'prenom'    => formatNom($prenom),
+                        'email'     => $email,
+                        'login'     => $login,
+                        'google_id' => $googleId,
+                        'photo'     => $picture,
+                        'role_id'   => $roleId,
+                    ]);
 
                     $this->db->commit();
                     logActivity('Création via Google', 'utilisateurs', $userId, "Nouvelle inscription Google : {$email}");
 
                     // Récupérer les données complètes avec le rôle
-                    $utilisateur = $this->db->fetchOne($sql, ['google_id' => $googleId]);
+                    $utilisateur = $this->accountService->findByGoogleId($googleId);
                 }
             }
 
@@ -598,7 +555,7 @@ class AuthController
         $login = $baseLogin;
         $counter = 1;
 
-        while ($this->db->exists("SELECT id FROM utilisateurs WHERE login = :login", ['login' => $login])) {
+        while ($this->accountService->loginExists($login)) {
             $login = $baseLogin . $counter;
             $counter++;
         }

@@ -6,13 +6,17 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/EnseignantService.php';
+
 class EnseignantController
 {
     private Database $db;
+    private EnseignantService $enseignantService;
 
-    public function __construct()
+    public function __construct(?EnseignantService $enseignantService = null)
     {
         $this->db = Database::getInstance();
+        $this->enseignantService = $enseignantService ?? new EnseignantService();
     }
 
     /**
@@ -135,56 +139,13 @@ class EnseignantController
         $id = (int) post('id', 0);
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $enseignant = $this->db->fetchOne(
-            "SELECT e.*, 
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    DATE_FORMAT(e.date_embauche, '%d/%m/%Y') AS date_embauche_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age,
-                    TIMESTAMPDIFF(YEAR, e.date_embauche, CURDATE()) AS anciennete,
-                    c.nom AS classe_nom, c.niveau AS classe_niveau, c.salle AS classe_salle,
-                    c.capacite_max AS classe_capacite,
-                    (SELECT COUNT(*) FROM inscriptions i WHERE i.classe_id = c.id AND i.statut = 'Actif') AS nb_eleves,
-                    u.login AS compte_login, u.email AS compte_email
-             FROM enseignants e
-             LEFT JOIN classes c ON e.classe_id = c.id
-             LEFT JOIN utilisateurs u ON e.utilisateur_id = u.id
-             WHERE e.id = :id",
-            ['id' => $id]
-        );
-
-        if (!$enseignant) jsonResponse(false, 'Enseignant introuvable.', [], 404);
-
-        // Récupérer les élèves de sa classe
-        $eleves = [];
-        if ($enseignant['classe_id']) {
-            $eleves = $this->db->fetchAll(
-                "SELECT e2.id, e2.matricule, e2.nom, e2.prenom, e2.sexe,
-                        DATE_FORMAT(e2.date_naissance, '%d/%m/%Y') AS date_naissance_format
-                 FROM inscriptions i
-                 INNER JOIN eleves e2 ON i.eleve_id = e2.id
-                 WHERE i.classe_id = :cid AND i.statut = 'Actif' AND e2.est_actif = 1
-                 ORDER BY e2.nom",
-                ['cid' => $enseignant['classe_id']]
-            );
-        }
-
-        // Récupérer l'emploi du temps
-        $emploiDuTemps = [];
-        if ($enseignant['classe_id']) {
-            $emploiDuTemps = $this->db->fetchAll(
-                "SELECT edt.jour, edt.heure_debut, edt.heure_fin, m.libelle AS matiere
-                 FROM emploi_du_temps edt
-                 INNER JOIN matieres m ON edt.matiere_id = m.id
-                 WHERE edt.classe_id = :cid
-                 ORDER BY FIELD(edt.jour, 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'), edt.heure_debut",
-                ['cid' => $enseignant['classe_id']]
-            );
-        }
+        $details = $this->enseignantService->getForAjax($id);
+        if ($details === null) jsonResponse(false, 'Enseignant introuvable.', [], 404);
 
         jsonResponse(true, 'Enseignant récupéré.', [
-            'enseignant'     => $enseignant,
-            'eleves'         => $eleves,
-            'emploiDuTemps'  => $emploiDuTemps
+            'enseignant'     => $details['enseignant'],
+            'eleves'         => $details['eleves'],
+            'emploiDuTemps'  => $details['emploiDuTemps']
         ]);
     }
 
@@ -481,21 +442,9 @@ class EnseignantController
         if ($enseignantId <= 0) jsonResponse(false, 'ID enseignant invalide.', [], 400);
 
         try {
-            if ($classeId > 0) {
-                // Vérifier que la classe n'a pas déjà un titulaire
-                $dejaTitulaire = $this->db->fetchColumn(
-                    "SELECT id FROM enseignants WHERE classe_id = :cid AND id != :eid AND est_actif = 1",
-                    ['cid' => $classeId, 'eid' => $enseignantId]
-                );
-                if ($dejaTitulaire) {
-                    jsonResponse(false, 'Cette classe a déjà un titulaire.', [], 409);
-                }
+            if (!$this->enseignantService->changeClass($enseignantId, $classeId)) {
+                jsonResponse(false, 'Cette classe a déjà un titulaire.', [], 409);
             }
-
-            $this->db->update(
-                "UPDATE enseignants SET classe_id = :cid WHERE id = :eid",
-                ['cid' => $classeId > 0 ? $classeId : null, 'eid' => $enseignantId]
-            );
 
             logActivity('Modification', 'enseignants', $enseignantId, 'Changement de classe');
             jsonResponse(true, 'Classe modifiée avec succès.');
@@ -513,13 +462,7 @@ class EnseignantController
     {
         $excludeEnseignantId = (int) post('exclude_enseignant_id', 0);
 
-        $sql = "SELECT c.id, c.nom, c.niveau, c.salle
-                FROM classes c
-                WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-                AND c.id NOT IN (SELECT COALESCE(classe_id, 0) FROM enseignants WHERE est_actif = 1 AND id != :eid)
-                ORDER BY c.niveau";
-
-        $classes = $this->db->fetchAll($sql, ['eid' => $excludeEnseignantId]);
+        $classes = $this->enseignantService->getAvailableClasses($excludeEnseignantId);
 
         jsonResponse(true, 'Classes disponibles.', ['classes' => $classes]);
     }
@@ -533,22 +476,7 @@ class EnseignantController
      */
     public function getEnseignantDetail(int $id): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT e.*, 
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    DATE_FORMAT(e.date_embauche, '%d/%m/%Y') AS date_embauche_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age,
-                    TIMESTAMPDIFF(YEAR, e.date_embauche, CURDATE()) AS anciennete,
-                    c.nom AS classe_nom, c.niveau AS classe_niveau, c.salle AS classe_salle,
-                    c.capacite_max AS classe_capacite,
-                    (SELECT COUNT(*) FROM inscriptions i WHERE i.classe_id = c.id AND i.statut = 'Actif') AS nb_eleves,
-                    u.login AS compte_login
-             FROM enseignants e
-             LEFT JOIN classes c ON e.classe_id = c.id
-             LEFT JOIN utilisateurs u ON e.utilisateur_id = u.id
-             WHERE e.id = :id",
-            ['id' => $id]
-        );
+        return $this->enseignantService->getDetail($id);
     }
 
     /**
@@ -556,19 +484,7 @@ class EnseignantController
      */
     public function getElevesClasse(int $enseignantId): array
     {
-        $classeId = $this->db->fetchColumn("SELECT classe_id FROM enseignants WHERE id = :id", ['id' => $enseignantId]);
-
-        if (!$classeId) return [];
-
-        return $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe,
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format
-             FROM inscriptions i
-             INNER JOIN eleves e ON i.eleve_id = e.id
-             WHERE i.classe_id = :cid AND i.statut = 'Actif' AND e.est_actif = 1
-             ORDER BY e.nom",
-            ['cid' => $classeId]
-        );
+        return $this->enseignantService->getStudents($enseignantId);
     }
 
     /**
@@ -576,13 +492,7 @@ class EnseignantController
      */
     public function getClassesActives(): array
     {
-        return $this->db->fetchAll(
-            "SELECT c.id, c.nom, c.niveau, c.salle,
-                    (SELECT COUNT(*) FROM enseignants e WHERE e.classe_id = c.id AND e.est_actif = 1) AS a_titulaire
-             FROM classes c
-             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY c.niveau"
-        );
+        return $this->enseignantService->getActiveClasses();
     }
 
     /**
@@ -590,9 +500,6 @@ class EnseignantController
      */
     public function getSpecialites(): array
     {
-        $result = $this->db->fetchAll(
-            "SELECT DISTINCT specialite FROM enseignants WHERE specialite IS NOT NULL AND specialite != '' ORDER BY specialite"
-        );
-        return array_column($result, 'specialite');
+        return $this->enseignantService->getSpecialties();
     }
 }

@@ -6,15 +6,19 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/UserAccountService.php';
+
 class UtilisateurController
 {
     private Database $db;
     private Security $security;
+    private UserAccountService $accountService;
 
-    public function __construct()
+    public function __construct(?UserAccountService $accountService = null)
     {
         $this->db = Database::getInstance();
         $this->security = Security::getInstance();
+        $this->accountService = $accountService ?? new UserAccountService();
     }
 
     /**
@@ -271,19 +275,15 @@ class UtilisateurController
 
             $hashedPassword = password_hash($password, PASSWORD_ALGO, ['cost' => PASSWORD_COST]);
 
-            $userId = $this->db->insert(
-                "INSERT INTO utilisateurs (nom, prenom, email, telephone, login, mot_de_passe, role_id, est_actif)
-                 VALUES (:nom, :prenom, :email, :telephone, :login, :password, :role_id, 1)",
-                [
-                    'nom'       => formatNom($nom),
-                    'prenom'    => formatNom($prenom),
-                    'email'     => mb_strtolower(trim($email)),
-                    'telephone' => $telephone ?: null,
-                    'login'     => mb_strtolower(trim($login)),
-                    'password'  => $hashedPassword,
-                    'role_id'   => $roleId
-                ]
-            );
+            $userId = $this->accountService->create([
+                'nom'       => formatNom($nom),
+                'prenom'    => formatNom($prenom),
+                'email'     => mb_strtolower(trim($email)),
+                'telephone' => $telephone ?: null,
+                'login'     => mb_strtolower(trim($login)),
+                'password'  => $hashedPassword,
+                'role_id'   => $roleId,
+            ]);
 
             $this->db->commit();
 
@@ -318,7 +318,7 @@ class UtilisateurController
         }
 
         // Vérifier que l'utilisateur existe
-        $existant = $this->db->fetchOne("SELECT id, role_id FROM utilisateurs WHERE id = :id", ['id' => $id]);
+        $existant = $this->accountService->findIdentity($id);
         if (!$existant) {
             jsonResponse(false, 'Utilisateur introuvable.', [], 404);
         }
@@ -356,21 +356,14 @@ class UtilisateurController
         }
 
         try {
-            $this->db->update(
-                "UPDATE utilisateurs 
-                 SET nom = :nom, prenom = :prenom, email = :email, telephone = :telephone,
-                     login = :login, role_id = :role_id
-                 WHERE id = :id",
-                [
-                    'nom'       => formatNom($nom),
-                    'prenom'    => formatNom($prenom),
-                    'email'     => mb_strtolower(trim($email)),
-                    'telephone' => $telephone ?: null,
-                    'login'     => mb_strtolower(trim($login)),
-                    'role_id'   => $roleId,
-                    'id'        => $id
-                ]
-            );
+            $this->accountService->update($id, [
+                'nom'       => formatNom($nom),
+                'prenom'    => formatNom($prenom),
+                'email'     => mb_strtolower(trim($email)),
+                'telephone' => $telephone ?: null,
+                'login'     => mb_strtolower(trim($login)),
+                'role_id'   => $roleId,
+            ]);
 
             logActivity('Modification', 'utilisateurs', $id, "Modification de l'utilisateur {$nom} {$prenom}");
 
@@ -401,17 +394,14 @@ class UtilisateurController
         }
 
         // Vérifier que l'utilisateur existe
-        $utilisateur = $this->db->fetchOne(
-            "SELECT id, nom, prenom FROM utilisateurs WHERE id = :id",
-            ['id' => $id]
-        );
+        $utilisateur = $this->accountService->findIdentity($id);
 
         if (!$utilisateur) {
             jsonResponse(false, 'Utilisateur introuvable.', [], 404);
         }
 
         try {
-            $this->db->delete("DELETE FROM utilisateurs WHERE id = :id", ['id' => $id]);
+            $this->accountService->delete($id);
 
             logActivity('Suppression', 'utilisateurs', $id, 
                 "Suppression de l'utilisateur {$utilisateur['nom']} {$utilisateur['prenom']}");
@@ -441,21 +431,14 @@ class UtilisateurController
             jsonResponse(false, 'Vous ne pouvez pas désactiver votre propre compte.', [], 403);
         }
 
-        $utilisateur = $this->db->fetchOne(
-            "SELECT id, est_actif, nom, prenom FROM utilisateurs WHERE id = :id",
-            ['id' => $id]
-        );
+        $utilisateur = $this->accountService->findIdentity($id);
 
         if (!$utilisateur) {
             jsonResponse(false, 'Utilisateur introuvable.', [], 404);
         }
 
-        $nouveauStatut = $utilisateur['est_actif'] ? 0 : 1;
-
-        $this->db->update(
-            "UPDATE utilisateurs SET est_actif = :statut WHERE id = :id",
-            ['statut' => $nouveauStatut, 'id' => $id]
-        );
+        $toggle = $this->accountService->toggleActive($id);
+        $nouveauStatut = $toggle['active'];
 
         $action = $nouveauStatut ? 'Activé' : 'Désactivé';
         logActivity($action, 'utilisateurs', $id, 
@@ -488,12 +471,7 @@ class UtilisateurController
             jsonResponse(false, 'Minimum 8 caractères.', [], 422);
         }
 
-        $hashedPassword = password_hash($password, PASSWORD_ALGO, ['cost' => PASSWORD_COST]);
-
-        $this->db->update(
-            "UPDATE utilisateurs SET mot_de_passe = :password WHERE id = :id",
-            ['password' => $hashedPassword, 'id' => $id]
-        );
+        $this->accountService->setPassword($id, $password);
 
         logActivity('Réinitialisation mot de passe', 'utilisateurs', $id);
 
@@ -554,14 +532,7 @@ class UtilisateurController
      */
     public function getLogs(int $userId, int $limit = 50): array
     {
-        return $this->db->fetchAll(
-            "SELECT action, table_concernee, description, date_action, adresse_ip
-             FROM logs_activites
-             WHERE utilisateur_id = :uid
-             ORDER BY date_action DESC
-             LIMIT :limit",
-            ['uid' => $userId, 'limit' => $limit]
-        );
+        return $this->accountService->getLogs($userId, $limit);
     }
 
     // ============================================================
@@ -570,27 +541,11 @@ class UtilisateurController
 
     private function emailExiste(string $email, ?int $excludeId = null): bool
     {
-        $sql = "SELECT COUNT(*) FROM utilisateurs WHERE email = :email";
-        $params = ['email' => mb_strtolower(trim($email))];
-
-        if ($excludeId) {
-            $sql .= " AND id != :exclude";
-            $params['exclude'] = $excludeId;
-        }
-
-        return (int) $this->db->fetchColumn($sql, $params) > 0;
+        return $this->accountService->emailExists($email, $excludeId);
     }
 
     private function loginExiste(string $login, ?int $excludeId = null): bool
     {
-        $sql = "SELECT COUNT(*) FROM utilisateurs WHERE login = :login";
-        $params = ['login' => mb_strtolower(trim($login))];
-
-        if ($excludeId) {
-            $sql .= " AND id != :exclude";
-            $params['exclude'] = $excludeId;
-        }
-
-        return (int) $this->db->fetchColumn($sql, $params) > 0;
+        return $this->accountService->loginExists($login, $excludeId);
     }
 }

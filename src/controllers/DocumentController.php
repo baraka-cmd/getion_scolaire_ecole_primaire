@@ -8,16 +8,20 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/DocumentService.php';
+
 class DocumentController
 {
     private Database $db;
+    private DocumentService $documentService;
     private string $uploadDir;
     private array $allowedExtensions;
     private int $maxFileSize;
 
-    public function __construct()
+    public function __construct(?DocumentService $documentService = null)
     {
         $this->db = Database::getInstance();
+        $this->documentService = $documentService ?? new DocumentService();
         $this->uploadDir = DOCUMENTS_STORAGE_PATH;
         $this->allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'jpg', 'jpeg', 'png', 'gif', 'txt', 'ppt', 'pptx'];
         $this->maxFileSize = 10 * 1024 * 1024; // 10 Mo
@@ -275,22 +279,17 @@ class DocumentController
 
             // Enregistrer dans la base de données
             try {
-                $docId = $this->db->insert(
-                    "INSERT INTO documents (titre, description, type_document, nom_fichier, chemin_fichier, 
-                     taille_fichier, extension, est_public, utilisateur_id, created_at)
-                     VALUES (:titre, :desc, :type_doc, :nom_fichier, :chemin, :taille, :ext, :public, :uid, NOW())",
-                    [
-                        'titre'       => pathinfo($nomOriginal, PATHINFO_FILENAME),
-                        'desc'        => $description ?: null,
-                        'type_doc'    => $categorie,
-                        'nom_fichier' => $nomOriginal,
-                        'chemin'      => 'documents/' . $nomUnique,
-                        'taille'      => $taille,
-                        'ext'         => $extension,
-                        'public'      => $estPublic,
-                        'uid'         => $userId
-                    ]
-                );
+                $docId = $this->documentService->create([
+                    'titre' => pathinfo($nomOriginal, PATHINFO_FILENAME),
+                    'description' => $description ?: null,
+                    'type_document' => $categorie,
+                    'nom_fichier' => $nomOriginal,
+                    'chemin_fichier' => 'documents/' . $nomUnique,
+                    'taille_fichier' => $taille,
+                    'extension' => $extension,
+                    'est_public' => $estPublic,
+                    'utilisateur_id' => $userId,
+                ]);
 
                 $documentsUploades[] = [
                     'id'           => $docId,
@@ -340,10 +339,7 @@ class DocumentController
         $docId = (int) post('document_id', 0);
         if ($docId <= 0) jsonResponse(false, 'ID document invalide.', [], 400);
 
-        $document = $this->db->fetchOne(
-            "SELECT id, nom_fichier, chemin_fichier FROM documents WHERE id = :id",
-            ['id' => $docId]
-        );
+        $document = $this->documentService->findMetadata($docId);
 
         if (!$document) jsonResponse(false, 'Document introuvable.', [], 404);
 
@@ -355,7 +351,7 @@ class DocumentController
         }
 
         // Supprimer de la base
-        $this->db->delete("DELETE FROM documents WHERE id = :id", ['id' => $docId]);
+        $this->documentService->delete($docId);
 
         logActivity('Suppression', 'documents', $docId, "Document supprimé : {$document['nom_fichier']}");
 
@@ -371,24 +367,7 @@ class DocumentController
         $docId = (int) post('document_id', 0);
         if ($docId <= 0) jsonResponse(false, 'ID document invalide.', [], 400);
 
-        $document = $this->db->fetchOne(
-            "SELECT d.*, 
-                    d.nom_fichier AS nom_original,
-                    d.extension AS type_fichier,
-                    COALESCE(NULLIF(d.type_document, ''), 'Autre') AS categorie,
-                    DATE_FORMAT(d.created_at, '%d/%m/%Y à %H:%i') AS date_format,
-                    CONCAT(u.prenom, ' ', u.nom) AS upload_par_nom,
-                    CASE 
-                        WHEN d.taille_fichier > 1048576 THEN CONCAT(ROUND(d.taille_fichier / 1048576, 1), ' Mo')
-                        WHEN d.taille_fichier > 1024 THEN CONCAT(ROUND(d.taille_fichier / 1024, 1), ' Ko')
-                        ELSE CONCAT(d.taille_fichier, ' o')
-                    END AS taille_formatee,
-                    0 AS nb_telechargements
-             FROM documents d
-             LEFT JOIN utilisateurs u ON d.utilisateur_id = u.id
-             WHERE d.id = :id",
-            ['id' => $docId]
-        );
+        $document = $this->documentService->findDetails($docId);
 
         if (!$document) jsonResponse(false, 'Document introuvable.', [], 404);
         if (!$document['est_public'] && !hasRole(['Admin', 'Directeur'])) {
@@ -409,19 +388,12 @@ class DocumentController
         $docId = (int) post('document_id', 0);
         if ($docId <= 0) jsonResponse(false, 'ID document invalide.', [], 400);
 
-        $document = $this->db->fetchOne(
-            "SELECT id, est_public, nom_fichier FROM documents WHERE id = :id",
-            ['id' => $docId]
-        );
-
-        if (!$document) jsonResponse(false, 'Document introuvable.', [], 404);
-
-        $nouvelleVisibilite = $document['est_public'] ? 0 : 1;
-
-        $this->db->update(
-            "UPDATE documents SET est_public = :vis WHERE id = :id",
-            ['vis' => $nouvelleVisibilite, 'id' => $docId]
-        );
+        try {
+            $toggle = $this->documentService->toggleVisibility($docId);
+        } catch (DomainException $e) {
+            jsonResponse(false, $e->getMessage(), [], 404);
+        }
+        $nouvelleVisibilite = $toggle['visibility'];
 
         $statut = $nouvelleVisibilite ? 'public' : 'restreint';
         logActivity('Modification', 'documents', $docId, "Visibilité changée : {$statut}");

@@ -3,14 +3,52 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../repositories/FinanceRepository.php';
 
 class FinanceService
 {
     private Database $db;
+    private FinanceRepository $repository;
 
-    public function __construct(?Database $db = null)
+    public function __construct(?Database $db = null, ?FinanceRepository $repository = null)
     {
         $this->db = $db ?? Database::getInstance();
+        $this->repository = $repository ?? new FinanceRepository($this->db);
+    }
+
+    public function getActiveYearId(): int
+    {
+        return $this->repository->getActiveYearId();
+    }
+
+    public function getStudentReceipt(int $versementId): ?array
+    {
+        return $this->repository->findStudentReceipts($versementId);
+    }
+
+    public function getActiveFees(): array
+    {
+        return $this->repository->findActiveFees();
+    }
+
+    public function searchStudents(int $yearId, string $search): array
+    {
+        return $this->repository->searchStudents($yearId, trim($search));
+    }
+
+    public function isStudentEnrolled(int $studentId, int $yearId): bool
+    {
+        return $this->repository->isStudentEnrolled($studentId, $yearId);
+    }
+
+    public function createFinancialFollowUp(array $data): int
+    {
+        return $this->repository->createFinancialFollowUp($data);
+    }
+
+    public function getActiveClasses(int $yearId): array
+    {
+        return $this->repository->findActiveClasses($yearId);
     }
 
     public static function convertirMontant(float $montant, string $deviseSource, string $deviseCible, float $tauxCdfParUsd): float

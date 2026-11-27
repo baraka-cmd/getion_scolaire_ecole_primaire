@@ -6,13 +6,17 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/ClasseService.php';
+
 class ClasseController
 {
     private Database $db;
+    private ClasseService $classeService;
 
-    public function __construct()
+    public function __construct(?ClasseService $classeService = null)
     {
         $this->db = Database::getInstance();
+        $this->classeService = $classeService ?? new ClasseService();
     }
 
     /**
@@ -130,33 +134,12 @@ class ClasseController
         $id = (int) post('id', 0);
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $classe = $this->db->fetchOne(
-            "SELECT c.*, 
-                    e.id AS titulaire_id,
-                    CONCAT(e.prenom, ' ', e.nom) AS titulaire_nom,
-                    a.libelle AS annee_libelle,
-                    (SELECT COUNT(*) FROM inscriptions i WHERE i.classe_id = c.id AND i.statut = 'Actif') AS nb_eleves
-             FROM classes c
-             LEFT JOIN enseignants e ON c.id = e.classe_id AND e.est_actif = 1
-             INNER JOIN annees_scolaires a ON c.annee_scolaire_id = a.id
-             WHERE c.id = :id",
-            ['id' => $id]
-        );
-
-        if (!$classe) jsonResponse(false, 'Classe introuvable.', [], 404);
-
-        // Récupérer les enseignants disponibles
-        $enseignants = $this->db->fetchAll(
-            "SELECT id, matricule, nom, prenom, specialite 
-             FROM enseignants 
-             WHERE est_actif = 1 AND (classe_id IS NULL OR classe_id = :classe_id)
-             ORDER BY nom",
-            ['classe_id' => $id]
-        );
+        $details = $this->classeService->getForAjax($id);
+        if ($details === null) jsonResponse(false, 'Classe introuvable.', [], 404);
 
         jsonResponse(true, 'Classe récupérée.', [
-            'classe'      => $classe,
-            'enseignants' => $enseignants
+            'classe'      => $details['classe'],
+            'enseignants' => $details['enseignants']
         ]);
     }
 
@@ -440,15 +423,7 @@ class ClasseController
         $classeId = (int) post('classe_id', 0);
         if ($classeId <= 0) jsonResponse(false, 'ID classe invalide.', [], 400);
 
-        $eleves = $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe, e.date_naissance,
-                    i.date_inscription, i.statut
-             FROM inscriptions i
-             INNER JOIN eleves e ON i.eleve_id = e.id
-             WHERE i.classe_id = :cid AND i.statut = 'Actif' AND e.est_actif = 1
-             ORDER BY e.nom, e.prenom",
-            ['cid' => $classeId]
-        );
+        $eleves = $this->classeService->getStudentsForAjax($classeId);
 
         jsonResponse(true, 'Élèves récupérés.', ['eleves' => $eleves]);
     }
@@ -466,16 +441,7 @@ class ClasseController
         if ($classeId <= 0) jsonResponse(false, 'ID classe invalide.', [], 400);
 
         try {
-            if ($titulaireId > 0) {
-                // Libérer l'ancien
-                $this->db->update("UPDATE enseignants SET classe_id = NULL WHERE classe_id = :cid", ['cid' => $classeId]);
-                // Libérer l'enseignant de son ancienne classe
-                $this->db->update("UPDATE enseignants SET classe_id = NULL WHERE id = :eid", ['eid' => $titulaireId]);
-                // Assigner
-                $this->db->update("UPDATE enseignants SET classe_id = :cid WHERE id = :eid", ['cid' => $classeId, 'eid' => $titulaireId]);
-            } else {
-                $this->db->update("UPDATE enseignants SET classe_id = NULL WHERE classe_id = :cid", ['cid' => $classeId]);
-            }
+            $this->classeService->changeHolder($classeId, $titulaireId);
 
             logActivity('Modification', 'classes', $classeId, 'Changement de titulaire');
             jsonResponse(true, 'Titulaire mis à jour avec succès.');
@@ -495,9 +461,7 @@ class ClasseController
      */
     public function getAnneesScolaires(): array
     {
-        return $this->db->fetchAll(
-            "SELECT id, libelle, est_active FROM annees_scolaires ORDER BY date_debut DESC"
-        );
+        return $this->classeService->getSchoolYears();
     }
 
     /**
@@ -505,20 +469,7 @@ class ClasseController
      */
     public function getEnseignantsDisponibles(?int $classeId = null): array
     {
-        $sql = "SELECT id, matricule, nom, prenom, specialite, classe_id
-                FROM enseignants 
-                WHERE est_actif = 1";
-        $params = [];
-
-        if ($classeId) {
-            $sql .= " AND (classe_id IS NULL OR classe_id = :classe_id)";
-            $params['classe_id'] = $classeId;
-        } else {
-            $sql .= " AND classe_id IS NULL";
-        }
-
-        $sql .= " ORDER BY nom";
-        return $this->db->fetchAll($sql, $params);
+        return $this->classeService->getAvailableTeachers($classeId);
     }
 
     /**
@@ -526,19 +477,7 @@ class ClasseController
      */
     public function getClasseDetail(int $id): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT c.*, 
-                    CONCAT(COALESCE(e.prenom, ''), ' ', COALESCE(e.nom, '')) AS titulaire_nom,
-                    e.id AS titulaire_id, e.matricule AS titulaire_matricule,
-                    e.telephone AS titulaire_telephone, e.email AS titulaire_email,
-                    a.libelle AS annee_libelle,
-                    (SELECT COUNT(*) FROM inscriptions i WHERE i.classe_id = c.id AND i.statut = 'Actif') AS nb_eleves
-             FROM classes c
-             LEFT JOIN enseignants e ON c.id = e.classe_id AND e.est_actif = 1
-             INNER JOIN annees_scolaires a ON c.annee_scolaire_id = a.id
-             WHERE c.id = :id",
-            ['id' => $id]
-        );
+        return $this->classeService->getDetail($id);
     }
 
     /**
@@ -546,16 +485,6 @@ class ClasseController
      */
     public function getElevesByClasse(int $classeId): array
     {
-        return $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe, 
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance,
-                    DATE_FORMAT(i.date_inscription, '%d/%m/%Y') AS date_inscription,
-                    i.statut
-             FROM inscriptions i
-             INNER JOIN eleves e ON i.eleve_id = e.id
-             WHERE i.classe_id = :cid AND i.statut = 'Actif' AND e.est_actif = 1
-             ORDER BY e.nom, e.prenom",
-            ['cid' => $classeId]
-        );
+        return $this->classeService->getStudents($classeId);
     }
 }

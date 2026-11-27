@@ -1,0 +1,206 @@
+<?php
+
+defined('ACCESS') or die('Accès interdit');
+
+require_once __DIR__ . '/../config/database.php';
+
+class MatiereRepository
+{
+    private Database $db;
+
+    public function __construct(?Database $db = null)
+    {
+        $this->db = $db ?? Database::getInstance();
+    }
+
+    public function findGroups(): array
+    {
+        return $this->db->fetchAll(
+            'SELECT * FROM matieres WHERE est_groupe = 1 AND est_actif = 1 ORDER BY libelle'
+        );
+    }
+
+    public function findSubSubjectsByGroup(int $groupId): array
+    {
+        return $this->db->fetchAll(
+            'SELECT * FROM matieres WHERE parent_id = :group_id AND est_groupe = 0 AND est_actif = 1 ORDER BY id',
+            ['group_id' => $groupId]
+        );
+    }
+
+    public function findActiveChildren(int $groupId): array
+    {
+        return $this->db->fetchAll(
+            'SELECT * FROM matieres WHERE parent_id = :group_id AND est_actif = 1 ORDER BY id',
+            ['group_id' => $groupId]
+        );
+    }
+
+    public function findSubSubjectsWithGroups(): array
+    {
+        return $this->db->fetchAll(
+            'SELECT m.*, p.libelle AS groupe_libelle
+             FROM matieres m
+             INNER JOIN matieres p ON m.parent_id = p.id
+             WHERE m.est_groupe = 0 AND m.est_actif = 1
+             ORDER BY p.libelle, m.id'
+        );
+    }
+
+    public function findGroupsForSelect(): array
+    {
+        return $this->db->fetchAll(
+            'SELECT id, code, libelle FROM matieres WHERE est_groupe = 1 AND est_actif = 1 ORDER BY libelle'
+        );
+    }
+
+    public function findDetail(int $id): ?array
+    {
+        return $this->db->fetchOne(
+            'SELECT m.*, p.libelle AS parent_libelle
+             FROM matieres m
+             LEFT JOIN matieres p ON m.parent_id = p.id
+             WHERE m.id = :id',
+            ['id' => $id]
+        );
+    }
+
+    public function findActiveClasses(): array
+    {
+        return $this->db->fetchAll(
+            "SELECT c.id, c.nom, c.niveau, c.salle
+             FROM classes c
+             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
+             ORDER BY c.niveau"
+        );
+    }
+
+    public function findTotalMaximaForClass(int $classId): int
+    {
+        return (int) $this->db->fetchColumn(
+            'SELECT COALESCE(SUM(COALESCE(cm.maxima_override, m.maxima)), 0)
+             FROM classe_matieres cm
+             INNER JOIN matieres m ON cm.matiere_id = m.id
+             WHERE cm.classe_id = :class_id AND cm.est_active = 1 AND m.est_actif = 1',
+            ['class_id' => $classId]
+        );
+    }
+
+    public function findScoringData(int $studentId, int $subjectId, int $termId): ?array
+    {
+        $subject = $this->db->fetchOne(
+            'SELECT maxima FROM matieres WHERE id = :id',
+            ['id' => $subjectId]
+        );
+        if (!$subject) {
+            return null;
+        }
+
+        $scores = [];
+        foreach (['Période 1' => 'periode_1', 'Période 2' => 'periode_2', 'Examen' => 'examen'] as $type => $key) {
+            $scores[$key] = $this->db->fetchColumn(
+                'SELECT n.valeur
+                 FROM notes n
+                 INNER JOIN evaluations ev ON n.evaluation_id = ev.id
+                 WHERE n.eleve_id = :student_id AND ev.matiere_id = :subject_id
+                   AND ev.trimestre_id = :term_id AND ev.type_evaluation = :type',
+                [
+                    'student_id' => $studentId,
+                    'subject_id' => $subjectId,
+                    'term_id' => $termId,
+                    'type' => $type,
+                ]
+            );
+        }
+
+        return ['maxima' => $subject['maxima']] + $scores;
+    }
+
+    public function findClassesForSubject(int $subjectId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT c.id, c.nom, c.niveau, c.salle,
+                    cm.maxima_override, cm.est_active,
+                    COALESCE(cm.maxima_override, :default_maxima) AS maxima_final
+             FROM classes c
+             LEFT JOIN classe_matieres cm ON c.id = cm.classe_id AND cm.matiere_id = :subject_id
+             CROSS JOIN (SELECT maxima FROM matieres WHERE id = :subject_id_for_maxima) AS m
+             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
+             ORDER BY c.niveau",
+            [
+                'subject_id' => $subjectId,
+                'subject_id_for_maxima' => $subjectId,
+                'default_maxima' => 20,
+            ]
+        );
+    }
+
+    public function findGlobalMaxima(int $subjectId): int
+    {
+        return (int) $this->db->fetchColumn(
+            'SELECT maxima FROM matieres WHERE id = :subject_id',
+            ['subject_id' => $subjectId]
+        );
+    }
+
+    public function hasClassAssociation(int $subjectId, int $classId): bool
+    {
+        return (int) $this->db->fetchColumn(
+            'SELECT COUNT(*) FROM classe_matieres WHERE matiere_id = :subject_id AND classe_id = :class_id',
+            ['subject_id' => $subjectId, 'class_id' => $classId]
+        ) > 0;
+    }
+
+    public function updateClassAssociation(int $subjectId, int $classId, ?int $maxima): void
+    {
+        $this->db->update(
+            'UPDATE classe_matieres
+             SET est_active = 1, maxima_override = :maxima
+             WHERE matiere_id = :subject_id AND classe_id = :class_id',
+            ['maxima' => $maxima, 'subject_id' => $subjectId, 'class_id' => $classId]
+        );
+    }
+
+    public function createClassAssociation(int $subjectId, int $classId, ?int $maxima): void
+    {
+        $this->db->insert(
+            'INSERT INTO classe_matieres (matiere_id, classe_id, maxima_override, est_active)
+             VALUES (:subject_id, :class_id, :maxima, 1)',
+            ['subject_id' => $subjectId, 'class_id' => $classId, 'maxima' => $maxima]
+        );
+    }
+
+    public function countEvaluationsForClass(int $subjectId, int $classId): int
+    {
+        return (int) $this->db->fetchColumn(
+            'SELECT COUNT(*) FROM evaluations WHERE matiere_id = :subject_id AND classe_id = :class_id',
+            ['subject_id' => $subjectId, 'class_id' => $classId]
+        );
+    }
+
+    public function deactivateClassAssociation(int $subjectId, int $classId): void
+    {
+        $this->db->update(
+            'UPDATE classe_matieres SET est_active = 0
+             WHERE matiere_id = :subject_id AND classe_id = :class_id',
+            ['subject_id' => $subjectId, 'class_id' => $classId]
+        );
+    }
+
+    public function deleteClassAssociation(int $subjectId, int $classId): void
+    {
+        $this->db->delete(
+            'DELETE FROM classe_matieres WHERE matiere_id = :subject_id AND classe_id = :class_id',
+            ['subject_id' => $subjectId, 'class_id' => $classId]
+        );
+    }
+
+    public function updateClassMaxima(int $subjectId, int $classId, ?int $maxima): void
+    {
+        $this->db->update(
+            'UPDATE classe_matieres SET maxima_override = :maxima
+             WHERE matiere_id = :subject_id AND classe_id = :class_id',
+            ['maxima' => $maxima, 'subject_id' => $subjectId, 'class_id' => $classId]
+        );
+    }
+}
