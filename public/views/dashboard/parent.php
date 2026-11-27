@@ -13,90 +13,11 @@ if (!hasRole(['Parent', 'Admin', 'Directeur'])) {
     redirect('/gestion_scolaire/dashboard');
 }
 
-$parentUserId = $_SESSION['utilisateur_id'] ?? 0;
+$parentUserId = (int) ($_SESSION['utilisateur_id'] ?? 0);
 
-$parentInfo = $db->fetchOne(
-    "SELECT id, nom, prenom FROM parents_tuteurs WHERE utilisateur_id = :uid LIMIT 1",
-    ['uid' => $parentUserId]
-);
-$parentId = $parentInfo['id'] ?? 0;
-
-$mesEnfants = [];
-$trimestreActif = (int) $db->fetchColumn("SELECT trimestre_actif_id FROM parametres_ecole LIMIT 1");
-
-if ($parentId > 0) {
-    $mesEnfants = $db->fetchAll(
-        "SELECT e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe, e.photo,
-                c.nom as classe_nom, c.niveau,
-                i.statut as statut_inscription
-         FROM eleves e
-         INNER JOIN eleve_parent ep ON e.id = ep.eleve_id
-         INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-         INNER JOIN classes c ON i.classe_id = c.id
-         WHERE ep.parent_id = :pid AND e.est_actif = 1
-         ORDER BY c.niveau DESC",
-        ['pid' => $parentId]
-    );
-
-    foreach ($mesEnfants as &$enfant) {
-        // Moyenne
-        $enfant['moyenne'] = $db->fetchColumn(
-            "SELECT moyenne_generale FROM resultats_trimestriels 
-             WHERE eleve_id = :eid1 
-             ORDER BY trimestre_id DESC LIMIT 1",
-            ['eid1' => $enfant['id']]
-        );
-
-        // Absences
-        $enfant['absences'] = (int) $db->fetchColumn(
-            "SELECT COUNT(*) FROM absences 
-             WHERE eleve_id = :eid2 AND type_absence = 'Absence'
-             AND date_absence BETWEEN 
-                 (SELECT date_debut FROM trimestres WHERE id = :tid1) 
-                 AND (SELECT date_fin FROM trimestres WHERE id = :tid2)",
-            ['eid2' => $enfant['id'], 'tid1' => $trimestreActif, 'tid2' => $trimestreActif]
-        );
-
-        // Retards
-        $enfant['retards'] = (int) $db->fetchColumn(
-            "SELECT COUNT(*) FROM retards 
-             WHERE eleve_id = :eid3
-             AND date_retard BETWEEN 
-                 (SELECT date_debut FROM trimestres WHERE id = :tid3) 
-                 AND (SELECT date_fin FROM trimestres WHERE id = :tid4)",
-            ['eid3' => $enfant['id'], 'tid3' => $trimestreActif, 'tid4' => $trimestreActif]
-        );
-
-        // Paiement dû
-        $enfant['paiement_du'] = (float) $db->fetchColumn(
-            "SELECT COALESCE(SUM(montant_total - montant_paye), 0) 
-             FROM paiements WHERE eleve_id = :eid4 AND statut != 'Payé'",
-            ['eid4' => $enfant['id']]
-        );
-    }
-    unset($enfant);
-}
-
-$prochainsEvenements = $db->fetchAll(
-    "SELECT titre, type_evenement, date_debut, date_fin, lieu
-     FROM calendrier_scolaire
-     WHERE date_debut >= CURDATE()
-     AND annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-     ORDER BY date_debut ASC
-     LIMIT 5"
-);
-
-$messagesNonLus = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM messages 
-     WHERE destinataire_id = :uid1 AND est_lu = 0 AND est_supprime_destinataire = 0",
-    ['uid1' => $parentUserId]
-);
-
-$notifsNonLues = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM notifications 
-     WHERE utilisateur_id = :uid2 AND est_lue = 0",
-    ['uid2' => $parentUserId]
-);
+require_once __DIR__ . '/../../../src/controllers/ParentDashboardController.php';
+$dashboardController = new ParentDashboardController();
+extract($dashboardController->getViewData($parentUserId), EXTR_OVERWRITE);
 
 $pageTitle = 'Tableau de bord — Parent';
 $pageIcon  = 'fa-gauge-high';
