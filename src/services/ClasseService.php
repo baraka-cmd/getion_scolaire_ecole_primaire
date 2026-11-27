@@ -115,7 +115,18 @@ class ClasseService
 
         $this->repository->releaseClassHolder($classId);
     }
-    public function createWithHolder(array $data,int $teacherId):int{return $this->repository->createWithHolder($data,$teacherId);}
-    public function updateWithHolder(int $id,array $data,int $teacherId):void{$this->repository->updateWithHolder($id,$data,$teacherId);}
-    public function deleteWithSchedule(int $id):void{$this->repository->deleteWithSchedule($id);}
+    public function createWithHolder(array $data, int $teacherId): int
+    {
+        return $this->repository->createWithHolder($data, $teacherId);
+    }
+
+    public function updateWithHolder(int $id, array $data, int $teacherId): void
+    {
+        $this->repository->updateWithHolder($id, $data, $teacherId);
+    }
+
+    public function deleteWithSchedule(int $id): void
+    {
+        $this->repository->deleteWithSchedule($id);
+    }
 }
