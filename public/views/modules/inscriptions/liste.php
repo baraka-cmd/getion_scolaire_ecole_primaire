@@ -12,9 +12,11 @@ requirePermission('inscriptions.consulter');
 
 global $db;
 
-// Charger le contrôleur
+// Le contrôleur reste responsable du traitement AJAX ; les données de filtre passent par le service.
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'InscriptionController.php';
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'InscriptionService.php';
 $inscriptionController = new InscriptionController();
+$inscriptionService = new InscriptionService();
 
 // Traitement AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
@@ -22,8 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
 }
 
 // Récupérer les données pour les filtres
-$classes = $inscriptionController->getClassesActives();
-$annees = $inscriptionController->getAnneesScolaires();
+$classes = $inscriptionService->getActiveClasses();
+$annees = $inscriptionService->getSchoolYears();
 
 // Statistiques
 $totalActifs = (int) $db->fetchColumn(
