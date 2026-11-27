@@ -18,17 +18,26 @@ class RolePermissionService
 
     public function getRole(int $roleId): ?array
     {
-        return $this->security->getRoleById($roleId);
+        return $this->repository->findById($roleId);
     }
 
     public function getRolePermissions(int $roleId): array
     {
-        return $this->security->getRolePermissions($roleId);
+        return $this->repository->getRolePermissions($roleId);
     }
 
     public function getAllPermissionsGrouped(): array
     {
-        return $this->security->getAllPermissionsGrouped();
+        $permissions = $this->repository->getAllPermissions();
+        $grouped = [];
+        foreach ($permissions as $permission) {
+            $module = $permission['module'];
+            if (!isset($grouped[$module])) {
+                $grouped[$module] = ['module' => $module, 'permissions' => []];
+            }
+            $grouped[$module]['permissions'][] = $permission;
+        }
+        return array_values($grouped);
     }
 
     public function updatePermissions(int $roleId, array $permissionIds): bool
@@ -71,6 +80,6 @@ class RolePermissionService
 
     public function getAllRoles(): array
     {
-        return $this->security->getAllRoles();
+        return $this->repository->getAllRolesWithPermissionCounts();
     }
 }
