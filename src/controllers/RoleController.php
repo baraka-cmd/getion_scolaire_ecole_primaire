@@ -10,14 +10,10 @@ require_once __DIR__ . '/../services/RolePermissionService.php';
 
 class RoleController
 {
-    private Database $db;
-    private Security $security;
     private RolePermissionService $roleService;
 
     public function __construct(?RolePermissionService $roleService = null)
     {
-        $this->db = Database::getInstance();
-        $this->security = Security::getInstance();
         $this->roleService = $roleService ?? new RolePermissionService();
     }
 
@@ -269,7 +265,7 @@ class RoleController
      */
     public function getAllPermissions(): array
     {
-        return $this->security->getAllPermissionsGrouped();
+        return $this->roleService->getAllPermissionsGrouped();
     }
 
     /**
@@ -277,17 +273,6 @@ class RoleController
      */
     public function getPermissionsForRole(int $roleId): array
     {
-        $allPermissions = $this->security->getAllPermissionsGrouped();
-        $rolePermissions = $this->security->getRolePermissions($roleId);
-        $rolePermIds = array_column($rolePermissions, 'id');
-
-        // Ajouter un flag "assigned" à chaque permission
-        foreach ($allPermissions as &$module) {
-            foreach ($module['permissions'] as &$perm) {
-                $perm['assigned'] = in_array($perm['id'], $rolePermIds);
-            }
-        }
-
-        return $allPermissions;
+        return $this->roleService->getPermissionsForRole($roleId);
     }
 }
