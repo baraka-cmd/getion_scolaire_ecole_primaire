@@ -13,6 +13,11 @@ class MatiereService
         $this->repository = $repository ?? new MatiereRepository();
     }
 
+    public function getPaginatedGroupHierarchy(string $search, int $limit, int $offset): array
+    {
+        return $this->repository->findPaginatedGroupHierarchy($search, $limit, $offset);
+    }
+
     public function getGroups(): array
     {
         return $this->repository->findGroups();
