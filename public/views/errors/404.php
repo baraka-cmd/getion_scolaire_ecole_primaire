@@ -5,7 +5,6 @@
  */
 defined('ACCESS') or die('Accès interdit');
 ?>
-
         <!DOCTYPE html>
         <html lang="fr">
         <head>
