@@ -140,4 +140,10 @@ class AbsenceService
                 : 0,
         ];
     }
+
+    public function getMarkingData(int $classId, string $date): array
+    {
+        return $this->repository->getMarkingData($classId, $date);
+    }
+
 }
