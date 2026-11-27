@@ -29,7 +29,8 @@ $errors         = [];
 
 // Traitement du formulaire
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $result = $inscriptionService->createEnrollment(
+    try {
+        $result = $inscriptionService->createEnrollment(
         (int) post('eleve_id', 0),
         (int) post('classe_id', 0),
         (string) post('statut', 'Actif')
@@ -41,9 +42,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('/gestion_scolaire/inscriptions');
     }
 
-    $errors = $result['errors'] ?? [];
-    $errorMessage = $result['message'] ?? '';
-    if (!$errorMessage && !$errors) {
+        $errors = $result['errors'] ?? [];
+        $errorMessage = $result['message'] ?? '';
+        if (!$errorMessage && !$errors) {
+            $errorMessage = 'Une erreur est survenue lors de l\'inscription.';
+        }
+    } catch (Throwable $e) {
+        error_log('Erreur inscription: ' . $e->getMessage());
         $errorMessage = 'Une erreur est survenue lors de l\'inscription.';
     }
 }
