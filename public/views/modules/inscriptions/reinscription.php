@@ -10,33 +10,17 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('inscriptions.creer');
 
-global $db;
 
-// Charger le contrôleur
-require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'InscriptionController.php';
-$inscriptionController = new InscriptionController();
+// Charger le service de lecture des années scolaires
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'InscriptionService.php';
+$inscriptionService = new InscriptionService();
 
 // Récupérer les années scolaires
-$annees = $inscriptionController->getAnneesScolaires();
+$annees = $inscriptionService->getSchoolYears();
 
 // Récupérer les classes de toutes les années pour le sélecteur source
-$classesToutes = $db->fetchAll(
-    "SELECT c.id, c.nom, c.niveau, a.libelle AS annee_libelle, a.id AS annee_id,
-            a.date_debut AS annee_date_debut, a.est_active
-     FROM classes c
-     INNER JOIN annees_scolaires a ON c.annee_scolaire_id = a.id
-     ORDER BY a.date_debut DESC, c.niveau"
-);
-
-$anneesDestination = $db->fetchAll(
-    "SELECT a.id, a.libelle, a.date_debut, a.est_active
-     FROM annees_scolaires a
-     WHERE EXISTS (
-         SELECT 1 FROM classes c
-         WHERE c.annee_scolaire_id = a.id AND c.est_actif = 1
-     )
-     ORDER BY a.date_debut"
-);
+$classesToutes = $inscriptionService->getClassesForTransition();
+$anneesDestination = $inscriptionService->getDestinationSchoolYears();
 
 $pageTitle = 'Réinscription massive';
 $pageIcon  = 'fa-rotate';

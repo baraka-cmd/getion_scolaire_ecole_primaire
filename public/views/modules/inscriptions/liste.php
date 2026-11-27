@@ -10,11 +10,12 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('inscriptions.consulter');
 
-global $db;
 
-// Charger le contrôleur
+// Le contrôleur reste responsable du traitement AJAX ; les données de filtre passent par le service.
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'InscriptionController.php';
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'InscriptionService.php';
 $inscriptionController = new InscriptionController();
+$inscriptionService = new InscriptionService();
 
 // Traitement AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
@@ -22,19 +23,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
 }
 
 // Récupérer les données pour les filtres
-$classes = $inscriptionController->getClassesActives();
-$annees = $inscriptionController->getAnneesScolaires();
+$classes = $inscriptionService->getActiveClasses();
+$annees = $inscriptionService->getSchoolYears();
 
-// Statistiques
-$totalActifs = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) AND statut = 'Actif'"
-);
-$totalRedoublants = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) AND statut = 'Redoublant'"
-);
-$totalTransferes = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) AND statut = 'Transféré'"
-);
+// Statistiques calculées par le service d'inscription
+$statistiques = $inscriptionService->getEnrollmentStatistics();
+$totalActifs = $statistiques['actifs'];
+$totalRedoublants = $statistiques['redoublants'];
+$totalTransferes = $statistiques['transferes'];
 
 // Métadonnées
 $pageTitle = 'Gestion des inscriptions';

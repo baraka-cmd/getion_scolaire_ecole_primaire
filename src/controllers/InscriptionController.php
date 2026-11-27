@@ -6,17 +6,15 @@
 
 defined('ACCESS') or die('Accès interdit');
 
-require_once __DIR__ . '/../services/AcademicResultsService.php';
+require_once __DIR__ . '/../services/InscriptionService.php';
 
 class InscriptionController
 {
-    private Database $db;
-    private AcademicResultsService $academicResults;
+    private InscriptionService $inscriptionService;
 
     public function __construct()
     {
-        $this->db = Database::getInstance();
-        $this->academicResults = new AcademicResultsService();
+        $this->inscriptionService = new InscriptionService();
     }
 
     /**
@@ -73,74 +71,10 @@ class InscriptionController
 
     private function getListe(): void
     {
-        $page      = max(1, (int) post('page', 1));
-        $recherche = post('recherche', '');
-        $classeId  = (int) post('classe_id', 0);
-        $anneeId   = (int) post('annee_id', 0);
-        $statut    = post('statut', '');
-        $parPage   = ITEMS_PER_PAGE;
-
-        $where = [];
-        $params = [];
-
-        // Par défaut, année active
-        if ($anneeId > 0) {
-            $where[] = "i.annee_scolaire_id = :annee";
-            $params['annee'] = $anneeId;
-        } else {
-            $where[] = "i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)";
-        }
-
-        if (!empty($recherche)) {
-            $where[] = "(e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3)";
-            $params['r1'] = "%{$recherche}%";
-            $params['r2'] = "%{$recherche}%";
-            $params['r3'] = "%{$recherche}%";
-        }
-
-        if ($classeId > 0) {
-            $where[] = "i.classe_id = :classe";
-            $params['classe'] = $classeId;
-        }
-
-        if (!empty($statut)) {
-            $where[] = "i.statut = :statut";
-            $params['statut'] = $statut;
-        }
-
-        $whereClause = 'WHERE ' . implode(' AND ', $where);
-
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions i
-             INNER JOIN eleves e ON i.eleve_id = e.id
-             INNER JOIN classes c ON i.classe_id = c.id
-             {$whereClause}",
-            $params
-        );
-
-        $offset = ($page - 1) * $parPage;
-        $inscriptions = $this->db->fetchAll(
-            "SELECT i.*, e.matricule, e.nom, e.prenom, e.sexe,
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    c.nom AS classe_nom, c.niveau AS classe_niveau,
-                    a.libelle AS annee_libelle,
-                    DATE_FORMAT(i.date_inscription, '%d/%m/%Y') AS date_inscription_format
-             FROM inscriptions i
-             INNER JOIN eleves e ON i.eleve_id = e.id
-             INNER JOIN classes c ON i.classe_id = c.id
-             INNER JOIN annees_scolaires a ON i.annee_scolaire_id = a.id
-             {$whereClause}
-             ORDER BY i.date_inscription DESC
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, ['limit' => $parPage, 'offset' => $offset])
-        );
-
-        jsonResponse(true, 'Liste récupérée.', [
-            'inscriptions' => $inscriptions,
-            'total'        => $total,
-            'page'         => $page,
-            'pages'        => ceil($total / $parPage)
-        ]);
+        $page = max(1, (int) post('page', 1));
+        $filters = ['recherche' => post('recherche', ''), 'classe_id' => (int) post('classe_id', 0), 'annee_id' => (int) post('annee_id', 0), 'statut' => post('statut', '')];
+        $result = $this->inscriptionService->paginate($filters, $page, ITEMS_PER_PAGE);
+        jsonResponse(true, 'Liste récupérée.', ['inscriptions' => $result['inscriptions'], 'total' => $result['total'], 'page' => $page, 'pages' => ceil($result['total'] / ITEMS_PER_PAGE)]);
     }
 
     // ============================================================
@@ -150,61 +84,16 @@ class InscriptionController
     private function inscrire(): void
     {
         requirePermission('inscriptions.creer');
-
-        $eleveId  = (int) post('eleve_id', 0);
-        $classeId = (int) post('classe_id', 0);
-        $statut   = post('statut', 'Actif');
-
-        $errors = [];
-
-        if ($eleveId <= 0) $errors['eleve_id'] = 'Veuillez sélectionner un élève.';
-        if ($classeId <= 0) $errors['classe_id'] = 'Veuillez sélectionner une classe.';
-
-        // Vérifier que l'élève existe
-        $eleve = $this->db->fetchOne("SELECT id, nom, prenom FROM eleves WHERE id = :id AND est_actif = 1", ['id' => $eleveId]);
-        if (!$eleve) $errors['eleve_id'] = 'Élève introuvable ou inactif.';
-
-        // Vérifier la capacité de la classe
-        if ($classeId > 0) {
-            $capacite = (int) $this->db->fetchColumn("SELECT capacite_max FROM classes WHERE id = :id", ['id' => $classeId]);
-            $nbInscrits = (int) $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif'",
-                ['cid' => $classeId]
-            );
-            if ($nbInscrits >= $capacite) {
-                $errors['classe_id'] = "Classe complète ({$capacite} élèves maximum).";
-            }
-        }
-
-        // Vérifier que l'élève n'est pas déjà inscrit dans une classe active cette année
-        $anneeActive = $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-        $dejaInscrit = $this->db->fetchOne(
-            "SELECT i.id, c.nom FROM inscriptions i
-             INNER JOIN classes c ON i.classe_id = c.id
-             WHERE i.eleve_id = :eid AND i.annee_scolaire_id = :aid AND i.statut = 'Actif'",
-            ['eid' => $eleveId, 'aid' => $anneeActive]
-        );
-        if ($dejaInscrit) {
-            $errors['eleve_id'] = "Cet élève est déjà inscrit en {$dejaInscrit['nom']} pour cette année.";
-        }
-
-        if (!empty($errors)) {
-            jsonResponse(false, 'Veuillez corriger les erreurs.', ['errors' => $errors], 422);
-        }
-
         try {
-            $inscriptionId = $this->db->insert(
-                "INSERT INTO inscriptions (eleve_id, classe_id, annee_scolaire_id, date_inscription, statut)
-                 VALUES (:eid, :cid, :aid, CURDATE(), :statut)",
-                ['eid' => $eleveId, 'cid' => $classeId, 'aid' => $anneeActive, 'statut' => $statut]
+            $result = $this->inscriptionService->createEnrollment(
+                (int) post('eleve_id', 0),
+                (int) post('classe_id', 0),
+                (string) post('statut', 'Actif')
             );
-
-            logActivity('Création', 'inscriptions', $inscriptionId,
-                "Inscription : {$eleve['nom']} {$eleve['prenom']}");
-
-            jsonResponse(true, 'Élève inscrit avec succès.', ['id' => $inscriptionId]);
-
-        } catch (Exception $e) {
+            if (!$result['ok']) jsonResponse(false, $result['message'] ?? 'Veuillez corriger les erreurs.', ['errors' => $result['errors'] ?? []], $result['status'] ?? 422);
+            logActivity('Création', 'inscriptions', $result['id'], "Inscription : {$result['student']['nom']} {$result['student']['prenom']}");
+            jsonResponse(true, 'Élève inscrit avec succès.', ['id' => $result['id']]);
+        } catch (Throwable $e) {
             error_log('Erreur inscription: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de l\'inscription.');
         }
@@ -217,53 +106,13 @@ class InscriptionController
     private function changerClasse(): void
     {
         requirePermission('inscriptions.modifier');
-
-        $eleveId          = (int) post('eleve_id', 0);
-        $ancienneClasseId = (int) post('ancienne_classe_id', 0);
-        $nouvelleClasseId = (int) post('nouvelle_classe_id', 0);
-        $motif            = post('motif', 'Changement de classe');
-
-        if ($eleveId <= 0 || $nouvelleClasseId <= 0) {
-            jsonResponse(false, 'Paramètres invalides.', [], 400);
-        }
-
-        // Vérifier la capacité
-        $capacite = (int) $this->db->fetchColumn("SELECT capacite_max FROM classes WHERE id = :id", ['id' => $nouvelleClasseId]);
-        $nbInscrits = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif'",
-            ['cid' => $nouvelleClasseId]
-        );
-        if ($nbInscrits >= $capacite) {
-            jsonResponse(false, "Classe complète ({$capacite} élèves max).", [], 409);
-        }
-
         try {
-            $this->db->beginTransaction();
-
-            $anneeActive = $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-
-            // Terminer l'ancienne inscription
-            $this->db->update(
-                "UPDATE inscriptions SET statut = 'Transféré', motif_statut = :motif, date_changement_statut = CURDATE()
-                 WHERE eleve_id = :eid AND classe_id = :cid AND annee_scolaire_id = :aid AND statut = 'Actif'",
-                ['motif' => $motif, 'eid' => $eleveId, 'cid' => $ancienneClasseId, 'aid' => $anneeActive]
-            );
-
-            // Créer la nouvelle inscription
-            $this->db->insert(
-                "INSERT INTO inscriptions (eleve_id, classe_id, annee_scolaire_id, date_inscription, statut)
-                 VALUES (:eid, :cid, :aid, CURDATE(), 'Actif')",
-                ['eid' => $eleveId, 'cid' => $nouvelleClasseId, 'aid' => $anneeActive]
-            );
-
-            $this->db->commit();
-
-            logActivity('Modification', 'inscriptions', null, "Changement de classe élève {$eleveId}");
-
+            $studentId = (int) post('eleve_id', 0);
+            $result = $this->inscriptionService->changeClass($studentId, (int) post('ancienne_classe_id', 0), (int) post('nouvelle_classe_id', 0), (string) post('motif', 'Changement de classe'));
+            if (!$result['ok']) jsonResponse(false, $result['message'], [], $result['status']);
+            logActivity('Modification', 'inscriptions', null, 'Changement de classe élève ' . $studentId);
             jsonResponse(true, 'Changement de classe effectué avec succès.');
-
-        } catch (Exception $e) {
-            $this->db->rollback();
+        } catch (Throwable $e) {
             error_log('Erreur changement classe: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors du changement de classe.');
         }
@@ -276,29 +125,14 @@ class InscriptionController
     private function desinscrire(): void
     {
         requirePermission('inscriptions.modifier');
-
-        $inscriptionId = (int) post('inscription_id', 0);
-        $statut        = post('statut', 'Abandon');
-        $motif         = post('motif', '');
-
-        if ($inscriptionId <= 0) jsonResponse(false, 'ID inscription invalide.', [], 400);
-        if (!in_array($statut, ['Abandon', 'Exclu', 'Diplômé'])) {
-            jsonResponse(false, 'Statut invalide.', [], 400);
-        }
-        if (isBlank($motif)) jsonResponse(false, 'Le motif est obligatoire.', [], 422);
-
         try {
-            $this->db->update(
-                "UPDATE inscriptions SET statut = :statut, motif_statut = :motif, date_changement_statut = CURDATE()
-                 WHERE id = :id",
-                ['statut' => $statut, 'motif' => $motif, 'id' => $inscriptionId]
-            );
-
-            logActivity('Modification', 'inscriptions', $inscriptionId, "Désinscription : {$statut}");
-
+            $enrollmentId = (int) post('inscription_id', 0);
+            $status = (string) post('statut', 'Abandon');
+            $result = $this->inscriptionService->discontinue($enrollmentId, $status, (string) post('motif', ''));
+            if (!$result['ok']) jsonResponse(false, $result['message'], [], $result['status']);
+            logActivity('Modification', 'inscriptions', $enrollmentId, 'Désinscription : ' . $status);
             jsonResponse(true, 'Statut mis à jour avec succès.');
-
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log('Erreur désinscription: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la mise à jour.');
         }
@@ -313,88 +147,18 @@ class InscriptionController
      */
     private function getElevesPourReinscription(): void
     {
-        $classeSourceId = (int) post('classe_source_id', 0);
-        $anneeSourceId  = (int) post('annee_source_id', 0);
-        $anneeDestinationId = (int) post('annee_destination_id', 0);
-
-        if ($classeSourceId <= 0 || $anneeSourceId <= 0 || $anneeDestinationId <= 0) {
-            jsonResponse(false, 'Classe, année source et année de destination obligatoires.', [], 400);
-        }
-
-        $classeSource = $this->db->fetchOne(
-            "SELECT c.id, c.nom, c.niveau, c.annee_scolaire_id, a.date_debut AS source_date_debut
-             FROM classes c
-             INNER JOIN annees_scolaires a ON a.id = c.annee_scolaire_id
-             WHERE c.id = :cid AND c.annee_scolaire_id = :aid",
-            ['cid' => $classeSourceId, 'aid' => $anneeSourceId]
+        requirePermission('inscriptions.creer');
+        $result = $this->inscriptionService->getTransitionCandidates(
+            (int) post('classe_source_id', 0),
+            (int) post('annee_source_id', 0),
+            (int) post('annee_destination_id', 0)
         );
-        $anneeDestination = $this->db->fetchOne(
-            "SELECT id, date_debut
-             FROM annees_scolaires
-             WHERE id = :aid",
-            ['aid' => $anneeDestinationId]
-        );
-        if (!$classeSource || !$anneeDestination) {
-            jsonResponse(false, 'Classe source ou année de destination introuvable.', [], 404);
-        }
-        if (strtotime($anneeDestination['date_debut']) <= strtotime($classeSource['source_date_debut'])) {
-            jsonResponse(false, 'L’année de destination doit être postérieure à l’année source.', [], 422);
-        }
-
-        $eleves = $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe, e.date_naissance,
-                    i.id AS inscription_id, i.statut
-             FROM inscriptions i
-             INNER JOIN eleves e ON i.eleve_id = e.id
-             WHERE i.classe_id = :cid AND i.annee_scolaire_id = :aid
-               AND i.statut IN ('Actif', 'Redoublant') AND e.est_actif = 1
-             ORDER BY e.nom, e.prenom",
-            ['cid' => $classeSourceId, 'aid' => $anneeSourceId]
-        );
-
-        $resultatsAnnuels = $this->academicResults->getAnnualResultsForClass(
-            $classeSourceId,
-            $anneeSourceId
-        );
-        $resultatsParEleve = [];
-        foreach ($resultatsAnnuels['resultats'] as $resultat) {
-            $resultatsParEleve[(int) $resultat['eleve_id']] = $resultat;
-        }
-
-        $niveauSource = (int) $classeSource['niveau'];
-        foreach ($eleves as &$eleve) {
-            $resultat = $resultatsParEleve[(int) $eleve['id']] ?? null;
-            $eleve['pourcentage_annuel'] = $resultat['pourcentage'] ?? null;
-            $eleve['bulletin_complet'] = (bool) ($resultat['bulletin_complet'] ?? false);
-            $eleve['notes_completees'] = (int) ($resultat['notes_completees'] ?? 0);
-            $eleve['notes_attendues'] = (int) ($resultat['notes_attendues'] ?? 0);
-
-            if (!$eleve['bulletin_complet']) {
-                $eleve['decision_auto'] = 'A_COMPLETER';
-            } elseif (!empty($resultat['is_admis'])) {
-                $eleve['decision_auto'] = $niveauSource >= 6 ? 'Diplômé' : 'Passe';
-            } else {
-                $eleve['decision_auto'] = 'Redouble';
-            }
-        }
-        unset($eleve);
-
-        $classesDisponibles = $this->db->fetchAll(
-            "SELECT c.id, c.nom, c.niveau, c.capacite_max,
-                    (SELECT COUNT(*) FROM inscriptions i
-                     WHERE i.classe_id = c.id AND i.annee_scolaire_id = c.annee_scolaire_id
-                       AND i.statut IN ('Actif', 'Redoublant')) AS nb_inscrits
-             FROM classes c
-             WHERE c.annee_scolaire_id = :aid AND c.est_actif = 1
-             ORDER BY c.niveau, c.nom",
-            ['aid' => $anneeDestinationId]
-        );
-
+        if (!$result['ok']) jsonResponse(false, $result['message'], [], $result['status']);
         jsonResponse(true, 'Élèves récupérés.', [
-            'eleves'              => $eleves,
-            'classe_source'       => $classeSource,
-            'classes_disponibles' => $classesDisponibles,
-            'total'               => count($eleves)
+            'eleves' => $result['eleves'],
+            'classe_source' => $result['classe_source'],
+            'classes_disponibles' => $result['classes_disponibles'],
+            'total' => $result['total']
         ]);
     }
 
@@ -404,239 +168,20 @@ class InscriptionController
     private function reinscrireMassivement(): void
     {
         requirePermission('inscriptions.creer');
-
-        $elevesData = post('eleves', '');
-        $elevesData = json_decode($elevesData, true);
-        $classeSourceId = (int) post('classe_source_id', 0);
-        $anneeSourceId = (int) post('annee_source_id', 0);
-        $anneeDestinationId = (int) post('annee_destination_id', 0);
-        if (
-            empty($elevesData)
-            || !is_array($elevesData)
-            || $classeSourceId <= 0
-            || $anneeSourceId <= 0
-            || $anneeDestinationId <= 0
-        ) {
-            jsonResponse(false, 'Aucun élève sélectionné.', [], 400);
-        }
-
-        $anneeDestination = $this->db->fetchOne(
-            "SELECT id, date_debut
-             FROM annees_scolaires
-             WHERE id = :aid",
-            ['aid' => $anneeDestinationId]
+        $selection = json_decode((string) post('eleves', ''), true);
+        $result = $this->inscriptionService->executeMassTransition(
+            is_array($selection) ? $selection : [],
+            (int) post('classe_source_id', 0),
+            (int) post('annee_source_id', 0),
+            (int) post('annee_destination_id', 0)
         );
-        $classeSource = $this->db->fetchOne(
-            "SELECT c.id, c.niveau, c.annee_scolaire_id, a.date_debut AS source_date_debut
-             FROM classes c
-             INNER JOIN annees_scolaires a ON a.id = c.annee_scolaire_id
-             WHERE c.id = :cid AND c.annee_scolaire_id = :aid",
-            ['cid' => $classeSourceId, 'aid' => $anneeSourceId]
-        );
-        if (!$classeSource || !$anneeDestination) {
-            jsonResponse(false, 'Classe source ou année de destination introuvable.', [], 404);
-        }
-        if (strtotime($anneeDestination['date_debut']) <= strtotime($classeSource['source_date_debut'])) {
-            jsonResponse(false, 'L’année de destination doit être postérieure à l’année source.', [], 422);
-        }
-
-        $resultatsAnnuels = $this->academicResults->getAnnualResultsForClass(
-            $classeSourceId,
-            $anneeSourceId
-        );
-        $resultatsParEleve = [];
-        foreach ($resultatsAnnuels['resultats'] as $resultat) {
-            $resultatsParEleve[(int) $resultat['eleve_id']] = $resultat;
-        }
-
-        $plans = [];
-        $elevesDejaSelectionnes = [];
-        foreach ($elevesData as $data) {
-            if (!is_array($data)) {
-                jsonResponse(false, 'La liste des élèves contient des données invalides.', [], 400);
-            }
-
-            $eleveId = (int) ($data['eleve_id'] ?? 0);
-            $inscriptionSourceId = (int) ($data['ancienne_inscription_id'] ?? 0);
-            $classeDestinationId = (int) ($data['nouvelle_classe_id'] ?? 0);
-            if ($eleveId <= 0 || $inscriptionSourceId <= 0 || isset($elevesDejaSelectionnes[$eleveId])) {
-                jsonResponse(false, 'Un élève est invalide ou présent plusieurs fois dans la sélection.', [], 422);
-            }
-            $elevesDejaSelectionnes[$eleveId] = true;
-
-            $inscriptionSource = $this->db->fetchOne(
-                "SELECT i.id, i.eleve_id
-                 FROM inscriptions i
-                 INNER JOIN eleves e ON e.id = i.eleve_id AND e.est_actif = 1
-                 WHERE i.id = :iid AND i.eleve_id = :eid AND i.classe_id = :cid
-                   AND i.annee_scolaire_id = :aid AND i.statut IN ('Actif', 'Redoublant')",
-                [
-                    'iid' => $inscriptionSourceId,
-                    'eid' => $eleveId,
-                    'cid' => $classeSourceId,
-                    'aid' => $anneeSourceId,
-                ]
-            );
-            if (!$inscriptionSource) {
-                jsonResponse(false, "L’inscription source de l’élève {$eleveId} n’est plus valide.", [], 422);
-            }
-
-            $resultat = $resultatsParEleve[$eleveId] ?? null;
-            if (!$resultat || empty($resultat['bulletin_complet'])) {
-                jsonResponse(
-                    false,
-                    "Réinscription bloquée : le bulletin de l’élève {$eleveId} n’est pas complet à 100 %.",
-                    [],
-                    422
-                );
-            }
-
-            $estReussite = !empty($resultat['is_admis']);
-            $estDiplome = $estReussite && (int) $classeSource['niveau'] >= 6;
-            $niveauDestinationAttendu = $estReussite
-                ? (int) $classeSource['niveau'] + 1
-                : (int) $classeSource['niveau'];
-
-            if (!$estDiplome) {
-                $classeDestination = $this->db->fetchOne(
-                    "SELECT id, niveau
-                     FROM classes
-                     WHERE id = :cid AND annee_scolaire_id = :aid AND est_actif = 1",
-                    ['cid' => $classeDestinationId, 'aid' => $anneeDestinationId]
-                );
-                if (!$classeDestination || (int) $classeDestination['niveau'] !== $niveauDestinationAttendu) {
-                    $decision = $estReussite ? 'passe en classe supérieure' : 'redouble dans la même classe';
-                    jsonResponse(
-                        false,
-                        "Destination incorrecte pour l’élève {$eleveId} : il doit {$decision}.",
-                        [],
-                        422
-                    );
-                }
-            }
-
-            $dejaInscrit = (int) $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM inscriptions
-                 WHERE eleve_id = :eid AND annee_scolaire_id = :aid",
-                ['eid' => $eleveId, 'aid' => $anneeDestinationId]
-            );
-            if ($dejaInscrit > 0) {
-                jsonResponse(false, "L’élève {$eleveId} est déjà inscrit pour l’année de destination.", [], 422);
-            }
-
-            $plans[] = [
-                'eleve_id' => $eleveId,
-                'inscription_source_id' => $inscriptionSourceId,
-                'classe_destination_id' => $estDiplome ? null : $classeDestinationId,
-                'est_reussite' => $estReussite,
-                'est_diplome' => $estDiplome,
-            ];
-        }
-
-        $this->db->beginTransaction();
-        try {
-            $capacitesUtilisees = [];
-            $classesDestination = [];
-            foreach ($plans as $plan) {
-                if ($plan['classe_destination_id'] === null) {
-                    continue;
-                }
-                $classesDestination[$plan['classe_destination_id']] = true;
-            }
-
-            foreach (array_keys($classesDestination) as $classeDestinationId) {
-                $classeDestination = $this->db->fetchOne(
-                    "SELECT id, capacite_max
-                     FROM classes
-                     WHERE id = :cid AND annee_scolaire_id = :aid AND est_actif = 1
-                     FOR UPDATE",
-                    ['cid' => $classeDestinationId, 'aid' => $anneeDestinationId]
-                );
-                if (!$classeDestination) {
-                    $this->db->rollback();
-                    jsonResponse(false, 'Une classe de destination n’est plus disponible.', [], 409);
-                }
-
-                $inscritsActuels = (int) $this->db->fetchColumn(
-                    "SELECT COUNT(*) FROM inscriptions
-                     WHERE classe_id = :cid AND annee_scolaire_id = :aid
-                       AND statut IN ('Actif', 'Redoublant')",
-                    ['cid' => $classeDestinationId, 'aid' => $anneeDestinationId]
-                );
-                $capacitesUtilisees[$classeDestinationId] = [
-                    'capacite' => (int) $classeDestination['capacite_max'],
-                    'inscrits' => $inscritsActuels,
-                ];
-            }
-
-            foreach ($plans as $plan) {
-                $destinationId = $plan['classe_destination_id'];
-                if ($destinationId !== null) {
-                    $capacitesUtilisees[$destinationId]['inscrits']++;
-                    if ($capacitesUtilisees[$destinationId]['inscrits'] > $capacitesUtilisees[$destinationId]['capacite']) {
-                        $this->db->rollback();
-                        jsonResponse(false, "La classe de destination {$destinationId} n’a plus assez de places.", [], 409);
-                    }
-                }
-            }
-
-            $inscrits = 0;
-            $redoublants = 0;
-            $diplomes = 0;
-            foreach ($plans as $plan) {
-                if ($plan['est_diplome']) {
-                    $updated = $this->db->update(
-                        "UPDATE inscriptions
-                         SET statut = 'Diplômé', motif_statut = 'Réussite en fin de 6e primaire',
-                             date_changement_statut = CURDATE()
-                         WHERE id = :iid AND eleve_id = :eid AND statut IN ('Actif', 'Redoublant')",
-                        [
-                            'iid' => $plan['inscription_source_id'],
-                            'eid' => $plan['eleve_id'],
-                        ]
-                    );
-                    if ($updated !== 1) {
-                        $this->db->rollback();
-                        jsonResponse(false, 'Une inscription de fin de cycle a changé pendant le traitement.', [], 409);
-                    }
-                    $diplomes++;
-                    continue;
-                }
-
-                $statut = $plan['est_reussite'] ? 'Actif' : 'Redoublant';
-                $this->db->insert(
-                    "INSERT INTO inscriptions (eleve_id, classe_id, annee_scolaire_id, date_inscription, statut)
-                     VALUES (:eid, :cid, :aid, CURDATE(), :statut)",
-                    [
-                        'eid' => $plan['eleve_id'],
-                        'cid' => $plan['classe_destination_id'],
-                        'aid' => $anneeDestinationId,
-                        'statut' => $statut,
-                    ]
-                );
-                $inscrits++;
-                if (!$plan['est_reussite']) {
-                    $redoublants++;
-                }
-            }
-            $this->db->commit();
-        } catch (PDOException $e) {
-            $this->db->rollback();
-            error_log('Erreur réinscription massive: ' . $e->getMessage());
-            jsonResponse(false, 'La réinscription a échoué et aucune modification n’a été conservée.', [], 500);
-        }
-
-        logActivity(
-            'Réinscription',
-            'inscriptions',
-            null,
-            "Transition scolaire : {$inscrits} inscrits, {$redoublants} redoublants, {$diplomes} diplômés"
-        );
-
+        if (!$result['ok']) jsonResponse(false, $result['message'], [], $result['status']);
+        logActivity('Réinscription', 'inscriptions', null,
+            "Transition scolaire : {$result['inscrits']} inscrits, {$result['redoublants']} redoublants, {$result['diplomes']} diplômés");
         jsonResponse(true, 'Transition scolaire enregistrée avec succès.', [
-            'inscrits' => $inscrits,
-            'redoublants' => $redoublants,
-            'diplomes' => $diplomes,
+            'inscrits' => $result['inscrits'],
+            'redoublants' => $result['redoublants'],
+            'diplomes' => $result['diplomes']
         ]);
     }
 
@@ -648,28 +193,8 @@ class InscriptionController
     {
         $eleveId = (int) post('eleve_id', 0);
         if ($eleveId <= 0) jsonResponse(false, 'ID élève invalide.', [], 400);
-
-        $historique = $this->db->fetchAll(
-            "SELECT i.*, c.nom AS classe_nom, c.niveau AS classe_niveau,
-                    a.libelle AS annee_libelle,
-                    DATE_FORMAT(i.date_inscription, '%d/%m/%Y') AS date_inscription_format
-             FROM inscriptions i
-             INNER JOIN classes c ON i.classe_id = c.id
-             INNER JOIN annees_scolaires a ON i.annee_scolaire_id = a.id
-             WHERE i.eleve_id = :eid
-             ORDER BY a.date_debut DESC, i.date_inscription DESC",
-            ['eid' => $eleveId]
-        );
-
-        $eleve = $this->db->fetchOne(
-            "SELECT id, matricule, nom, prenom FROM eleves WHERE id = :id",
-            ['id' => $eleveId]
-        );
-
-        jsonResponse(true, 'Historique récupéré.', [
-            'eleve'      => $eleve,
-            'historique' => $historique
-        ]);
+        $result = $this->inscriptionService->getStudentHistory($eleveId);
+        jsonResponse(true, 'Historique récupéré.', ['eleve' => $result['eleve'], 'historique' => $result['historique']]);
     }
 
     /**
@@ -678,19 +203,7 @@ class InscriptionController
     private function getClassesDisponibles(): void
     {
         $anneeId = (int) post('annee_id', 0);
-        if ($anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-        }
-
-        $classes = $this->db->fetchAll(
-            "SELECT c.id, c.nom, c.niveau, c.capacite_max,
-                    (SELECT COUNT(*) FROM inscriptions WHERE classe_id = c.id AND statut = 'Actif') AS nb_inscrits
-             FROM classes c
-             WHERE c.annee_scolaire_id = :aid
-             ORDER BY c.niveau",
-            ['aid' => $anneeId]
-        );
-
+        $classes = $this->inscriptionService->getAvailableClasses($anneeId);
         jsonResponse(true, 'Classes récupérées.', ['classes' => $classes]);
     }
 
@@ -703,7 +216,7 @@ class InscriptionController
      */
     public function getAnneesScolaires(): array
     {
-        return $this->db->fetchAll("SELECT * FROM annees_scolaires ORDER BY date_debut DESC");
+        return $this->inscriptionService->getSchoolYears();
     }
 
     /**
@@ -711,13 +224,7 @@ class InscriptionController
      */
     public function getClassesActives(): array
     {
-        return $this->db->fetchAll(
-            "SELECT c.*, 
-                    (SELECT COUNT(*) FROM inscriptions WHERE classe_id = c.id AND statut = 'Actif') AS nb_inscrits
-             FROM classes c
-             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY c.niveau"
-        );
+        return $this->inscriptionService->getActiveClasses();
     }
 
     /**
@@ -725,18 +232,7 @@ class InscriptionController
      */
     public function getElevesNonInscrits(): array
     {
-        $anneeActive = $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-
-        return $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe, e.date_naissance
-             FROM eleves e
-             WHERE e.est_actif = 1
-             AND e.id NOT IN (
-                 SELECT eleve_id FROM inscriptions WHERE annee_scolaire_id = :aid AND statut = 'Actif'
-             )
-             ORDER BY e.nom, e.prenom",
-            ['aid' => $anneeActive]
-        );
+        return $this->inscriptionService->getUnenrolledStudents();
     }
 
     /**
@@ -744,15 +240,7 @@ class InscriptionController
      */
     public function getInscriptionById(int $id): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT i.*, e.matricule, e.nom, e.prenom, c.nom AS classe_nom, a.libelle AS annee_libelle
-             FROM inscriptions i
-             INNER JOIN eleves e ON i.eleve_id = e.id
-             INNER JOIN classes c ON i.classe_id = c.id
-             INNER JOIN annees_scolaires a ON i.annee_scolaire_id = a.id
-             WHERE i.id = :id",
-            ['id' => $id]
-        );
+        return $this->inscriptionService->findEnrollment($id);
     }
 
     /**
@@ -760,14 +248,6 @@ class InscriptionController
      */
     public function getHistoriqueEleve(int $eleveId): array
     {
-        return $this->db->fetchAll(
-            "SELECT i.*, c.nom AS classe_nom, c.niveau, a.libelle AS annee_libelle
-             FROM inscriptions i
-             INNER JOIN classes c ON i.classe_id = c.id
-             INNER JOIN annees_scolaires a ON i.annee_scolaire_id = a.id
-             WHERE i.eleve_id = :eid
-             ORDER BY a.date_debut DESC",
-            ['eid' => $eleveId]
-        );
+        return $this->inscriptionService->getEnrollmentHistory($eleveId);
     }
 }

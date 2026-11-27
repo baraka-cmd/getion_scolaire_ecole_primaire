@@ -10,17 +10,16 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('inscriptions.creer');
 
-global $db;
 
-// Charger le contrôleur
-require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'InscriptionController.php';
-$inscriptionController = new InscriptionController();
+// Charger le service de lecture des données du formulaire
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'InscriptionService.php';
+$inscriptionService = new InscriptionService();
 
 // Récupérer les élèves non inscrits cette année
-$elevesNonInscrits = $inscriptionController->getElevesNonInscrits();
+$elevesNonInscrits = $inscriptionService->getUnenrolledStudents();
 
 // Récupérer les classes avec capacités
-$classesActives = $inscriptionController->getClassesActives();
+$classesActives = $inscriptionService->getActiveClasses();
 
 // Messages
 $successMessage = '';
@@ -29,60 +28,27 @@ $errors         = [];
 
 // Traitement du formulaire
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $eleveId  = (int) post('eleve_id', 0);
-    $classeId = (int) post('classe_id', 0);
-    $statut   = post('statut', 'Actif');
-
-    $errors = [];
-
-    if ($eleveId <= 0) $errors['eleve_id'] = 'Veuillez sélectionner un élève.';
-    if ($classeId <= 0) $errors['classe_id'] = 'Veuillez sélectionner une classe.';
-
-    // Vérifier la capacité
-    if ($classeId > 0) {
-        $capacite = (int) $db->fetchColumn("SELECT capacite_max FROM classes WHERE id = :id", ['id' => $classeId]);
-        $nbInscrits = (int) $db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif'",
-            ['cid' => $classeId]
+    try {
+        $result = $inscriptionService->createEnrollment(
+            (int) post('eleve_id', 0),
+            (int) post('classe_id', 0),
+            (string) post('statut', 'Actif')
         );
-        if ($nbInscrits >= $capacite) {
-            $errors['classe_id'] = "Classe complète ({$capacite} élèves maximum).";
-        }
-    }
 
-    // Vérifier que l'élève n'est pas déjà inscrit
-    if ($eleveId > 0) {
-        $anneeActive = $db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-        $dejaInscrit = $db->fetchOne(
-            "SELECT c.nom FROM inscriptions i
-             INNER JOIN classes c ON i.classe_id = c.id
-             WHERE i.eleve_id = :eid AND i.annee_scolaire_id = :aid AND i.statut = 'Actif'",
-            ['eid' => $eleveId, 'aid' => $anneeActive]
-        );
-        if ($dejaInscrit) {
-            $errors['eleve_id'] = "Cet élève est déjà inscrit en {$dejaInscrit['nom']}.";
-        }
-    }
-
-    if (empty($errors)) {
-        try {
-            $anneeActive = $db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-            
-            $inscriptionId = $db->insert(
-                "INSERT INTO inscriptions (eleve_id, classe_id, annee_scolaire_id, date_inscription, statut)
-                 VALUES (:eid, :cid, :aid, CURDATE(), :statut)",
-                ['eid' => $eleveId, 'cid' => $classeId, 'aid' => $anneeActive, 'statut' => $statut]
-            );
-
-            logActivity('Création', 'inscriptions', $inscriptionId, "Inscription élève {$eleveId}");
-
+        if ($result['ok']) {
+            logActivity('Création', 'inscriptions', $result['id'], 'Inscription élève ' . (int) post('eleve_id', 0));
             setFlash('success', 'Élève inscrit avec succès.');
             redirect('/gestion_scolaire/inscriptions');
-
-        } catch (Exception $e) {
-            $errorMessage = 'Une erreur est survenue lors de l\'inscription.';
-            error_log('Erreur inscription: ' . $e->getMessage());
         }
+
+        $errors = $result['errors'] ?? [];
+        $errorMessage = $result['message'] ?? '';
+        if (!$errorMessage && !$errors) {
+            $errorMessage = 'Une erreur est survenue lors de l\'inscription.';
+        }
+    } catch (Throwable $e) {
+        error_log('Erreur inscription: ' . $e->getMessage());
+        $errorMessage = 'Une erreur est survenue lors de l\'inscription.';
     }
 }
 
@@ -212,6 +178,9 @@ require_once VIEWS_PATH . 'templates' . DIRECTORY_SEPARATOR . 'header.php';
                     <option value="Actif">Actif — Inscription normale</option>
                     <option value="Redoublant">Redoublant — Reprend la même classe</option>
                 </select>
+                <?php if (isset($errors['statut'])): ?>
+                    <span class="invalid-feedback d-block"><?= e($errors['statut']) ?></span>
+                <?php endif; ?>
             </div>
         </form>
     </div>
