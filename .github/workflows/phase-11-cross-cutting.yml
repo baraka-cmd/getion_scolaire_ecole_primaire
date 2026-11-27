@@ -10,6 +10,7 @@ on:
       - 'src/services/LogService.php'
       - 'src/repositories/LogRepository.php'
       - 'tests/phase11_logs_mvc_smoke.php'
+      - 'tests/phase11_document_security_smoke.php'
       - 'tests/documents_messages_notifications_service_smoke.php'
       - '.github/workflows/phase-11-cross-cutting.yml'
 
@@ -30,5 +31,7 @@ jobs:
           done
       - name: Activity log MVC boundary
         run: php tests/phase11_logs_mvc_smoke.php
+      - name: Private document storage and upload security
+        run: php tests/phase11_document_security_smoke.php
       - name: Existing document, message and notification service contracts
         run: php tests/documents_messages_notifications_service_smoke.php
