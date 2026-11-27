@@ -174,6 +174,9 @@ require_once VIEWS_PATH . 'templates' . DIRECTORY_SEPARATOR . 'header.php';
                     <option value="Actif">Actif — Inscription normale</option>
                     <option value="Redoublant">Redoublant — Reprend la même classe</option>
                 </select>
+                <?php if (isset($errors['statut'])): ?>
+                    <span class="invalid-feedback d-block"><?= e($errors['statut']) ?></span>
+                <?php endif; ?>
             </div>
         </form>
     </div>
