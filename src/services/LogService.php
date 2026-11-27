@@ -21,7 +21,7 @@ class LogService
             'logs' => $this->repository->listFiltered($where, $params, $perPage, ($page - 1) * $perPage),
             'total' => $total,
             'page' => $page,
-            'pages' => (int) ceil($total / $perPage),
+            'pages' => ceil($total / $perPage),
         ];
     }
 
