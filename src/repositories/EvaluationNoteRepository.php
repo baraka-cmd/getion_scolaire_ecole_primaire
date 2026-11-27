@@ -221,4 +221,59 @@ class EvaluationNoteRepository
         );
     }
 
+
+    public function isClassAndTermConsistent(int $classId, int $termId): bool
+    {
+        return (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM classes c
+             INNER JOIN trimestres t ON t.annee_scolaire_id = c.annee_scolaire_id
+             WHERE c.id = :cid AND t.id = :tid",
+            ['cid' => $classId, 'tid' => $termId]
+        ) === 1;
+    }
+
+    public function evaluationExists(int $termId, int $classId, int $groupId, string $type): bool
+    {
+        return (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM evaluations
+             WHERE trimestre_id = :tid AND classe_id = :cid AND groupe_id = :gid AND type_evaluation = :type",
+            ['tid' => $termId, 'cid' => $classId, 'gid' => $groupId, 'type' => $type]
+        ) > 0;
+    }
+
+    public function insertEvaluation(int $termId, int $groupId, int $classId, string $type, string $date): int
+    {
+        return (int) $this->db->insert(
+            "INSERT INTO evaluations (trimestre_id, groupe_id, classe_id, type_evaluation, date_evaluation)
+             VALUES (:tid, :gid, :cid, :type, :date_eval)",
+            ['tid' => $termId, 'gid' => $groupId, 'cid' => $classId, 'type' => $type, 'date_eval' => $date]
+        );
+    }
+
+    public function evaluationIdExists(int $evaluationId): bool
+    {
+        return (bool) $this->db->fetchOne("SELECT id FROM evaluations WHERE id = :id", ['id' => $evaluationId]);
+    }
+
+    public function countNotesForEvaluation(int $evaluationId): int
+    {
+        return (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM notes WHERE evaluation_id = :eid",
+            ['eid' => $evaluationId]
+        );
+    }
+
+    public function updateEvaluationDate(int $evaluationId, string $date): void
+    {
+        $this->db->update(
+            "UPDATE evaluations SET date_evaluation = :date_eval WHERE id = :id",
+            ['date_eval' => $date, 'id' => $evaluationId]
+        );
+    }
+
+    public function deleteEvaluation(int $evaluationId): void
+    {
+        $this->db->delete("DELETE FROM evaluations WHERE id = :id", ['id' => $evaluationId]);
+    }
+
 }
