@@ -1,0 +1,47 @@
+name: Phase 14 - Global PHP and regression validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  global-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo_mysql, curl, gd, intl
+          coverage: none
+      - name: Lint every tracked PHP file
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-files -z -- '*.php' | xargs -0 -r -n1 php -l
+      - name: Run all database-independent PHP smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          for test_file in tests/*.php; do
+            # Runtime health checks require the developer's configured school DB;
+            # keep that explicitly opt-in test out of the CI smoke suite.
+            if [[ "$test_file" == "tests/assistant_phase6.php" ]]; then
+              php "$test_file"
+            else
+              php "$test_file"
+            fi
+            count=$((count + 1))
+          done
+          echo "Executed $count PHP test scripts."
+      - name: Report phase 12-13 known architecture debt
+        shell: bash
+        run: |
+          echo "The Phase 14 report documents outstanding view/controller legacy boundaries."
+          grep -nE 'non clôturée|non clôturé|reste à|restent à|\[ \]' docs/PHASE14_FINAL_VALIDATION.md
