@@ -1,0 +1,32 @@
+name: Phase 6 - Enrollments MVC smoke
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/controllers/InscriptionController.php'
+      - 'src/services/InscriptionService.php'
+      - 'src/repositories/InscriptionRepository.php'
+      - 'tests/inscription_mvc_smoke.php'
+      - '.github/workflows/phase-6-enrollments-mvc.yml'
+  push:
+    branches: [refactor/phase-6-enrollments]
+jobs:
+  php-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: PHP syntax
+        run: |
+          php -l src/controllers/InscriptionController.php
+          php -l src/services/InscriptionService.php
+          php -l src/repositories/InscriptionRepository.php
+          php -l tests/inscription_mvc_smoke.php
+      - name: Enrollment MVC contract
+        run: php tests/inscription_mvc_smoke.php
+      - name: Existing annual result and student access contracts
+        run: |
+          php tests/phase6_cleanup_smoke.php
+          php tests/student_records_mvc_smoke.php
