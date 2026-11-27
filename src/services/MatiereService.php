@@ -43,6 +43,16 @@ class MatiereService
         return $this->repository->countTimetableEntriesForSubject($subjectId);
     }
 
+    public function createClassAssociationIfMissing(int $subjectId, int $classId): void
+    {
+        $this->repository->createClassAssociationIfMissing($subjectId, $classId);
+    }
+
+    public function updateSubject(array $data, bool $updateParent): void
+    {
+        $this->repository->updateSubject($data, $updateParent);
+    }
+
     public function getPaginatedGroupHierarchy(string $search, int $limit, int $offset): array
     {
         return $this->repository->findPaginatedGroupHierarchy($search, $limit, $offset);
