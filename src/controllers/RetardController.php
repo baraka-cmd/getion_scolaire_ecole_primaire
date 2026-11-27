@@ -39,6 +39,7 @@ class RetardController
 
         switch ($action) {
             case 'enregistrerRetard':
+                Security::getInstance()->validateCsrf();
                 $this->enregistrerRetard();
                 break;
             case 'getListeRetards':
@@ -48,12 +49,14 @@ class RetardController
                 $this->getStatsRetards();
                 break;
             case 'justifierRetard':
+                Security::getInstance()->validateCsrf();
                 $this->justifierRetard();
                 break;
             case 'getRetardsEleve':
                 $this->getRetardsEleve();
                 break;
             case 'supprimerRetard':
+                Security::getInstance()->validateCsrf();
                 $this->supprimerRetard();
                 break;
             default:
@@ -112,6 +115,7 @@ class RetardController
         $classeId = (int) post('classe_id', 0);
         if (hasRole('Enseignant')) {
             $ownedClass = $this->retardService->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
+            if (!$ownedClass) jsonResponse(false, 'Aucune classe active n’est affectée à votre compte.', [], 403);
             if ($classeId > 0 && $classeId !== $ownedClass) jsonResponse(false, 'Vous ne pouvez consulter que votre classe.', [], 403);
             $classeId = $ownedClass;
         }
@@ -161,6 +165,7 @@ class RetardController
      */
     public function justifierRetard(): void
     {
+        requirePermission('retards.justifier');
         $retardId = (int) post('retard_id', 0);
         $motif = post('motif', '');
         if ($retardId <= 0) jsonResponse(false, 'ID retard invalide.', [], 400);
