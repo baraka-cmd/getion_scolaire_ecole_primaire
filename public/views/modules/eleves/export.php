@@ -26,78 +26,13 @@ $statut    = $_GET['statut'] ?? '1';
 $recherche = $_GET['recherche'] ?? '';
 $format    = $_GET['format'] ?? 'csv';
 
-// Construire la requête
-$where = [];
-$params = [];
-
-$where[] = "i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)";
-
-if (hasRole('Parent')) {
-    $where[] = "EXISTS (
-        SELECT 1
-        FROM eleve_parent ep
-        INNER JOIN parents_tuteurs pt ON pt.id = ep.parent_id
-        WHERE ep.eleve_id = e.id AND pt.utilisateur_id = :parent_user_id
-    )";
-    $params['parent_user_id'] = (int) $_SESSION['utilisateur_id'];
-} elseif (hasRole('Enseignant')) {
-    $where[] = "EXISTS (
-        SELECT 1
-        FROM enseignants ens
-        WHERE ens.classe_id = i.classe_id
-          AND ens.utilisateur_id = :teacher_user_id
-          AND ens.est_actif = 1
-    )";
-    $params['teacher_user_id'] = (int) $_SESSION['utilisateur_id'];
-}
-
-if (!empty($recherche)) {
-    $where[] = "(e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3)";
-    $params['r1'] = "%{$recherche}%";
-    $params['r2'] = "%{$recherche}%";
-    $params['r3'] = "%{$recherche}%";
-}
-
-if ($classeId > 0) {
-    $where[] = "i.classe_id = :classe";
-    $params['classe'] = $classeId;
-}
-
-if (!empty($sexe)) {
-    $where[] = "e.sexe = :sexe";
-    $params['sexe'] = $sexe;
-}
-
-if ($statut !== '') {
-    $where[] = "e.est_actif = :statut";
-    $params['statut'] = (int) $statut;
-}
-
-$whereClause = 'WHERE ' . implode(' AND ', $where);
-
-// Récupérer les élèves
-$eleves = $db->fetchAll(
-    "SELECT e.matricule, e.nom, e.prenom, 
-            DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance,
-            e.sexe, e.lieu_naissance, e.adresse, e.telephone, e.email,
-            e.groupe_sanguin, e.allergies, e.maladies,
-            DATE_FORMAT(e.date_inscription, '%d/%m/%Y') AS date_inscription,
-            CASE WHEN e.est_actif = 1 THEN 'Actif' ELSE 'Inactif' END AS statut,
-            c.nom AS classe_nom,
-            GROUP_CONCAT(CONCAT(pt.nom, ' ', pt.prenom, ' (', pt.lien, ' - ', pt.telephone_principal, ')') SEPARATOR ' | ') AS parents
-     FROM eleves e
-     INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-     INNER JOIN classes c ON i.classe_id = c.id
-     LEFT JOIN eleve_parent ep ON e.id = ep.eleve_id
-     LEFT JOIN parents_tuteurs pt ON ep.parent_id = pt.id
-     {$whereClause}
-     GROUP BY e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe, 
-              e.lieu_naissance, e.adresse, e.telephone, e.email,
-              e.groupe_sanguin, e.allergies, e.maladies, e.date_inscription, 
-              e.est_actif, c.nom
-     ORDER BY c.nom, e.nom, e.prenom",
-    $params
-);
+// Charger les données exportables depuis le contrôleur (SQL hors de la vue).
+$eleves = $eleveController->getExportRows([
+    'classe_id' => $classeId,
+    'sexe' => $sexe,
+    'statut' => $statut,
+    'recherche' => $recherche,
+]);
 
 // Si export demandé
 if (isset($_GET['action']) && $_GET['action'] === 'export') {
