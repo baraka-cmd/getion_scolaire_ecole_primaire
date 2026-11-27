@@ -292,7 +292,7 @@ class AbsenceController
         if (!$class) return ['classe'=>null,'eleves'=>[],'absences'=>[],'absences_mois'=>0,'absences_non_justifiees_mois'=>0];
         $marking = $this->getMarkingData((int) $class['id'], $date);
         $monthly = $this->service->getClassMonthStatistics((int) $class['id']);
-        return $marking + ['classe'=>$class] + $monthly;
+        return array_merge($marking, ['classe'=>$class], $monthly);
     }
 
     public function getParentChildrenData(int $userId): array
