@@ -35,6 +35,17 @@ class UserRepository
         return (int) $this->db->fetchColumn($sql, $params) > 0;
     }
 
+    public function findActiveSessionIdentity(int $userId): ?array
+    {
+        return $this->db->fetchOne(
+            'SELECT u.role_id, r.nom AS role_nom
+             FROM utilisateurs u
+             INNER JOIN roles r ON r.id = u.role_id
+             WHERE u.id = :id AND u.est_actif = 1 AND r.est_actif = 1',
+            ['id' => $userId]
+        );
+    }
+
     public function findIdentity(int $userId): ?array
     {
         return $this->db->fetchOne(
