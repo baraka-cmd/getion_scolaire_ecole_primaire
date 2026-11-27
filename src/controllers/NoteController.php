@@ -155,13 +155,7 @@ class NoteController
         if (isBlank($dateEval)) $errors['date_evaluation'] = 'Date obligatoire.';
 
         if ($classeId > 0 && $trimestreId > 0) {
-            $trimestreValide = $this->db->fetchColumn(
-                "SELECT COUNT(*)
-                 FROM classes c
-                 INNER JOIN trimestres t ON t.annee_scolaire_id = c.annee_scolaire_id
-                 WHERE c.id = :cid AND t.id = :tid",
-                ['cid' => $classeId, 'tid' => $trimestreId]
-            );
+            $trimestreValide = $this->evaluationNoteService->classAndTermAreConsistent($classeId, $trimestreId) ? 1 : 0;
             if ((int) $trimestreValide !== 1) {
                 $errors['trimestre_id'] = 'Le trimestre doit appartenir à l’année scolaire de la classe.';
             }
@@ -169,11 +163,7 @@ class NoteController
 
         // Vérifier l'unicité : une seule évaluation par groupe/classe/trimestre/type
         if ($groupeId > 0 && $classeId > 0 && $trimestreId > 0 && !empty($type)) {
-            $existe = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM evaluations 
-                 WHERE trimestre_id = :tid AND classe_id = :cid AND groupe_id = :gid AND type_evaluation = :type",
-                ['tid' => $trimestreId, 'cid' => $classeId, 'gid' => $groupeId, 'type' => $type]
-            );
+            $existe = $this->evaluationNoteService->evaluationAlreadyExists($trimestreId, $classeId, $groupeId, $type) ? 1 : 0;
             if ($existe > 0) {
                 $errors['type_evaluation'] = 'Cette évaluation existe déjà pour ce groupe, cette classe et ce trimestre.';
             }
@@ -184,17 +174,7 @@ class NoteController
         }
 
         try {
-            $id = $this->db->insert(
-                "INSERT INTO evaluations (trimestre_id, groupe_id, classe_id, type_evaluation, date_evaluation)
-                 VALUES (:tid, :gid, :cid, :type, :date_eval)",
-                [
-                    'tid'       => $trimestreId,
-                    'gid'       => $groupeId,
-                    'cid'       => $classeId,
-                    'type'      => $type,
-                    'date_eval' => $dateEval
-                ]
-            );
+            $id = $this->evaluationNoteService->createEvaluation($trimestreId, $groupeId, $classeId, $type, $dateEval);
 
             logActivity('Création', 'evaluations', $id, "Évaluation créée : groupe {$groupeId}, classe {$classeId}, {$type}");
 
@@ -220,14 +200,11 @@ class NoteController
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
         if (isBlank($dateEval)) jsonResponse(false, 'Date obligatoire.', [], 422);
 
-        $existe = $this->db->fetchOne("SELECT id FROM evaluations WHERE id = :id", ['id' => $id]);
+        $existe = $this->evaluationNoteService->evaluationExists($id);
         if (!$existe) jsonResponse(false, 'Évaluation introuvable.', [], 404);
 
         try {
-            $this->db->update(
-                "UPDATE evaluations SET date_evaluation = :date_eval WHERE id = :id",
-                ['date_eval' => $dateEval, 'id' => $id]
-            );
+            $this->evaluationNoteService->updateEvaluationDate($id, $dateEval);
 
             logActivity('Modification', 'evaluations', $id, 'Date modifiée');
             jsonResponse(true, 'Date modifiée avec succès.');
@@ -250,17 +227,14 @@ class NoteController
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
         // Vérifier si des notes existent
-        $nbNotes = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM notes WHERE evaluation_id = :eid",
-            ['eid' => $id]
-        );
+        $nbNotes = $this->evaluationNoteService->countEvaluationNotes($id);
 
         if ($nbNotes > 0) {
             jsonResponse(false, "Impossible de supprimer : {$nbNotes} note(s) saisie(s). Supprimez d'abord les notes.", [], 409);
         }
 
         try {
-            $this->db->delete("DELETE FROM evaluations WHERE id = :id", ['id' => $id]);
+            $this->evaluationNoteService->deleteEvaluation($id);
             logActivity('Suppression', 'evaluations', $id, 'Évaluation supprimée');
             jsonResponse(true, 'Évaluation supprimée avec succès.');
         } catch (Exception $e) {
