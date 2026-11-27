@@ -58,7 +58,7 @@ Dépendance attendue : View/HTTP → Controller → Service → Repository → D
 |---|---|---|
 | 0 | Audit complet en lecture seule : comprendre le dépôt et cartographier les fonctionnalités | Audit préliminaire déjà réalisé dans le chat antérieur ; utiliser ses constats, vérifier uniquement les points nécessaires à l'écriture |
 | 1 | Infrastructure et démarrage : bootstrap, routage, réponses, helpers | Analyse préalable réalisée ; mise en œuvre MVC progressive en cours sur branche dédiée |
-| 2 | Authentification et permissions : connexion, sessions, rôles, utilisateurs | Analyse préalable commencée ; à reprendre après stabilisation des phases 0–1 |
+| 2 | Authentification et permissions : connexion, sessions, rôles, utilisateurs | Mise en œuvre progressive commencée sur la branche dédiée ; voir le suivi dans `docs/ARCHITECTURE.md`. Les parcours login/register/OAuth/session et les mutations CRUD restantes sont encore à migrer et vérifier |
 
 ## Interdictions explicites
 
@@ -72,3 +72,22 @@ Dépendance attendue : View/HTTP → Controller → Service → Repository → D
 ## Instruction à tout nouveau chat
 
 Commencer par lire ce fichier et `docs/ARCHITECTURE.md`, examiner la branche et les changements existants, puis continuer depuis l'état indiqué. Ne redémarrer aucun audit déjà effectué et ne répéter aucune modification déjà présente.
+
+
+## Phase 2 — Progression de la mise en œuvre (27 novembre 2026)
+
+Commits réalisés sur `refactor/mvc-phase-0-1` (aucun changement sur `main`) :
+
+- Les requêtes de liste administrative, détail utilisateur et historique d'authentification ont été déplacées du contrôleur `UtilisateurController` vers `UserRepository`, avec orchestration/formatage dans `UserAccountService`. Les paramètres de tri restent protégés par la même liste blanche ; pagination, champs de sortie, messages et structure JSON ont été conservés.
+- Les lectures rôles/permissions utilisées par `RoleController` passent maintenant par `RolePermissionService` et `RoleRepository`. Le contrôleur délègue également ses mutations au service existant, sans modifier les permissions exigées ni les réponses.
+- Le remplacement des permissions d'un rôle est désormais transactionnel dans le repository : une erreur annule la suppression/insertion partielle. Si l'utilisateur courant modifie les permissions de son propre rôle, le cache de permissions de la requête est rafraîchi après succès.
+
+### Périmètre encore à traiter en phase 2
+
+- Déplacer les requêtes SQL restantes de `UtilisateurController` et `RoleController` vers les repositories appropriés, sans perdre les transactions qui encadrent les opérations.
+- Séparer progressivement les responsabilités de `Security` (autorisation/cache et persistance rôles) sans casser ses API utilisées par les autres modules.
+- Revoir les parcours login, inscription, logout, OAuth, sessions, reset de mot de passe et rate-limit pour les placer dans les couches appropriées tout en conservant les contrats.
+- Tracer toutes les routes, vues et scripts JS qui appellent ces endpoints ; vérifier CSRF, permissions, accès aux ressources et réponses.
+- Exécuter les tests disponibles et les vérifications PHP dans un environnement PHP avant de considérer la phase terminée.
+
+**La phase 2 n'est pas terminée.** Les modifications sont une migration MVC par incréments ; aucun comportement ne doit être déclaré validé sans tests exécutés.
