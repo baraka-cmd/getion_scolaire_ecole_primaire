@@ -55,8 +55,24 @@ Avant chaque phase de refonte, lire `docs/MVC_REFACTORING_CONTRACT.md`. La refon
 - Les autres parties du bootstrap, routage, réponses et helpers doivent être migrées par petits changements après traçage de leurs usages.
 
 
-## Phase 2 — Authentification et permissions (mise en œuvre en cours)
+## Phase 2 — Authentification et permissions (implémentation MVC)
 
-Sur la branche `refactor/mvc-phase-0-1`, les lectures de liste/détail/historique utilisateurs ont été extraites de `UtilisateurController` vers `UserRepository` et `UserAccountService`. Les lectures de rôles et permissions de `RoleController` sont déléguées à `RolePermissionService` et `RoleRepository`. La mise à jour des permissions d'un rôle est désormais transactionnelle et rafraîchit le cache de permissions de l'utilisateur courant lorsque son propre rôle est modifié.
+La phase 2 a été mise en œuvre sur la branche `refactor/mvc-phase-0-1` par changements incrémentaux, sans modifier `main` :
 
-La phase reste ouverte : SQL et transactions CRUD restants, séparation progressive de `Security`, parcours login/register/logout/OAuth/session/réinitialisation, traces routes-vues-JS, tests de non-régression et vérifications PHP doivent être traités avant clôture. Lire `docs/MVC_REFACTORING_CONTRACT.md` et ce suivi avant de poursuivre.
+- `UtilisateurController` délègue les requêtes de liste, détail, historique, rôles actifs, existence email/login et les mutations CRUD à `UserAccountService`/`UserRepository`. La création conserve sa transaction dans le repository.
+- `RoleController` délègue la lecture et les mutations à `RolePermissionService`/`RoleRepository`. Les anciennes méthodes publiques de `Security` restent disponibles pour les autres modules.
+- `Security` conserve les décisions d'autorisation, la validation CSRF, la gestion du cache et les contrôles de session ; ses accès de persistance des rôles/permissions et la lecture de l'identité active sont délégués aux repositories.
+- `AuthController` conserve l'orchestration HTTP, la validation et la gestion de session, mais les requêtes de compte, la création transactionnelle, l'historique de tentative et la persistance OAuth sont délégués à `AuthAccountService`/`AuthRepository`.
+- `AuthRateLimitService` porte les règles de limitation et la validation des clés ; `AuthRateLimitRepository` porte les requêtes et la transaction atomique du compteur.
+- Les pages de récupération et de réinitialisation du mot de passe gardent leur HTML et leurs messages ; le traitement a été déplacé vers `PasswordResetController`, `PasswordResetService` et `PasswordResetRepository`. Le jeton reste haché, limité dans le temps, consommé transactionnellement et le mot de passe est mis à jour avec remise à zéro des tentatives.
+
+Les contrats de routes, validation, messages, paramètres du rate-limit, réponses et présentation des vues ont été conservés dans les chemins modifiés. Aucun schéma ni donnée de base n'a été modifié.
+
+**État de clôture :** la migration d'implémentation des parcours ciblés est effectuée, mais la phase ne doit pas être déclarée techniquement validée tant que le lint PHP, les tests de sécurité/authentification et les tests de non-régression ne sont pas exécutés dans l'environnement local avec la base de test. Les outils disponibles dans cette session n'ont pas permis de cloner le dépôt dans l'environnement d'exécution PHP ; aucun résultat de test ne doit donc être inventé.
+
+
+## Phase 2 — Journal de progression (27 novembre 2026)
+
+Derniers ajouts sur la branche dédiée : repositories et services pour le rate-limit et la réinitialisation du mot de passe ; contrôleurs des pages oubli/réinitialisation désormais sans SQL ; transactions de création utilisateur/Google et remplacement des permissions encapsulées dans les repositories. Les vues de récupération conservent leur structure HTML/CSS et leurs messages visibles.
+
+À la reprise, lire ce suivi et `docs/MVC_REFACTORING_CONTRACT.md`, récupérer la branche, exécuter `php -l` sur les fichiers modifiés et les tests `tests/auth_security_smoke.php`, `tests/google_oauth_config_smoke.php`, `tests/users_listing_smoke.php` et `tests/finance_auth_users_service_smoke.php` avec une base de test appropriée. Comparer ensuite les réponses et les flux de login, OAuth, reset, utilisateurs et rôles. Ne clôturer la validation qu'après ces résultats réels.
