@@ -13,6 +13,46 @@ final class InMemoryEvaluationNoteRepository extends EvaluationNoteRepository
     public array $studentIds = [10, 11];
     public array $maxima = [4 => 40.0];
     public array $studentNotes = [['valeur' => 17.0]];
+    public function isClassAndTermConsistent(int $classId, int $termId): bool
+    {
+        $this->calls[] = ['class-term', $classId, $termId];
+        return true;
+    }
+
+    public function evaluationExists(int $termId, int $classId, int $groupId, string $type): bool
+    {
+        $this->calls[] = ['duplicate', $termId, $classId, $groupId, $type];
+        return false;
+    }
+
+    public function insertEvaluation(int $termId, int $groupId, int $classId, string $type, string $date): int
+    {
+        $this->calls[] = ['create-evaluation', $termId, $groupId, $classId, $type, $date];
+        return 42;
+    }
+
+    public function evaluationIdExists(int $evaluationId): bool
+    {
+        $this->calls[] = ['evaluation-exists', $evaluationId];
+        return true;
+    }
+
+    public function countNotesForEvaluation(int $evaluationId): int
+    {
+        $this->calls[] = ['note-count', $evaluationId];
+        return 0;
+    }
+
+    public function updateEvaluationDate(int $evaluationId, string $date): void
+    {
+        $this->calls[] = ['evaluation-date', $evaluationId, $date];
+    }
+
+    public function deleteEvaluation(int $evaluationId): void
+    {
+        $this->calls[] = ['delete-evaluation', $evaluationId];
+    }
+
     public function findEvaluationList(array $filters): array
     {
         $this->calls[] = ['evaluation-list', $filters];
@@ -91,6 +131,17 @@ if ($service->getEvaluationList(['classe_id' => 2]) !== [['id' => 5]]
     || $service->getStudentNotes(10, 2) !== [['valeur' => 17.0]]) {
     throw new RuntimeException('Evaluation reads were not delegated through the service.');
 }
+
+$repository->calls = [];
+if (!$service->classAndTermAreConsistent(2, 3)
+    || $service->evaluationAlreadyExists(3, 2, 8, 'Examen')
+    || $service->createEvaluation(3, 8, 2, 'Examen', '2026-11-20') !== 42
+    || !$service->evaluationExists(42)
+    || $service->countEvaluationNotes(42) !== 0) {
+    throw new RuntimeException('Evaluation CRUD service contract failed.');
+}
+$service->updateEvaluationDate(42, '2026-11-21');
+$service->deleteEvaluation(42);
 
 $repository->calls = [];
 $repository->existingId = 7;
