@@ -1,19 +1,32 @@
 # Phase 12 — Tableaux de bord : statistiques et indicateurs
 
 ## Contrat
-Lire `docs/MVC_REFACTORING_CONTRACT.md` et `docs/ARCHITECTURE.md`. Conserver les mêmes indicateurs, calculs, unités monétaires, année scolaire, données visibles selon le rôle, routes et réponses AJAX.
+Lire `docs/MVC_REFACTORING_CONTRACT.md` et `docs/ARCHITECTURE.md`. Conserver les indicateurs, calculs, unités monétaires, année scolaire, périmètre des données par rôle, routes, HTML/JS et réponses AJAX.
 
-## Audit ciblé et lot réalisé
-- Le projet possédait déjà `DashboardService` et `DashboardRepository` pour les données graphiques AJAX, mais la page principale Admin/Directeur recalculait en SQL ses 8 KPI directement dans la vue.
-- La vue administrative délègue désormais le chargement initial des KPI au `DashboardController`, qui orchestre `DashboardService` et `DashboardRepository`. Les valeurs par défaut et le calcul de l'évolution mensuelle restent identiques.
-- Le contrôleur ne conserve plus de dépendance `Database` inutilisée.
-- Les actions AJAX des graphiques sont maintenant protégées côté serveur par le rôle Admin/Directeur. Les vérifications de méthode HTTP et AJAX restent en place. Les données financières agrégées ne reposent pas sur le seul masquage de l'interface.
+## Lot déjà fusionné
+- La page Admin/Directeur délègue ses KPI initiaux au `DashboardController` → `DashboardService` → `DashboardRepository`.
+- Les actions AJAX graphiques sont contrôlées côté serveur (Admin/Directeur), méthode HTTP et AJAX.
+- CI/smoke du lot initial : voir `tests/phase12_dashboard_mvc_smoke.php` et workflow `.github/workflows/phase-12-dashboards.yml`.
 
-## État — Phase non clôturée
-Ce lot est une première migration contrôlée, pas la clôture de toute la phase. Les vues des tableaux de bord Enseignant, Parent, Comptable et Secrétaire contiennent encore des lectures SQL directes et nécessitent un inventaire/migration propre à chaque domaine. Les indicateurs comptables ne doivent pas être recalculés hors des règles et services finance existants. La suite doit préserver le périmètre exact d'accès aux classes de l'enseignant et aux enfants liés du parent (risques IDOR/BOLA).
+## Parcours restant, précis
+Les quatre vues suivantes ont encore des appels directs `$db->fetchOne/fetchAll/fetchColumn`. Elles ne sont donc pas encore conformes au contrat MVC.
 
-## Contrôles
-- Smoke test sans base : `tests/phase12_dashboard_mvc_smoke.php`.
-- CI : syntaxe PHP des fichiers modifiés + smoke test.
-- À réaliser localement avec XAMPP : vérifier les chiffres de KPI par comparaison avec l'ancienne page, les permissions Admin/Directeur/autres rôles, graphiques AJAX, classes sans élèves/année active absente et affichage d'erreur base.
-- Aucun test de navigateur ou de base XAMPP n'est prétendu exécuté par ce lot.
+| Vue | Responsabilités à déplacer | Protection métier à préserver |
+|---|---|---|
+| `enseignant.php` | classe affectée, effectif, présence quotidienne et mensuelle, notes du trimestre, genre, absences, examens, élèves en difficulté, anniversaires | classe déterminée depuis l'utilisateur connecté ; aucun identifiant de classe fourni par le navigateur |
+| `parent.php` | parent lié à l'utilisateur, enfants liés, moyenne, absences/retards par trimestre, solde, événements, messages et notifications | filtrage strict via `eleve_parent` ; ne jamais afficher un enfant non lié |
+| `comptable.php` | année active, soldes/impayés, reçus du mois, échéances, suivis, séries mensuelles, soldes par classe, états de dette, derniers reçus | garder les calculs USD/CDF, annulations et affectations dans les règles financières existantes ; pas de montant calculé par le client |
+| `secretaire.php` | effectifs, enseignants/classes, inscriptions récentes/en attente, distribution par sexe, événements, absences du jour, messages | année scolaire et données de l'établissement cohérentes ; autorisations de rôle côté serveur |
+
+## Étapes et validation
+- [x] Première délégation KPI Admin/Directeur fusionnée.
+- [x] Autorisation serveur sur endpoints graphiques globaux.
+- [x] Vues et SQL résiduels identifiés par rôle.
+- [ ] Extraire chaque rôle vers repository/service spécialisé, sans mélanger les domaines.
+- [ ] Faire passer les vues à une consommation de données préparées par contrôleur/service.
+- [ ] Tests automatisés de contrat : absence de SQL dans ces vues, scoping parent/enseignant, calculs comptables, année active et cas sans données.
+- [ ] Vérification de diff et CI verte.
+- [ ] Tests fonctionnels XAMPP : comparaison ancienne/nouvelle page, rôles, graphiques, cas limites.
+
+## État
+**Phase 12 non clôturée.** Les tests smoke/CI du lot précédent ne prouvent pas la conformité des quatre vues restantes. Aucun test XAMPP/navigateur n'est déclaré exécuté à distance.

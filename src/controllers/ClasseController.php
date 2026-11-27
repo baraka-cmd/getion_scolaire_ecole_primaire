@@ -10,12 +10,10 @@ require_once __DIR__ . '/../services/ClasseService.php';
 
 class ClasseController
 {
-    private Database $db;
     private ClasseService $classeService;
 
     public function __construct(?ClasseService $classeService = null)
     {
-        $this->db = Database::getInstance();
         $this->classeService = $classeService ?? new ClasseService();
     }
 
@@ -170,45 +168,17 @@ class ClasseController
         }
 
         try {
-            $this->db->beginTransaction();
-
-            $classeId = $this->db->insert(
-                "INSERT INTO classes (nom, niveau, salle, capacite_max, annee_scolaire_id, description, est_actif)
-                 VALUES (:nom, :niveau, :salle, :capacite, :annee, :description, 1)",
+$classeId = $this->classeService->createWithHolder(
                 [
-                    'nom'         => formatNom($nom),
-                    'niveau'      => $niveau,
-                    'salle'       => mb_strtoupper(trim($salle)),
-                    'capacite'    => $capaciteMax,
-                    'annee'       => $anneeId,
-                    'description' => $description ?: null
-                ]
+                    'nom' => formatNom($nom), 'niveau' => $niveau,
+                    'salle' => mb_strtoupper(trim($salle)), 'capacite' => $capaciteMax,
+                    'annee' => $anneeId, 'description' => $description ?: null
+                ],
+                $titulaireId
             );
-
-            // Assigner le titulaire si fourni
-            if ($titulaireId > 0) {
-                // Vérifier que l'enseignant n'est pas déjà titulaire d'une autre classe
-                $dejaTitulaire = $this->classeService->findTeacherClass($titulaireId);
-                if ($dejaTitulaire) {
-                    $this->db->update(
-                        "UPDATE enseignants SET classe_id = NULL WHERE id = :eid",
-                        ['eid' => $titulaireId]
-                    );
-                }
-                $this->db->update(
-                    "UPDATE enseignants SET classe_id = :classe WHERE id = :eid",
-                    ['classe' => $classeId, 'eid' => $titulaireId]
-                );
-            }
-
-            $this->db->commit();
-
             logActivity('Création', 'classes', $classeId, "Classe créée : {$nom}");
-
             jsonResponse(true, 'Classe créée avec succès.', ['id' => $classeId]);
-
         } catch (Exception $e) {
-            $this->db->rollback();
             error_log('Erreur création classe: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la création de la classe.');
         }
@@ -266,52 +236,18 @@ class ClasseController
         }
 
         try {
-            $this->db->beginTransaction();
-
-            $this->db->update(
-                "UPDATE classes 
-                 SET nom = :nom, niveau = :niveau, salle = :salle, capacite_max = :capacite,
-                     annee_scolaire_id = :annee, description = :description
-                 WHERE id = :id",
+$this->classeService->updateWithHolder(
+                $id,
                 [
-                    'nom'         => formatNom($nom),
-                    'niveau'      => $niveau,
-                    'salle'       => mb_strtoupper(trim($salle)),
-                    'capacite'    => $capaciteMax,
-                    'annee'       => $anneeId,
-                    'description' => $description ?: null,
-                    'id'          => $id
-                ]
+                    'nom' => formatNom($nom), 'niveau' => $niveau,
+                    'salle' => mb_strtoupper(trim($salle)), 'capacite' => $capaciteMax,
+                    'annee' => $anneeId, 'description' => $description ?: null, 'id' => $id
+                ],
+                $titulaireId
             );
-
-            // Gérer le changement de titulaire
-            if ($titulaireId > 0) {
-                // Libérer l'ancien titulaire
-                $this->db->update(
-                    "UPDATE enseignants SET classe_id = NULL WHERE classe_id = :cid AND id != :eid",
-                    ['cid' => $id, 'eid' => $titulaireId]
-                );
-                // Assigner le nouveau
-                $this->db->update(
-                    "UPDATE enseignants SET classe_id = :cid WHERE id = :eid",
-                    ['cid' => $id, 'eid' => $titulaireId]
-                );
-            } else {
-                // Libérer le titulaire actuel
-                $this->db->update(
-                    "UPDATE enseignants SET classe_id = NULL WHERE classe_id = :cid",
-                    ['cid' => $id]
-                );
-            }
-
-            $this->db->commit();
-
             logActivity('Modification', 'classes', $id, "Classe modifiée : {$nom}");
-
             jsonResponse(true, 'Classe modifiée avec succès.');
-
         } catch (Exception $e) {
-            $this->db->rollback();
             error_log('Erreur modification classe: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la modification.');
         }
@@ -343,19 +279,9 @@ class ClasseController
         }
 
         try {
-            // Libérer le titulaire
-            $this->db->update("UPDATE enseignants SET classe_id = NULL WHERE classe_id = :cid", ['cid' => $id]);
-
-            // Supprimer l'emploi du temps
-            $this->db->delete("DELETE FROM emploi_du_temps WHERE classe_id = :cid", ['cid' => $id]);
-
-            // Supprimer la classe
-            $this->db->delete("DELETE FROM classes WHERE id = :id", ['id' => $id]);
-
+$this->classeService->deleteWithSchedule($id);
             logActivity('Suppression', 'classes', $id, "Classe supprimée : {$classe['nom']}");
-
             jsonResponse(true, 'Classe supprimée avec succès.');
-
         } catch (Exception $e) {
             error_log('Erreur suppression classe: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la suppression.');

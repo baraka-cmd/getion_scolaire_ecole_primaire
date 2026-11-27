@@ -241,4 +241,96 @@ class ClasseRepository
             ['class_id' => $classId, 'teacher_id' => $teacherId]
         );
     }
+
+    /**
+     * Crée la classe et assigne son titulaire dans une transaction.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function createWithHolder(array $data, int $teacherId): int
+    {
+        $this->db->beginTransaction();
+
+        try {
+            $id = $this->db->insert(
+                "INSERT INTO classes
+                    (nom, niveau, salle, capacite_max, annee_scolaire_id, description, est_actif)
+                 VALUES
+                    (:nom, :niveau, :salle, :capacite, :annee, :description, 1)",
+                $data
+            );
+
+            if ($teacherId > 0) {
+                $this->releaseTeacherFromClass($teacherId);
+                $this->assignTeacherToClass($teacherId, (int) $id);
+            }
+
+            $this->db->commit();
+
+            return (int) $id;
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
+
+    /**
+     * Met à jour les données et le titulaire de classe atomiquement.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function updateWithHolder(int $id, array $data, int $teacherId): void
+    {
+        $this->db->beginTransaction();
+
+        try {
+            $this->db->update(
+                "UPDATE classes
+                 SET nom = :nom, niveau = :niveau, salle = :salle,
+                     capacite_max = :capacite, annee_scolaire_id = :annee,
+                     description = :description
+                 WHERE id = :id",
+                $data
+            );
+
+            if ($teacherId > 0) {
+                $this->db->update(
+                    "UPDATE enseignants SET classe_id = NULL
+                     WHERE classe_id = :cid AND id != :eid",
+                    ['cid' => $id, 'eid' => $teacherId]
+                );
+                $this->assignTeacherToClass($teacherId, $id);
+            } else {
+                $this->releaseClassHolder($id);
+            }
+
+            $this->db->commit();
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
+
+    /** Supprime planning, titulaire et classe dans une transaction. */
+    public function deleteWithSchedule(int $id): void
+    {
+        $this->db->beginTransaction();
+
+        try {
+            $this->releaseClassHolder($id);
+            $this->db->delete(
+                'DELETE FROM emploi_du_temps WHERE classe_id = :cid',
+                ['cid' => $id]
+            );
+            $this->db->delete(
+                'DELETE FROM classes WHERE id = :id',
+                ['id' => $id]
+            );
+
+            $this->db->commit();
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
 }
