@@ -45,6 +45,9 @@ class StudentRecordRepositoryFake extends StudentRecordRepository
     public function payments(int $studentId): array { return []; }
     public function summaryStats(): array { return ['total_actifs' => 8, 'total_garcons' => 4, 'total_filles' => 4, 'nouvelles_inscriptions' => 2]; }
     public function exportRows(array $filters, string $role, int $userId): array { $this->received['export'] = compact('filters', 'role', 'userId'); return [['matricule' => 'EL-1']]; }
+    public function updateProfile(int $studentId, array $data): void { $this->received['update'] = compact('studentId', 'data'); }
+    public function deactivate(int $studentId, string $reason): void { $this->received['deactivate'] = compact('studentId', 'reason'); }
+    public function transferEnrollment(int $studentId, int $newClassId, string $reason): array { $this->received['transfer'] = compact('studentId', 'newClassId', 'reason'); return ['success' => true, 'capacity' => 20]; }
 }
 
 class StudentAccessRepositoryFake extends StudentAccessRepository
@@ -88,6 +91,12 @@ $stats = $service->summaryStats();
 studentAssert($stats['total_actifs'] === 8 && $stats['total_filles'] === 4, 'statistiques liste transmises');
 $export = $service->exportRows(['classe_id' => 2], 'Parent', 9);
 studentAssert($export[0]['matricule'] === 'EL-1', 'export délégué au repository');
+$service->updateProfile(17, ['nom' => 'Test']);
+studentAssert($repository->received['update']['studentId'] === 17, 'modification déléguée');
+$service->deactivate(17, 'Motif test');
+studentAssert($repository->received['deactivate']['reason'] === 'Motif test', 'désactivation déléguée');
+$transfer = $service->transferEnrollment(17, 4, 'Mutation');
+studentAssert($transfer['success'] && $repository->received['transfer']['newClassId'] === 4, 'transfert délégué');
 
 $accessRepository = new StudentAccessRepositoryFake();
 $policy = new StudentAccessPolicy(null, $accessRepository);
