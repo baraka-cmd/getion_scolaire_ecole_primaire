@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
 }
 
 // Récupérer les paramètres actuels
-$params = $db->fetchOne("SELECT * FROM parametres_ecole WHERE id = 1");
+$params = $schoolSettingsService->getSettings();
 if (!$params) {
     $params = [
         'nom_ecole'              => ECOLE_NOM,
@@ -52,11 +52,8 @@ if (!$params) {
 }
 
 // Récupérer les années et trimestres pour les sélecteurs
-$annees = $db->fetchAll("SELECT * FROM annees_scolaires ORDER BY date_debut DESC");
-$trimestres = $db->fetchAll(
-    "SELECT * FROM trimestres WHERE annee_scolaire_id = :aid ORDER BY numero",
-    ['aid' => $params['annee_scolaire_active_id'] ?? 0]
-);
+$annees = $schoolSettingsService->getSchoolYears();
+$trimestres = $schoolSettingsService->getTerms((int) ($params['annee_scolaire_active_id'] ?? 0));
 
 $pageTitle = 'Paramètres de l\'école';
 $pageIcon  = 'fa-gear';
