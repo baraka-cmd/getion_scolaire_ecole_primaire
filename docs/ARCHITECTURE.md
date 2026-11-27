@@ -53,3 +53,10 @@ Avant chaque phase de refonte, lire `docs/MVC_REFACTORING_CONTRACT.md`. La refon
 - Phase 0 : audit en lecture seule déjà effectué dans le travail précédent ; conserver sa cartographie comme référence et ne pas recommencer inutilement.
 - Phase 1 : infrastructure en migration progressive. La page 404 auparavant intégrée au routeur a été extraite dans `public/views/errors/404.php`; le routeur conserve la définition du statut HTTP 404 et délègue le rendu à cette vue. Le HTML/CSS et les liens de présentation ont été conservés tels quels.
 - Les autres parties du bootstrap, routage, réponses et helpers doivent être migrées par petits changements après traçage de leurs usages.
+
+
+## Phase 2 — Authentification et permissions (mise en œuvre en cours)
+
+Sur la branche `refactor/mvc-phase-0-1`, les lectures de liste/détail/historique utilisateurs ont été extraites de `UtilisateurController` vers `UserRepository` et `UserAccountService`. Les lectures de rôles et permissions de `RoleController` sont déléguées à `RolePermissionService` et `RoleRepository`. La mise à jour des permissions d'un rôle est désormais transactionnelle et rafraîchit le cache de permissions de l'utilisateur courant lorsque son propre rôle est modifié.
+
+La phase reste ouverte : SQL et transactions CRUD restants, séparation progressive de `Security`, parcours login/register/logout/OAuth/session/réinitialisation, traces routes-vues-JS, tests de non-régression et vérifications PHP doivent être traités avant clôture. Lire `docs/MVC_REFACTORING_CONTRACT.md` et ce suivi avant de poursuivre.
