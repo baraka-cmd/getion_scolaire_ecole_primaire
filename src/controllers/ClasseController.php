@@ -139,10 +139,7 @@ class ClasseController
             $errors['nom'] = 'Maximum 50 caractères.';
         } else {
             // Vérifier l'unicité pour la même année
-            $existe = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM classes WHERE nom = :nom AND annee_scolaire_id = :annee",
-                ['nom' => trim($nom), 'annee' => $anneeId]
-            );
+            $existe = $this->classeService->countNameInYear(trim($nom), $anneeId);
             if ($existe > 0) $errors['nom'] = 'Cette classe existe déjà pour cette année scolaire.';
         }
 
@@ -156,10 +153,7 @@ class ClasseController
             $errors['salle'] = 'Maximum 20 caractères.';
         } else {
             // Vérifier que la salle n'est pas déjà utilisée pour cette année
-            $salleExistante = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM classes WHERE salle = :salle AND annee_scolaire_id = :annee",
-                ['salle' => trim($salle), 'annee' => $anneeId]
-            );
+            $salleExistante = $this->classeService->countRoomInYear(trim($salle), $anneeId);
             if ($salleExistante > 0) $errors['salle'] = 'Cette salle est déjà attribuée pour cette année.';
         }
 
@@ -194,10 +188,7 @@ class ClasseController
             // Assigner le titulaire si fourni
             if ($titulaireId > 0) {
                 // Vérifier que l'enseignant n'est pas déjà titulaire d'une autre classe
-                $dejaTitulaire = $this->db->fetchColumn(
-                    "SELECT classe_id FROM enseignants WHERE id = :eid",
-                    ['eid' => $titulaireId]
-                );
+                $dejaTitulaire = $this->classeService->findTeacherClass($titulaireId);
                 if ($dejaTitulaire) {
                     $this->db->update(
                         "UPDATE enseignants SET classe_id = NULL WHERE id = :eid",
@@ -242,7 +233,7 @@ class ClasseController
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
         // Vérifier que la classe existe
-        $classe = $this->db->fetchOne("SELECT id, nom FROM classes WHERE id = :id", ['id' => $id]);
+        $classe = $this->classeService->findBasic($id);
         if (!$classe) jsonResponse(false, 'Classe introuvable.', [], 404);
 
         $errors = [];
@@ -250,20 +241,14 @@ class ClasseController
         if (isBlank($nom)) $errors['nom'] = 'Le nom est obligatoire.';
         elseif (mb_strlen($nom) < 2) $errors['nom'] = 'Minimum 2 caractères.';
         else {
-            $existe = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM classes WHERE nom = :nom AND annee_scolaire_id = :annee AND id != :id",
-                ['nom' => trim($nom), 'annee' => $anneeId, 'id' => $id]
-            );
+            $existe = $this->classeService->countNameInYear(trim($nom), $anneeId, $id);
             if ($existe > 0) $errors['nom'] = 'Ce nom existe déjà pour cette année.';
         }
 
         if ($niveau < 1 || $niveau > 12) $errors['niveau'] = 'Niveau invalide (1-12).';
         if (isBlank($salle)) $errors['salle'] = 'La salle est obligatoire.';
         else {
-            $salleExistante = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM classes WHERE salle = :salle AND annee_scolaire_id = :annee AND id != :id",
-                ['salle' => trim($salle), 'annee' => $anneeId, 'id' => $id]
-            );
+            $salleExistante = $this->classeService->countRoomInYear(trim($salle), $anneeId, $id);
             if ($salleExistante > 0) $errors['salle'] = 'Cette salle est déjà attribuée.';
         }
 
@@ -271,10 +256,7 @@ class ClasseController
         if ($anneeId <= 0) $errors['annee_scolaire_id'] = 'L\'année scolaire est obligatoire.';
 
         // Vérifier que la capacité n'est pas inférieure au nombre d'élèves actuels
-        $nbEleves = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif'",
-            ['cid' => $id]
-        );
+        $nbEleves = $this->classeService->countActiveStudents($id);
         if ($capaciteMax < $nbEleves) {
             $errors['capacite_max'] = "Capacité insuffisante ({$nbEleves} élèves inscrits).";
         }
@@ -345,23 +327,17 @@ class ClasseController
         $id = (int) post('id', 0);
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $classe = $this->db->fetchOne("SELECT id, nom FROM classes WHERE id = :id", ['id' => $id]);
+        $classe = $this->classeService->findBasic($id);
         if (!$classe) jsonResponse(false, 'Classe introuvable.', [], 404);
 
         // Vérifier les élèves inscrits
-        $nbEleves = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid",
-            ['cid' => $id]
-        );
+        $nbEleves = $this->classeService->countStudents($id);
         if ($nbEleves > 0) {
             jsonResponse(false, "Impossible de supprimer cette classe : {$nbEleves} élève(s) y sont inscrits.", [], 409);
         }
 
         // Vérifier les évaluations
-        $nbEvaluations = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM evaluations WHERE classe_id = :cid",
-            ['cid' => $id]
-        );
+        $nbEvaluations = $this->classeService->countEvaluations($id);
         if ($nbEvaluations > 0) {
             jsonResponse(false, "Impossible de supprimer cette classe : des évaluations y sont liées.", [], 409);
         }
