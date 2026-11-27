@@ -362,21 +362,7 @@ class DocumentController
      */
     public function getDocumentsRecents(int $limite = 5): array
     {
-        $where = hasRole(['Admin', 'Directeur']) ? '' : 'WHERE d.est_public = 1';
-
-        return $this->db->fetchAll(
-            "SELECT d.*, 
-                    d.nom_fichier AS nom_original,
-                    d.extension AS type_fichier,
-                    DATE_FORMAT(d.created_at, '%d/%m/%Y') AS date_format,
-                    CONCAT(u.prenom, ' ', u.nom) AS upload_par_nom
-             FROM documents d
-             LEFT JOIN utilisateurs u ON d.utilisateur_id = u.id
-             {$where}
-             ORDER BY d.created_at DESC
-             LIMIT :limite",
-            ['limite' => $limite]
-        );
+        return $this->documentService->findRecent(hasRole(['Admin', 'Directeur']), $limite);
     }
 
     /**
@@ -384,21 +370,13 @@ class DocumentController
      */
     public function getStatsDocuments(): array
     {
-        $isAdmin = hasRole(['Admin', 'Directeur']);
-        $where = $isAdmin ? '' : 'WHERE est_public = 1';
-        $total = (int) $this->db->fetchColumn("SELECT COUNT(*) FROM documents {$where}");
-        $tailleTotale = (int) $this->db->fetchColumn("SELECT COALESCE(SUM(taille_fichier), 0) FROM documents {$where}");
-        $nbPublics = (int) $this->db->fetchColumn("SELECT COUNT(*) FROM documents WHERE est_public = 1");
-        $nbCeMois = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM documents " . ($isAdmin ? "WHERE " : "WHERE est_public = 1 AND ")
-            . "MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())"
-        );
-
+        $stats = $this->documentService->statistics(hasRole(['Admin', 'Directeur']));
+        $size = (int) $stats['total_size'];
         return [
-            'total'        => $total,
-            'taille_totale'=> $tailleTotale > 1048576 ? round($tailleTotale / 1048576, 1) . ' Mo' : round($tailleTotale / 1024, 1) . ' Ko',
-            'nb_publics'   => $nbPublics,
-            'nb_ce_mois'   => $nbCeMois
+            'total' => $stats['total'],
+            'taille_totale' => $size > 1048576 ? round($size / 1048576, 1) . ' Mo' : round($size / 1024, 1) . ' Ko',
+            'nb_publics' => $stats['public_count'],
+            'nb_ce_mois' => $stats['current_month_count'],
         ];
     }
 
@@ -407,10 +385,7 @@ class DocumentController
      */
     public function telecharger(int $docId): void
     {
-        $document = $this->db->fetchOne(
-            "SELECT id, nom_fichier, chemin_fichier, est_public FROM documents WHERE id = :id",
-            ['id' => $docId]
-        );
+        $document = $this->documentService->findMetadata($docId);
 
         if (!$document) {
             setFlash('error', 'Document introuvable.');
