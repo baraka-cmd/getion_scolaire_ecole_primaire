@@ -12,8 +12,6 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('paiements.consulter');
 
-global $db;
-
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'PaiementController.php';
 $paiementController = new PaiementController();
 
@@ -160,7 +158,7 @@ require_once VIEWS_PATH . 'templates' . DIRECTORY_SEPARATOR . 'header.php';
                             <td><?= e(ucfirst($fraisItem['periodicite'])) ?> · échéance le <?= (int) $fraisItem['jour_echeance'] ?></td>
                             <td>
                                 <?php if ($fraisItem['classe_id']): 
-                                    $classeFrais = $db->fetchOne("SELECT nom FROM classes WHERE id = :id", ['id' => $fraisItem['classe_id']]);
+                                    $classeFrais = ['nom' => $paymentReadController->getClassName((int) $fraisItem['classe_id'])];
                                     echo e($classeFrais['nom'] ?? '—');
                                 else: ?>
                                     <span class="badge badge-info">Toutes les classes</span>
