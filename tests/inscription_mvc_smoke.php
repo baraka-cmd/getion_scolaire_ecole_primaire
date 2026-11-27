@@ -44,4 +44,31 @@ if ($repository->calls[1] !== ['availableClasses', 0] || $service->findEnrollmen
 if (!str_contains(file_get_contents(__DIR__ . '/../src/controllers/InscriptionController.php'), '$this->inscriptionService->paginate')) {
     throw new RuntimeException('Inscription controller has not delegated its list query.');
 }
-fwrite(STDOUT, "Phase 6 enrollment MVC smoke tests passed.\n");
+$invalidRegistration = $service->createEnrollment(0, 0, 'Actif');
+if ($invalidRegistration['ok'] || !isset($invalidRegistration['errors']['eleve_id'], $invalidRegistration['errors']['classe_id'])) {
+    throw new RuntimeException('Invalid enrollment IDs must be rejected before persistence.');
+}
+if ($service->changeClass(4, 2, 0)['status'] !== 400) {
+    throw new RuntimeException('Invalid class transfer parameters must be rejected.');
+}
+if ($service->discontinue(2, 'Actif', 'motif')['status'] !== 400) {
+    throw new RuntimeException('Invalid closure status must be rejected.');
+}
+if ($service->discontinue(2, 'Abandon', '   ')['status'] !== 422) {
+    throw new RuntimeException('Closure reason must be required.');
+}
+$controller = file_get_contents(__DIR__ . '/../src/controllers/InscriptionController.php');
+if (preg_match('/\\b(?:SELECT|INSERT|UPDATE|DELETE)\\b/i', $controller)) {
+    throw new RuntimeException('SQL must not remain in the enrollment controller.');
+}
+foreach (['nouvelle.php', 'liste.php', 'reinscription.php'] as $view) {
+    $source = file_get_contents(__DIR__ . '/../public/views/modules/inscriptions/' . $view);
+    if (preg_match('/\\b(?:SELECT|INSERT|UPDATE|DELETE)\\b/i', $source)) {
+        throw new RuntimeException('SQL must not remain in enrollment views: ' . $view);
+    }
+}
+$repositorySource = file_get_contents(__DIR__ . '/../src/repositories/InscriptionRepository.php');
+if (!str_contains($repositorySource, 'FOR UPDATE') || !str_contains($repositorySource, 'beginTransaction')) {
+    throw new RuntimeException('Enrollment writes must be transactionally protected.');
+}
+fwrite(STDOUT, "Phase 6 enrollment MVC/security smoke tests passed.\\n");
