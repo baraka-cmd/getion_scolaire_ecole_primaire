@@ -21,66 +21,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
     $paiementController->handleAjax();
 }
 
-$anneeActiveId = (int) $db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-$annees = $db->fetchAll("SELECT id, libelle FROM annees_scolaires ORDER BY date_debut DESC");
-$anneeId = (int) ($_GET['annee_id'] ?? $anneeActiveId);
-if (!(int) $db->fetchColumn("SELECT COUNT(*) FROM annees_scolaires WHERE id = :id", ['id' => $anneeId])) {
-    $anneeId = $anneeActiveId;
-}
-$classes = $paiementController->getClassesActives($anneeId);
-
-$totauxVersements = $db->fetchOne(
-    "SELECT
-        COALESCE(SUM(CASE WHEN v.devise_recue = 'USD' THEN v.montant_recu ELSE 0 END), 0) AS total_usd,
-        COALESCE(SUM(CASE WHEN v.devise_recue = 'CDF' THEN v.montant_recu ELSE 0 END), 0) AS total_cdf,
-        COUNT(DISTINCT v.id) AS nb_versements
-     FROM finance_versements v
-     INNER JOIN (
-         SELECT a.versement_id, MIN(cr.annee_scolaire_id) AS annee_scolaire_id
-         FROM finance_affectations a
-         INNER JOIN finance_creances cr ON cr.id = a.creance_id
-         GROUP BY a.versement_id
-     ) cr ON cr.versement_id = v.id
-     LEFT JOIN finance_annulations an ON an.versement_id = v.id
-     WHERE cr.annee_scolaire_id = :annee AND an.id IS NULL",
-    ['annee' => $anneeId]
-);
-$totauxMois = $db->fetchOne(
-    "SELECT
-        COALESCE(SUM(CASE WHEN v.devise_recue = 'USD' THEN v.montant_recu ELSE 0 END), 0) AS mois_usd,
-        COALESCE(SUM(CASE WHEN v.devise_recue = 'CDF' THEN v.montant_recu ELSE 0 END), 0) AS mois_cdf,
-        COUNT(DISTINCT v.id) AS nb_versements_mois
-     FROM finance_versements v
-     INNER JOIN (
-         SELECT a.versement_id, MIN(cr.annee_scolaire_id) AS annee_scolaire_id
-         FROM finance_affectations a
-         INNER JOIN finance_creances cr ON cr.id = a.creance_id
-         GROUP BY a.versement_id
-     ) cr ON cr.versement_id = v.id
-     LEFT JOIN finance_annulations an ON an.versement_id = v.id
-     WHERE cr.annee_scolaire_id = :annee AND an.id IS NULL
-       AND YEAR(v.date_versement) = YEAR(CURDATE()) AND MONTH(v.date_versement) = MONTH(CURDATE())",
-    ['annee' => $anneeId]
-);
-$nbImpayes = (int) $db->fetchColumn(
-    "SELECT COUNT(DISTINCT cr.eleve_id)
-     FROM finance_creances cr
-     LEFT JOIN (
-         SELECT a.creance_id, SUM(a.montant_affecte) AS montant_paye
-         FROM finance_affectations a
-         INNER JOIN finance_versements v ON v.id = a.versement_id
-         LEFT JOIN finance_annulations an ON an.versement_id = v.id
-         WHERE an.id IS NULL GROUP BY a.creance_id
-     ) p ON p.creance_id = cr.id
-     WHERE cr.annee_scolaire_id = :annee
-       AND GREATEST(cr.montant_du - COALESCE(p.montant_paye, 0), 0) > 0",
-    ['annee' => $anneeId]
-);
-$nbElevesTotal = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions
-     WHERE annee_scolaire_id = :annee AND statut IN ('Actif', 'Redoublant')",
-    ['annee' => $anneeId]
-);
+require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'PaymentReadController.php';
+$paymentReadController = new PaymentReadController();
+extract($paymentReadController->getViewData('liste', $_GET), EXTR_OVERWRITE);
 
 $pageTitle = 'Gestion des paiements';
 $pageIcon  = 'fa-money-bill-wave';
