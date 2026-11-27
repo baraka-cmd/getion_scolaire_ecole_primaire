@@ -33,6 +33,16 @@ class UserAccountService
         return $this->repository->create($data);
     }
 
+    public function createTransactional(array $data): int
+    {
+        return $this->repository->createTransactional($data);
+    }
+
+    public function getActiveRoles(): array
+    {
+        return $this->repository->getActiveRoles();
+    }
+
     public function update(int $userId, array $data): void
     {
         $this->repository->update($userId, $data);
