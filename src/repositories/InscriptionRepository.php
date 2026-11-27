@@ -141,7 +141,7 @@ class InscriptionRepository
              WHERE e.est_actif = 1
                AND e.id NOT IN (
                    SELECT eleve_id FROM inscriptions
-                   WHERE annee_scolaire_id = :aid AND statut = 'Actif'
+                   WHERE annee_scolaire_id = :aid AND statut IN ('Actif', 'Redoublant')
                )
              ORDER BY e.nom, e.prenom",
             ['aid' => $activeYear]
