@@ -53,4 +53,9 @@ class DocumentService
     {
         return $this->repository->findRecent($admin, max(1, $limit));
     }
+    public function statistics(bool $admin): array
+    {
+        return $this->repository->statistics($admin);
+    }
+
 }
