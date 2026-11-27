@@ -516,45 +516,20 @@ class NoteController
             jsonResponse(false, 'Aucune note à enregistrer (JSON invalide).', [], 400);
         }
 
-        $evaluation = $this->db->fetchOne(
-            "SELECT ev.id, ev.classe_id, ev.groupe_id, ev.type_evaluation,
-                    c.annee_scolaire_id
-             FROM evaluations ev
-             INNER JOIN trimestres t ON t.id = ev.trimestre_id
-             INNER JOIN classes c ON c.id = ev.classe_id
-                 AND c.annee_scolaire_id = t.annee_scolaire_id
-             WHERE ev.id = :id",
-            ['id' => $evaluationId]
-        );
+        $evaluation = $this->evaluationNoteService->getEntryContext($evaluationId);
         if (!$evaluation || !$this->canCurrentUserManageEvaluation($evaluationId)) {
             jsonResponse(false, 'Évaluation introuvable.', [], 404);
         }
 
-        $studentIds = array_map('intval', array_column(
-            $this->db->fetchAll(
-                "SELECT i.eleve_id
-                 FROM inscriptions i
-                 INNER JOIN eleves e ON e.id = i.eleve_id AND e.est_actif = 1
-                 WHERE i.classe_id = :class_id
-                   AND i.annee_scolaire_id = :year_id
-                   AND i.statut = 'Actif'",
-                ['class_id' => $evaluation['classe_id'], 'year_id' => $evaluation['annee_scolaire_id']]
-            ),
-            'eleve_id'
-        ));
-        $subjectRows = $this->db->fetchAll(
-            "SELECT sm.id, COALESCE(cm.maxima_override, sm.maxima) AS maxima
-             FROM matieres sm
-             INNER JOIN classe_matieres cm ON cm.matiere_id = sm.id
-                 AND cm.classe_id = :class_id AND cm.est_active = 1
-             WHERE sm.parent_id = :group_id AND sm.est_groupe = 0 AND sm.est_actif = 1",
-            ['class_id' => $evaluation['classe_id'], 'group_id' => $evaluation['groupe_id']]
+        $studentIds = $this->evaluationNoteService->getActiveStudentIds(
+            (int) $evaluation['classe_id'],
+            (int) $evaluation['annee_scolaire_id']
         );
-        $subjectMaxima = [];
-        foreach ($subjectRows as $subject) {
-            $subjectMaxima[(int) $subject['id']] = (float) $subject['maxima']
-                * ($evaluation['type_evaluation'] === 'Examen' ? 2 : 1);
-        }
+        $subjectMaxima = $this->evaluationNoteService->getSubjectMaxima(
+            (int) $evaluation['classe_id'],
+            (int) $evaluation['groupe_id'],
+            (string) $evaluation['type_evaluation']
+        );
         $allowedStudents = array_fill_keys($studentIds, true);
         $normalizedNotes = [];
         $seenCells = [];
@@ -648,33 +623,7 @@ class NoteController
             jsonResponse(false, 'Élève introuvable.', [], 404);
         }
 
-        $where = [];
-        $params = ['eid' => $eleveId];
-
-        if ($trimestreId > 0) {
-            $where[] = "ev.trimestre_id = :tid";
-            $params['tid'] = $trimestreId;
-        }
-
-        $whereClause = !empty($where) ? 'AND ' . implode(' AND ', $where) : '';
-
-        $notes = $this->db->fetchAll(
-            "SELECT n.valeur, n.absence, 
-                    ev.type_evaluation, 
-                    DATE_FORMAT(ev.date_evaluation, '%d/%m/%Y') AS date_eval,
-                    sm.libelle AS sous_matiere,
-                    sm.maxima,
-                    m.libelle AS groupe,
-                    t.libelle AS trimestre
-             FROM notes n
-             INNER JOIN evaluations ev ON n.evaluation_id = ev.id
-             INNER JOIN matieres sm ON n.sous_matiere_id = sm.id
-             INNER JOIN matieres m ON ev.groupe_id = m.id
-             INNER JOIN trimestres t ON ev.trimestre_id = t.id
-             WHERE n.eleve_id = :eid {$whereClause}
-             ORDER BY t.numero, m.libelle, sm.libelle, FIELD(ev.type_evaluation, 'Période 1', 'Période 2', 'Examen')",
-            $params
-        );
+        $notes = $this->evaluationNoteService->getStudentNotes($eleveId, $trimestreId);
 
         jsonResponse(true, 'Notes récupérées.', ['notes' => $notes]);
     }
