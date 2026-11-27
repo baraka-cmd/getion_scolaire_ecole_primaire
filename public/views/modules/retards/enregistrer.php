@@ -12,7 +12,6 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('retards.enregistrer');
 
-global $db;
 
 // Charger le contrôleur
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'RetardController.php';
@@ -41,29 +40,10 @@ $eleves = [];
 $retardsExistants = [];
 
 if ($classeId > 0) {
-    $classe = $db->fetchOne("SELECT * FROM classes WHERE id = :id", ['id' => $classeId]);
-
-    // Récupérer les élèves
-    $eleves = $db->fetchAll(
-        "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe, e.photo,
-                DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format
-         FROM inscriptions i
-         INNER JOIN eleves e ON i.eleve_id = e.id
-         WHERE i.classe_id = :cid AND i.statut = 'Actif' AND e.est_actif = 1
-         ORDER BY e.nom, e.prenom",
-        ['cid' => $classeId]
-    );
-
-    // Récupérer les retards déjà enregistrés pour cette date
-    $retardsExistants = $db->fetchAll(
-        "SELECT r.eleve_id, r.heure_arrivee, r.duree_retard, r.motif, r.est_justifie,
-                TIME_FORMAT(r.heure_arrivee, '%H:%i') AS heure_arrivee_format
-         FROM retards r
-         WHERE r.eleve_id IN (SELECT eleve_id FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif')
-         AND r.date_retard = :date",
-        ['cid' => $classeId, 'date' => $dateRetard]
-    );
-
+    $markingData = $retardController->getMarkingData($classeId, $dateRetard);
+    $classe = $markingData['classe'];
+    $eleves = $markingData['eleves'];
+    $retardsExistants = $markingData['retards'];
     $retardsMap = [];
     foreach ($retardsExistants as $r) {
         $retardsMap[$r['eleve_id']] = $r;
