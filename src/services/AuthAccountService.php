@@ -13,6 +13,22 @@ class AuthAccountService
         $this->repository = $repository ?? new AuthRepository();
     }
 
+
+    public function emailExists(string $email): bool
+    {
+        return $this->repository->emailExists($email);
+    }
+
+    public function createRegisteredUser(array $data): int
+    {
+        return $this->repository->createRegisteredUser($data);
+    }
+
+    public function logFailedAttempt(?int $userId, string $email, string $ip, string $browser): void
+    {
+        $this->repository->logFailedAttempt($userId, $email, $ip, $browser);
+    }
+
     public function findByEmail(string $email): ?array
     {
         return $this->repository->findByEmail($email);
