@@ -9,12 +9,14 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../services/AcademicResultsService.php';
+require_once __DIR__ . '/../services/ResultsBulletinService.php';
 require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
 
 class ResultatController
 {
     private Database $db;
     private AcademicResultsService $academicResults;
+    private ResultsBulletinService $resultsBulletinService;
     private StudentAccessPolicy $studentAccessPolicy;
     private array $bulletinPlacesCache = [];
 
@@ -22,6 +24,7 @@ class ResultatController
     {
         $this->db = Database::getInstance();
         $this->academicResults = new AcademicResultsService();
+        $this->resultsBulletinService = new ResultsBulletinService();
         $this->studentAccessPolicy = new StudentAccessPolicy($this->db);
     }
 
@@ -87,22 +90,11 @@ public function handleAjax(): void
 
         // Si pas d'année spécifiée, prendre l'année active
         if ($anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn(
-                "SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1"
-            );
+            $anneeId = $this->resultsBulletinService->getActiveSchoolYearId();
         }
 
         // Récupérer les infos de l'élève
-        $eleve = $this->db->fetchOne(
-            "SELECT e.*, c.nom AS classe_nom, c.niveau AS classe_niveau, c.id AS classe_id,
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age
-             FROM eleves e
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             INNER JOIN classes c ON i.classe_id = c.id AND c.annee_scolaire_id = i.annee_scolaire_id
-             WHERE e.id = :eid AND i.annee_scolaire_id = :aid",
-            ['eid' => $eleveId, 'aid' => $anneeId]
-        );
+        $eleve = $this->resultsBulletinService->getStudentForResults($eleveId, $anneeId);
 
         if (!$eleve) jsonResponse(false, 'Élève introuvable ou non inscrit.', [], 404);
 
@@ -265,7 +257,7 @@ private function calculerNotesTrimestre(
             jsonResponse(false, 'Classe et trimestre obligatoires.', [], 400);
         }
 
-        $trimestre = $this->db->fetchOne(
+        $trimestre = $this->resultsBulletinService->fetchOne(
             "SELECT t.*
              FROM trimestres t
              INNER JOIN classes c ON c.id = :cid AND c.annee_scolaire_id = t.annee_scolaire_id
@@ -281,7 +273,7 @@ private function calculerNotesTrimestre(
         $effectif = $data['effectif'];
 
         jsonResponse(true, 'Procès-verbal récupéré.', [
-            'classe'    => $this->db->fetchOne("SELECT * FROM classes WHERE id = :id", ['id' => $classeId]),
+            'classe'    => $this->resultsBulletinService->fetchOne("SELECT * FROM classes WHERE id = :id", ['id' => $classeId]),
             'trimestre' => $trimestre,
             'resultats' => $resultats,
             'effectif'  => $effectif
@@ -306,7 +298,7 @@ private function calculerNotesTrimestre(
             jsonResponse(false, 'Classe et trimestre obligatoires.', [], 400);
         }
 
-        $trimestre = $this->db->fetchOne(
+        $trimestre = $this->resultsBulletinService->fetchOne(
             "SELECT t.*
              FROM trimestres t
              INNER JOIN classes c ON c.id = :cid AND c.annee_scolaire_id = t.annee_scolaire_id
@@ -317,7 +309,7 @@ private function calculerNotesTrimestre(
             jsonResponse(false, 'Le trimestre ne correspond pas à l’année scolaire de cette classe.', [], 422);
         }
 
-        $eleves = $this->db->fetchAll(
+        $eleves = $this->resultsBulletinService->fetchAll(
             "SELECT e.id FROM inscriptions i
              INNER JOIN eleves e ON i.eleve_id = e.id
              WHERE i.classe_id = :cid AND i.annee_scolaire_id = :aid
@@ -355,7 +347,7 @@ private function calculerNotesTrimestre(
                 $decision = $this->determinerDecision($pct);
 
                 // Supprimer l'ancien résultat
-                $this->db->delete(
+                $this->resultsBulletinService->delete(
                     "DELETE FROM resultats_trimestriels
                      WHERE eleve_id = :eid AND classe_id = :cid AND trimestre_id = :tid",
                     ['eid' => $eleve['id'], 'cid' => $classeId, 'tid' => $trimestreId]
@@ -363,7 +355,7 @@ private function calculerNotesTrimestre(
 
                 // Remplacez l'insertion SQL dans calculerResultatsClasse() par :
 
-                $this->db->insert(
+                $this->resultsBulletinService->insert(
                     "INSERT INTO resultats_trimestriels (eleve_id, classe_id, trimestre_id, moyenne_generale, 
                     total_points, total_coefficients, mention, decision)
                     VALUES (:eid, :cid, :tid, :pct, :obt, :max, :mention, :decision)",
@@ -415,7 +407,7 @@ private function calculerNotesTrimestre(
             jsonResponse(false, 'Classe et trimestre obligatoires.', [], 400);
         }
 
-        $trimestreValide = $this->db->fetchColumn(
+        $trimestreValide = $this->resultsBulletinService->fetchColumn(
             "SELECT COUNT(*)
              FROM classes c
              INNER JOIN trimestres t ON t.annee_scolaire_id = c.annee_scolaire_id
@@ -426,7 +418,7 @@ private function calculerNotesTrimestre(
             jsonResponse(false, 'Le trimestre ne correspond pas à l’année scolaire de cette classe.', [], 422);
         }
 
-        $resultats = $this->db->fetchAll(
+        $resultats = $this->resultsBulletinService->fetchAll(
             "SELECT rt.*, e.matricule, e.nom, e.prenom, e.sexe,
                     DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format
              FROM resultats_trimestriels rt
@@ -455,7 +447,7 @@ private function calculerNotesTrimestre(
 
         if ($resultatId <= 0) jsonResponse(false, 'ID résultat invalide.', [], 400);
 
-        $this->db->update(
+        $this->resultsBulletinService->update(
             "UPDATE resultats_trimestriels 
              SET decision = :decision, appreciation_conseil = :appreciation, decision_finale = :finale
              WHERE id = :id",
@@ -479,7 +471,7 @@ private function calculerNotesTrimestre(
      */
     private function calculerRangs(int $classeId, int $trimestreId): void
     {
-        $resultats = $this->db->fetchAll(
+        $resultats = $this->resultsBulletinService->fetchAll(
             "SELECT id, moyenne_generale FROM resultats_trimestriels 
              WHERE classe_id = :cid AND trimestre_id = :tid 
              ORDER BY moyenne_generale DESC",
@@ -489,7 +481,7 @@ private function calculerNotesTrimestre(
         $effectif = count($resultats);
 
         foreach ($resultats as $index => $r) {
-            $this->db->update(
+            $this->resultsBulletinService->update(
                 "UPDATE resultats_trimestriels SET rang = :rang, effectif_classe = :eff WHERE id = :id",
                 ['rang' => $index + 1, 'eff' => $effectif, 'id' => $r['id']]
             );
@@ -523,7 +515,7 @@ private function calculerNotesTrimestre(
     private function getRangsEleve(int $eleveId, int $anneeId): array
     {
         $rangs = [];
-        $classeId = (int) $this->db->fetchColumn(
+        $classeId = (int) $this->resultsBulletinService->fetchColumn(
             "SELECT i.classe_id
              FROM inscriptions i
              INNER JOIN classes c ON c.id = i.classe_id AND c.annee_scolaire_id = i.annee_scolaire_id
@@ -535,13 +527,13 @@ private function calculerNotesTrimestre(
             return $rangs;
         }
 
-        $trimestres = $this->db->fetchAll(
+        $trimestres = $this->resultsBulletinService->fetchAll(
             "SELECT id, numero, libelle FROM trimestres WHERE annee_scolaire_id = :aid ORDER BY numero",
             ['aid' => $anneeId]
         );
 
         foreach ($trimestres as $trimestre) {
-            $resultat = $this->db->fetchOne(
+            $resultat = $this->resultsBulletinService->fetchOne(
                 "SELECT rang, effectif_classe, moyenne_generale, mention, decision
                  FROM resultats_trimestriels 
                  WHERE eleve_id = :eid AND classe_id = :cid AND trimestre_id = :tid",
@@ -563,7 +555,7 @@ private function calculerNotesTrimestre(
      */
     public function getClassesActives(): array
     {
-        return $this->db->fetchAll(
+        return $this->resultsBulletinService->fetchAll(
             "SELECT c.* FROM classes c
              WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
              ORDER BY c.niveau"
@@ -575,7 +567,7 @@ private function calculerNotesTrimestre(
      */
     public function getTrimestresActifs(): array
     {
-        return $this->db->fetchAll(
+        return $this->resultsBulletinService->fetchAll(
             "SELECT t.* FROM trimestres t
              WHERE t.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
              ORDER BY t.numero"
@@ -587,7 +579,7 @@ private function calculerNotesTrimestre(
      */
     public function getAnneesScolaires(): array
     {
-        return $this->db->fetchAll("SELECT * FROM annees_scolaires ORDER BY date_debut DESC");
+        return $this->resultsBulletinService->fetchAll("SELECT * FROM annees_scolaires ORDER BY date_debut DESC");
     }
 
 
@@ -599,7 +591,7 @@ private function calculerNotesTrimestre(
 public function getResultatsCompletsEleve(int $eleveId, int $anneeId): array
 {
     // Récupérer les infos de l'élève
-    $eleve = $this->db->fetchOne(
+    $eleve = $this->resultsBulletinService->fetchOne(
         "SELECT e.*, c.nom AS classe_nom, c.niveau AS classe_niveau, c.id AS classe_id
          FROM eleves e
          INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
@@ -789,7 +781,7 @@ private function getPlacesParComposante(
 ): array {
     $cacheKey = $classeId . ':' . $anneeId;
     if (!array_key_exists($cacheKey, $this->bulletinPlacesCache)) {
-        $eleves = $this->db->fetchAll(
+        $eleves = $this->resultsBulletinService->fetchAll(
             "SELECT DISTINCT e.id, e.nom, e.prenom
              FROM inscriptions i
              INNER JOIN eleves e ON e.id = i.eleve_id
@@ -824,7 +816,7 @@ private function getPlacesParComposante(
             $numeroParTrimestreId[(int) $trimestre['id']] = (int) $numero;
         }
 
-        $evaluations = $this->db->fetchAll(
+        $evaluations = $this->resultsBulletinService->fetchAll(
             "SELECT DISTINCT ev.trimestre_id, ev.type_evaluation, n.eleve_id
              FROM evaluations ev
              INNER JOIN notes n ON n.evaluation_id = ev.id
@@ -953,7 +945,7 @@ private function getPlacesParComposante(
  */
 public function getResultatsAnnuelsClasse(int $classeId, int $anneeId): array
 {
-    $classe = $this->db->fetchOne(
+    $classe = $this->resultsBulletinService->fetchOne(
         "SELECT id, annee_scolaire_id FROM classes WHERE id = :cid",
         ['cid' => $classeId]
     );
@@ -968,7 +960,7 @@ public function getResultatsAnnuelsClasse(int $classeId, int $anneeId): array
         return $emptyResult;
     }
 
-    $eleves = $this->db->fetchAll(
+    $eleves = $this->resultsBulletinService->fetchAll(
         "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe
          FROM inscriptions i
          INNER JOIN eleves e ON i.eleve_id = e.id
@@ -1004,7 +996,7 @@ public function getResultatsAnnuelsClasse(int $classeId, int $anneeId): array
             $placeholders[] = ':' . $placeholder;
             $params[$placeholder] = $trimestreId;
         }
-        $participationRows = $this->db->fetchAll(
+        $participationRows = $this->resultsBulletinService->fetchAll(
             "SELECT n.eleve_id,
                     SUM(CASE WHEN n.absence = 0 THEN 1 ELSE 0 END) AS notes_present,
                     SUM(CASE WHEN n.absence = 1 THEN 1 ELSE 0 END) AS notes_absence
@@ -1118,7 +1110,7 @@ public function getResultatsAnnuelsClasse(int $classeId, int $anneeId): array
  */
 public function getResultatsPeriode(int $classeId, int $trimestreId, string $type): array
 {
-    $classe = $this->db->fetchOne(
+    $classe = $this->resultsBulletinService->fetchOne(
         "SELECT id, annee_scolaire_id FROM classes WHERE id = :cid",
         ['cid' => $classeId]
     );
@@ -1147,7 +1139,7 @@ public function getResultatsPeriode(int $classeId, int $trimestreId, string $typ
 
     $groupes = $this->academicResults->getSubjectGroupsForClass($classeId);
 
-    $eleves = $this->db->fetchAll(
+    $eleves = $this->resultsBulletinService->fetchAll(
         "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe
          FROM inscriptions i
          INNER JOIN eleves e ON i.eleve_id = e.id
@@ -1170,7 +1162,7 @@ public function getResultatsPeriode(int $classeId, int $trimestreId, string $typ
         $evaluationParams[$placeholder] = $evaluationType;
     }
 
-    $participationRows = $this->db->fetchAll(
+    $participationRows = $this->resultsBulletinService->fetchAll(
         "SELECT n.eleve_id, COUNT(*) AS total_notes,
                 SUM(CASE WHEN n.absence = 0 THEN 1 ELSE 0 END) AS notes_present,
                 SUM(CASE WHEN n.absence = 1 THEN 1 ELSE 0 END) AS notes_absence
