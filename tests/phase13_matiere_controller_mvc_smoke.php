@@ -36,4 +36,4 @@ foreach (['Matière créée', 'Matière supprimée', 'logActivity('] as $contrac
     }
 }
 
-echo "Phase 13 subject-controller MVC smoke: OK\\n";
+echo "Phase 13 subject-controller MVC smoke: OK\n";
