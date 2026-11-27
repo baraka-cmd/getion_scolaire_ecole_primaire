@@ -119,10 +119,7 @@ require_once VIEWS_PATH . 'templates' . DIRECTORY_SEPARATOR . 'header.php';
         $statusIcon = $isActive ? 'fa-circle-check' : ($isCloturee ? 'fa-lock' : 'fa-circle');
         
         // Récupérer les trimestres
-        $trimestres = $db->fetchAll(
-            "SELECT * FROM trimestres WHERE annee_scolaire_id = :aid ORDER BY numero",
-            ['aid' => $annee['id']]
-        );
+        $trimestres = $anneeService->getTerms((int) $annee['id']);
         ?>
 
         <div class="annee-card <?= $cardClass ?>">
