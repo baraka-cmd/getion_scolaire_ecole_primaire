@@ -8,14 +8,16 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/SchoolSettingsService.php';
+
 class ParametreController
 {
-    private Database $db;
+    private SchoolSettingsService $settingsService;
     private string $uploadDir;
 
-    public function __construct()
+    public function __construct(?SchoolSettingsService $settingsService = null)
     {
-        $this->db = Database::getInstance();
+        $this->settingsService = $settingsService ?? new SchoolSettingsService();
         $this->uploadDir = UPLOADS_PATH . 'logos' . DIRECTORY_SEPARATOR;
         if (!is_dir($this->uploadDir)) {
             mkdir($this->uploadDir, 0755, true);
@@ -64,7 +66,7 @@ class ParametreController
 
     private function getParametres(): void
     {
-        $params = $this->db->fetchOne("SELECT * FROM parametres_ecole WHERE id = 1");
+        $params = $this->settingsService->getSettings();
 
         if (!$params) {
             // Valeurs par défaut si la table est vide
@@ -96,13 +98,13 @@ class ParametreController
 
         // Récupérer le libellé de l'année active
         if ($params['annee_scolaire_active_id']) {
-            $annee = $this->db->fetchOne("SELECT libelle FROM annees_scolaires WHERE id = :id", ['id' => $params['annee_scolaire_active_id']]);
+            $annee = $this->settingsService->getYearLabel((int) $params['annee_scolaire_active_id']);
             $params['annee_active_libelle'] = $annee ? $annee['libelle'] : '';
         }
 
         // Récupérer le libellé du trimestre actif
         if ($params['trimestre_actif_id']) {
-            $trimestre = $this->db->fetchOne("SELECT libelle FROM trimestres WHERE id = :id", ['id' => $params['trimestre_actif_id']]);
+            $trimestre = $this->settingsService->getTermLabel((int) $params['trimestre_actif_id']);
             $params['trimestre_actif_libelle'] = $trimestre ? $trimestre['libelle'] : '';
         }
 
@@ -161,15 +163,7 @@ class ParametreController
             jsonResponse(false, 'Veuillez corriger les erreurs.', ['errors' => $errors], 422);
         }
 
-        $annee = $this->db->fetchOne(
-            "SELECT id FROM annees_scolaires WHERE id = :id",
-            ['id' => $anneeActiveId]
-        );
-        $trimestre = $this->db->fetchOne(
-            "SELECT id FROM trimestres WHERE id = :id AND annee_scolaire_id = :annee_id",
-            ['id' => $trimestreActifId, 'annee_id' => $anneeActiveId]
-        );
-        if (!$annee || !$trimestre) {
+        if (!$this->settingsService->hasValidYearAndTerm($anneeActiveId, $trimestreActifId)) {
             jsonResponse(false, 'Le trimestre sélectionné ne correspond pas à l’année scolaire choisie.', [], 422);
         }
 
@@ -334,7 +328,7 @@ class ParametreController
             jsonResponse(false, 'Le fichier sélectionné n’est pas une image valide.', [], 400);
         }
 
-        $params = $this->db->fetchOne("SELECT logo FROM parametres_ecole WHERE id = 1");
+        $params = $this->settingsService->getLogo();
         if (!$params) {
             jsonResponse(false, 'Enregistrez d’abord les paramètres de l’école avant d’ajouter un logo.', [], 409);
         }
@@ -351,10 +345,7 @@ class ParametreController
         }
 
         try {
-            $this->db->update(
-                "UPDATE parametres_ecole SET logo = :logo WHERE id = 1",
-                ['logo' => $cheminRelatif]
-            );
+            $this->settingsService->updateLogo($cheminRelatif);
         } catch (Throwable $e) {
             if (file_exists($cheminAbsolu)) {
                 unlink($cheminAbsolu);
@@ -381,7 +372,7 @@ class ParametreController
 
     private function getAnnees(): void
     {
-        $annees = $this->db->fetchAll("SELECT * FROM annees_scolaires ORDER BY date_debut DESC");
+        $annees = $this->settingsService->getSchoolYears();
         jsonResponse(true, 'Années récupérées.', ['annees' => $annees]);
     }
 
@@ -393,13 +384,10 @@ class ParametreController
     {
         $anneeId = (int) post('annee_id', 0);
         if ($anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
+            $anneeId = $this->settingsService->getActiveYearId();
         }
 
-        $trimestres = $this->db->fetchAll(
-            "SELECT * FROM trimestres WHERE annee_scolaire_id = :aid ORDER BY numero",
-            ['aid' => $anneeId]
-        );
+        $trimestres = $this->settingsService->getTerms($anneeId);
 
         jsonResponse(true, 'Trimestres récupérés.', ['trimestres' => $trimestres]);
     }
