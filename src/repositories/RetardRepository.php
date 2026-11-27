@@ -230,4 +230,40 @@ class RetardRepository
         ];
     }
 
+
+    public function studentBelongsToClass(int $studentId, int $classId): bool
+    {
+        return (bool) $this->db->fetchColumn(
+            "SELECT i.id FROM inscriptions i
+             INNER JOIN eleves e ON e.id = i.eleve_id
+             WHERE i.eleve_id = :student AND i.classe_id = :class
+               AND i.statut IN ('Actif', 'Redoublant') AND e.est_actif = 1
+             LIMIT 1",
+            ['student' => $studentId, 'class' => $classId]
+        );
+    }
+
+    public function getMarkingData(int $classId, string $date): array
+    {
+        $class = $this->db->fetchOne('SELECT * FROM classes WHERE id = :id', ['id' => $classId]);
+        if (!$class) return ['classe' => null, 'eleves' => [], 'retards' => []];
+        $students = $this->db->fetchAll(
+            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe, e.photo,
+                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format
+             FROM inscriptions i INNER JOIN eleves e ON i.eleve_id = e.id
+             WHERE i.classe_id = :cid AND i.statut = 'Actif' AND e.est_actif = 1
+             ORDER BY e.nom, e.prenom",
+            ['cid' => $classId]
+        );
+        $late = $this->db->fetchAll(
+            "SELECT r.eleve_id, r.heure_arrivee, r.duree_retard, r.motif, r.est_justifie,
+                    TIME_FORMAT(r.heure_arrivee, '%H:%i') AS heure_arrivee_format
+             FROM retards r
+             WHERE r.eleve_id IN (SELECT eleve_id FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif')
+               AND r.date_retard = :date",
+            ['cid' => $classId, 'date' => $date]
+        );
+        return ['classe' => $class, 'eleves' => $students, 'retards' => $late];
+    }
+
 }
