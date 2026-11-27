@@ -35,6 +35,6 @@ class PaymentReadRepository
     }
     public function feeTotals(int $yearId): array
     {
-        return $this->db->fetchAll("SELECT id, nom FROM classes WHERE annee_scolaire_id = :annee ORDER BY niveau", ['annee' => $yearId]);
+        return $this->db->fetchAll("SELECT c.* FROM classes c WHERE c.annee_scolaire_id = :annee ORDER BY c.niveau", ['annee' => $yearId]);
     }
 }
