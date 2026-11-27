@@ -320,4 +320,27 @@ class AbsenceRepository
             $params['absence_teacher_user_id'] = $userId;
         }
     }
+
+    public function getMarkingData(int $classId, string $date): array
+    {
+        $class = $this->db->fetchOne('SELECT * FROM classes WHERE id = :id', ['id' => $classId]);
+        if (!$class) return ['classe' => null, 'eleves' => [], 'absences' => []];
+        $students = $this->db->fetchAll(
+            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe, e.photo,
+                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format
+             FROM inscriptions i INNER JOIN eleves e ON i.eleve_id = e.id
+             WHERE i.classe_id = :cid AND i.statut = 'Actif' AND e.est_actif = 1
+             ORDER BY e.nom, e.prenom",
+            ['cid' => $classId]
+        );
+        $marked = $this->db->fetchAll(
+            "SELECT a.eleve_id, a.type_absence, a.est_justifiee, a.motif
+             FROM absences a
+             WHERE a.eleve_id IN (SELECT eleve_id FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif')
+               AND a.date_absence = :date",
+            ['cid' => $classId, 'date' => $date]
+        );
+        return ['classe' => $class, 'eleves' => $students, 'absences' => $marked];
+    }
+
 }
