@@ -8,13 +8,15 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/LogService.php';
+
 class LogController
 {
-    private Database $db;
+    private LogService $logService;
 
-    public function __construct()
+    public function __construct(?LogService $logService = null)
     {
-        $this->db = Database::getInstance();
+        $this->logService = $logService ?? new LogService();
     }
 
     /**
@@ -62,41 +64,11 @@ class LogController
 
     private function getListe(): void
     {
-        $page       = max(1, (int) post('page', 1));
-        $parPage    = ITEMS_PER_PAGE;
-
+        $page = max(1, (int) post('page', 1));
+        $perPage = ITEMS_PER_PAGE;
         [$whereClause, $params] = $this->buildLogFilters();
-
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM logs_activites l
-             LEFT JOIN utilisateurs u ON l.utilisateur_id = u.id
-             {$whereClause}",
-            $params
-        );
-
-        $offset = ($page - 1) * $parPage;
-
-        $logs = $this->db->fetchAll(
-            "SELECT l.*, 
-                    DATE_FORMAT(l.date_action, '%d/%m/%Y') AS date_format,
-                    TIME_FORMAT(l.date_action, '%H:%i:%s') AS heure_format,
-                    CONCAT(COALESCE(u.prenom, ''), ' ', COALESCE(u.nom, '')) AS utilisateur_nom,
-                    u.login AS utilisateur_login,
-                    COALESCE(u.prenom, 'Système') AS utilisateur_prenom
-             FROM logs_activites l
-             LEFT JOIN utilisateurs u ON l.utilisateur_id = u.id
-             {$whereClause}
-             ORDER BY l.date_action DESC
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, ['limit' => $parPage, 'offset' => $offset])
-        );
-
-        jsonResponse(true, 'Liste récupérée.', [
-            'logs'  => $logs,
-            'total' => $total,
-            'page'  => $page,
-            'pages' => ceil($total / $parPage)
-        ]);
+        $result = $this->logService->listFiltered($whereClause, $params, $page, $perPage);
+        jsonResponse(true, 'Liste récupérée.', $result);
     }
 
     private function buildLogFilters(): array
@@ -157,16 +129,7 @@ class LogController
         $security->validateCsrf();
 
         [$whereClause, $params] = $this->buildLogFilters();
-        $logs = $this->db->fetchAll(
-            "SELECT l.date_action, CONCAT(COALESCE(u.prenom, ''), ' ', COALESCE(u.nom, '')) AS utilisateur,
-                    l.action, l.table_concernee, l.enregistrement_id, l.description, l.adresse_ip
-             FROM logs_activites l
-             LEFT JOIN utilisateurs u ON l.utilisateur_id = u.id
-             {$whereClause}
-             ORDER BY l.date_action DESC, l.id DESC
-             LIMIT 10000",
-            $params
-        );
+        $logs = $this->logService->exportFiltered($whereClause, $params);
 
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="journaux_' . date('Y-m-d_H-i-s') . '.csv"');
@@ -175,15 +138,8 @@ class LogController
         fwrite($output, "\xEF\xBB\xBF");
         fputcsv($output, ['Date', 'Utilisateur', 'Action', 'Table', 'Identifiant', 'Description', 'Adresse IP'], ';');
         foreach ($logs as $log) {
-            $values = [
-                $log['date_action'],
-                $log['utilisateur'],
-                $log['action'],
-                $log['table_concernee'],
-                $log['enregistrement_id'],
-                $log['description'],
-                $log['adresse_ip']
-            ];
+            $values = [$log['date_action'], $log['utilisateur'], $log['action'], $log['table_concernee'],
+                $log['enregistrement_id'], $log['description'], $log['adresse_ip']];
             fputcsv($output, array_map([$this, 'neutraliserFormuleCsv'], $values), ';');
         }
         fclose($output);
@@ -202,49 +158,7 @@ class LogController
 
     private function getStatistiques(): void
     {
-        // Total des logs
-        $totalLogs = (int) $this->db->fetchColumn("SELECT COUNT(*) FROM logs_activites");
-
-        // Logs aujourd'hui
-        $logsAujourdhui = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM logs_activites WHERE DATE(date_action) = CURDATE()"
-        );
-
-        // Logs cette semaine
-        $logsSemaine = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM logs_activites WHERE YEARWEEK(date_action, 1) = YEARWEEK(CURDATE(), 1)"
-        );
-
-        // Logs ce mois
-        $logsMois = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM logs_activites WHERE MONTH(date_action) = MONTH(CURDATE()) AND YEAR(date_action) = YEAR(CURDATE())"
-        );
-
-        // Dernière activité
-        $derniereActivite = $this->db->fetchOne(
-            "SELECT l.*, 
-                    DATE_FORMAT(l.date_action, '%d/%m/%Y à %H:%i:%s') AS date_format,
-                    CONCAT(COALESCE(u.prenom, ''), ' ', COALESCE(u.nom, '')) AS utilisateur_nom
-             FROM logs_activites l
-             LEFT JOIN utilisateurs u ON l.utilisateur_id = u.id
-             ORDER BY l.date_action DESC LIMIT 1"
-        );
-
-        // Nombre d'utilisateurs distincts ayant effectué des actions
-        $nbUtilisateursActifs = (int) $this->db->fetchColumn(
-            "SELECT COUNT(DISTINCT utilisateur_id) FROM logs_activites WHERE utilisateur_id IS NOT NULL"
-        );
-
-        jsonResponse(true, 'Statistiques récupérées.', [
-            'stats' => [
-                'total_logs'           => $totalLogs,
-                'logs_aujourdhui'      => $logsAujourdhui,
-                'logs_semaine'         => $logsSemaine,
-                'logs_mois'            => $logsMois,
-                'nb_utilisateurs'      => $nbUtilisateursActifs,
-                'derniere_activite'    => $derniereActivite
-            ]
-        ]);
+        jsonResponse(true, 'Statistiques récupérées.', ['stats' => $this->logService->statistics()]);
     }
 
     // ============================================================
@@ -253,15 +167,7 @@ class LogController
 
     private function getTopActions(): void
     {
-        $topActions = $this->db->fetchAll(
-            "SELECT action, COUNT(*) AS nb 
-             FROM logs_activites 
-             GROUP BY action 
-             ORDER BY nb DESC 
-             LIMIT 10"
-        );
-
-        jsonResponse(true, 'Top actions récupéré.', ['top_actions' => $topActions]);
+        jsonResponse(true, 'Top actions récupéré.', ['top_actions' => $this->logService->topActions()]);
     }
 
     // ============================================================
@@ -270,20 +176,7 @@ class LogController
 
     private function getTopUtilisateurs(): void
     {
-        $topUtilisateurs = $this->db->fetchAll(
-            "SELECT CONCAT(COALESCE(u.prenom, ''), ' ', COALESCE(u.nom, '')) AS utilisateur_nom,
-                    u.login,
-                    COUNT(*) AS nb,
-                    MAX(l.date_action) AS derniere_action,
-                    DATE_FORMAT(MAX(l.date_action), '%d/%m/%Y à %H:%i') AS derniere_action_format
-             FROM logs_activites l
-             INNER JOIN utilisateurs u ON l.utilisateur_id = u.id
-             GROUP BY l.utilisateur_id, u.prenom, u.nom, u.login
-             ORDER BY nb DESC
-             LIMIT 5"
-        );
-
-        jsonResponse(true, 'Top utilisateurs récupéré.', ['top_utilisateurs' => $topUtilisateurs]);
+        jsonResponse(true, 'Top utilisateurs récupéré.', ['top_utilisateurs' => $this->logService->topUsers()]);
     }
 
     // ============================================================
@@ -292,22 +185,7 @@ class LogController
 
     private function getActiviteParJour(): void
     {
-        $activite = [];
-        for ($i = 6; $i >= 0; $i--) {
-            $date = date('Y-m-d', strtotime("-{$i} days"));
-            $nb = (int) $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM logs_activites WHERE DATE(date_action) = :date",
-                ['date' => $date]
-            );
-            $activite[] = [
-                'date'  => $date,
-                'label' => date('d/m', strtotime($date)),
-                'jour'  => jourEnFrancais($date),
-                'nb'    => $nb
-            ];
-        }
-
-        jsonResponse(true, 'Activité récupérée.', ['activite' => $activite]);
+        jsonResponse(true, 'Activité récupérée.', ['activite' => $this->logService->activityLastSevenDays()]);
     }
 
     // ============================================================
@@ -319,12 +197,7 @@ class LogController
      */
     public function getUtilisateursActifs(): array
     {
-        return $this->db->fetchAll(
-            "SELECT DISTINCT u.id, CONCAT(u.prenom, ' ', u.nom) AS nom_complet, u.login
-             FROM logs_activites l
-             INNER JOIN utilisateurs u ON l.utilisateur_id = u.id
-             ORDER BY u.nom"
-        );
+        return $this->logService->activeUsers();
     }
 
     /**
@@ -332,10 +205,7 @@ class LogController
      */
     public function getActionsDistinctes(): array
     {
-        $result = $this->db->fetchAll(
-            "SELECT DISTINCT action FROM logs_activites ORDER BY action"
-        );
-        return array_column($result, 'action');
+        return $this->logService->distinctActions();
     }
 
     /**
@@ -343,9 +213,6 @@ class LogController
      */
     public function getTablesDistinctes(): array
     {
-        $result = $this->db->fetchAll(
-            "SELECT DISTINCT table_concernee FROM logs_activites WHERE table_concernee IS NOT NULL ORDER BY table_concernee"
-        );
-        return array_column($result, 'table_concernee');
+        return $this->logService->distinctTables();
     }
 }
