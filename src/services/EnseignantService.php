@@ -66,4 +66,8 @@ class EnseignantService
         $this->repository->updateClassAssignment($teacherId, $classId > 0 ? $classId : null);
         return true;
     }
+    public function paginate(array $filters, int $page, int $perPage): array
+    {
+        return $this->repository->paginate($filters, max(1, $page), $perPage);
+    }
 }
