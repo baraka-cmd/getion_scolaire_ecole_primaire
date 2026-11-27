@@ -58,12 +58,12 @@ if ($service->discontinue(2, 'Abandon', '   ')['status'] !== 422) {
     throw new RuntimeException('Closure reason must be required.');
 }
 $controller = file_get_contents(__DIR__ . '/../src/controllers/InscriptionController.php');
-if (preg_match('/(?:SELECT\\s+(?:\\*|[a-z_]+)|INSERT\\s+INTO\\s+[a-z_]+|UPDATE\\s+[a-z_]+\\s+SET|DELETE\\s+FROM\\s+[a-z_]+)/i', $controller)) {
+if (preg_match('/(?:SELECT\\s+(?:\\*|[a-z_]+(?:\\.[a-z_*]+)?)\\s+FROM\\s+[a-z_]+|INSERT\\s+INTO\\s+[a-z_]+|UPDATE\\s+[a-z_]+\\s+SET|DELETE\\s+FROM\\s+[a-z_]+)/i', $controller)) {
     throw new RuntimeException('SQL must not remain in the enrollment controller.');
 }
 foreach (['nouvelle.php', 'liste.php', 'reinscription.php'] as $view) {
     $source = file_get_contents(__DIR__ . '/../public/views/modules/inscriptions/' . $view);
-    if (preg_match('/(?:SELECT\\s+(?:\\*|[a-z_]+)|INSERT\\s+INTO\\s+[a-z_]+|UPDATE\\s+[a-z_]+\\s+SET|DELETE\\s+FROM\\s+[a-z_]+)/i', $source)) {
+    if (preg_match('/(?:SELECT\\s+(?:\\*|[a-z_]+(?:\\.[a-z_*]+)?)\\s+FROM\\s+[a-z_]+|INSERT\\s+INTO\\s+[a-z_]+|UPDATE\\s+[a-z_]+\\s+SET|DELETE\\s+FROM\\s+[a-z_]+)/i', $source)) {
         throw new RuntimeException('SQL must not remain in enrollment views: ' . $view);
     }
 }
