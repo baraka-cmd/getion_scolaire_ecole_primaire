@@ -118,4 +118,15 @@ class RetardService
         return $this->repository->getGlobalStatistics();
     }
 
+
+    public function studentBelongsToClass(int $studentId, int $classId): bool
+    {
+        return $this->repository->studentBelongsToClass($studentId, $classId);
+    }
+
+    public function getMarkingData(int $classId, string $date): array
+    {
+        return $this->repository->getMarkingData($classId, $date);
+    }
+
 }
