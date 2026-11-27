@@ -138,4 +138,50 @@ class EnseignantRepository
              ORDER BY specialite"
         );
     }
+    public function paginate(array $filters, int $page, int $perPage): array
+    {
+        $where = [];
+        $params = [];
+        $search = $filters['recherche'] ?? '';
+        $specialty = $filters['specialite'] ?? '';
+        $status = $filters['statut'] ?? '';
+
+        if (!empty($search)) {
+            $where[] = "(e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3 OR e.email LIKE :r4 OR e.specialite LIKE :r5)";
+            foreach (['r1', 'r2', 'r3', 'r4', 'r5'] as $key) {
+                $params[$key] = "%{$search}%";
+            }
+        }
+        if (!empty($specialty)) {
+            $where[] = "e.specialite = :specialite";
+            $params['specialite'] = $specialty;
+        }
+        if ($status !== '') {
+            $where[] = "e.est_actif = :statut";
+            $params['statut'] = (int) $status;
+        }
+        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+        $order = $filters['ordre'] ?? 'nom';
+        $direction = strtoupper((string) ($filters['direction'] ?? 'ASC'));
+        $allowed = ['id', 'nom', 'prenom', 'matricule', 'specialite', 'classe_nom', 'date_embauche'];
+        if (!in_array($order, $allowed, true)) $order = 'nom';
+        if (!in_array($direction, ['ASC', 'DESC'], true)) $direction = 'ASC';
+        $orderColumn = $order === 'classe_nom' ? 'c.nom' : 'e.' . $order;
+
+        $total = (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM enseignants e LEFT JOIN classes c ON e.classe_id = c.id {$whereClause}",
+            $params
+        );
+        $rows = $this->db->fetchAll(
+            "SELECT e.*, c.nom AS classe_nom, c.niveau AS classe_niveau,
+                    DATE_FORMAT(e.date_embauche, '%d/%m/%Y') AS date_embauche_format,
+                    (SELECT COUNT(*) FROM inscriptions i WHERE i.classe_id = c.id AND i.statut = 'Actif') AS nb_eleves
+             FROM enseignants e LEFT JOIN classes c ON e.classe_id = c.id
+             {$whereClause}
+             ORDER BY {$orderColumn} {$direction}
+             LIMIT :limit OFFSET :offset",
+            array_merge($params, ['limit' => $perPage, 'offset' => ($page - 1) * $perPage])
+        );
+        return ['enseignants' => $rows, 'total' => $total];
+    }
 }
