@@ -354,6 +354,13 @@ class StudentRecordRepository
 
     public function transferEnrollment(int $studentId, int $newClassId, string $reason): array
     {
+        $hasActiveEnrollment = (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM inscriptions WHERE eleve_id = :eid AND statut = 'Actif'",
+            ['eid' => $studentId]
+        );
+        if ($hasActiveEnrollment === 0) {
+            return ['success' => false, 'capacity' => 0, 'reason' => 'NO_ACTIVE_ENROLLMENT'];
+        }
         $capacity = (int) $this->db->fetchColumn(
             'SELECT capacite_max FROM classes WHERE id = :cid', ['cid' => $newClassId]
         );
