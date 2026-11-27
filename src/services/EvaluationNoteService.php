@@ -152,4 +152,14 @@ class EvaluationNoteService
     {
         return $evaluationId > 0 ? $this->repository->findNotesForEvaluationGrid($evaluationId) : [];
     }
+
+    public function getTermForGeneration(int $classId, int $termId): ?array
+    {
+        return $classId > 0 && $termId > 0 ? $this->repository->findTermForGeneration($classId, $termId) : null;
+    }
+
+    public function getActiveGroupsForEvaluationGeneration(): array
+    {
+        return $this->repository->findActiveGroupsForEvaluationGeneration();
+    }
 }
