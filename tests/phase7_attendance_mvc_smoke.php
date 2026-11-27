@@ -32,10 +32,16 @@ if (($pointage['eleves'][0]['pointage']['type_absence'] ?? null) !== 'Présent'
 }
 
 $controllerPaths = [
+    __DIR__ . '/../src/controllers/AbsenceController.php',
     __DIR__ . '/../src/controllers/RetardController.php',
     __DIR__ . '/../src/controllers/AttendanceRegisterController.php',
 ];
 $viewPaths = [
+    __DIR__ . '/../public/views/enseignant/modules/absences.php',
+    __DIR__ . '/../public/views/parent/modules/absences.php',
+    __DIR__ . '/../public/views/parent/modules/retards.php',
+    __DIR__ . '/../public/views/modules/absences/justifier.php',
+    __DIR__ . '/../public/views/modules/absences/liste.php',
     __DIR__ . '/../public/views/modules/absences/marquer.php',
     __DIR__ . '/../public/views/modules/retards/enregistrer.php',
     __DIR__ . '/../public/views/modules/retards/liste.php',
@@ -65,6 +71,10 @@ foreach (['beginTransaction', 'FOR UPDATE', 'commit', 'rollback', 'enrollment_ch
     }
 }
 $retardController = file_get_contents(__DIR__ . '/../src/controllers/RetardController.php');
+if (!str_contains($retardController, 'Security::getInstance()->validateCsrf()')
+    || !str_contains($retardController, "requirePermission('retards.justifier')")) {
+    throw new RuntimeException('Tardiness mutation CSRF and action permissions must remain enforced.');
+}
 if (!str_contains($retardController, 'StudentAccessPolicy')
     || !str_contains($retardController, 'canCurrentUserAccessStudent')) {
     throw new RuntimeException('Student-level access policy must protect tardiness endpoints.');
