@@ -18,6 +18,11 @@ on:
       - 'tests/absence_service_smoke.php'
       - 'tests/retard_service_smoke.php'
       - 'tests/attendance_register_service_smoke.php'
+      - 'public/views/enseignant/modules/absences.php'
+      - 'public/views/parent/modules/absences.php'
+      - 'public/views/parent/modules/retards.php'
+      - 'public/views/modules/absences/justifier.php'
+      - 'public/views/modules/absences/liste.php'
       - 'public/views/modules/absences/marquer.php'
       - 'public/views/modules/retards/enregistrer.php'
       - 'public/views/modules/retards/liste.php'
@@ -47,6 +52,11 @@ jobs:
           php -l tests/absence_service_smoke.php
           php -l tests/retard_service_smoke.php
           php -l tests/attendance_register_service_smoke.php
+          php -l public/views/enseignant/modules/absences.php
+          php -l public/views/parent/modules/absences.php
+          php -l public/views/parent/modules/retards.php
+          php -l public/views/modules/absences/justifier.php
+          php -l public/views/modules/absences/liste.php
           php -l public/views/modules/absences/marquer.php
           php -l public/views/modules/retards/enregistrer.php
           php -l public/views/modules/retards/liste.php
