@@ -237,4 +237,83 @@ class StudentRecordRepository
         ];
     }
 
+
+    /**
+     * Données exportables des élèves, avec le même filtrage que l'écran d'export.
+     * Les rôles et l'identifiant utilisateur proviennent exclusivement de la session.
+     */
+    public function exportRows(array $filters, string $role, int $userId): array
+    {
+        $where = [
+            "i.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)"
+        ];
+        $params = [];
+
+        if ($role === 'Parent') {
+            $where[] = "EXISTS (
+                SELECT 1 FROM eleve_parent ep
+                INNER JOIN parents_tuteurs pt ON pt.id = ep.parent_id
+                WHERE ep.eleve_id = e.id AND pt.utilisateur_id = :parent_user_id
+            )";
+            $params['parent_user_id'] = $userId;
+        } elseif ($role === 'Enseignant') {
+            $where[] = "EXISTS (
+                SELECT 1 FROM enseignants ens
+                WHERE ens.classe_id = i.classe_id
+                  AND ens.utilisateur_id = :teacher_user_id
+                  AND ens.est_actif = 1
+            )";
+            $params['teacher_user_id'] = $userId;
+        }
+
+        $search = (string) ($filters['recherche'] ?? '');
+        if ($search !== '') {
+            $where[] = "(e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3)";
+            $params['r1'] = "%{$search}%";
+            $params['r2'] = "%{$search}%";
+            $params['r3'] = "%{$search}%";
+        }
+
+        $classId = (int) ($filters['classe_id'] ?? 0);
+        if ($classId > 0) {
+            $where[] = 'i.classe_id = :classe';
+            $params['classe'] = $classId;
+        }
+
+        $sex = (string) ($filters['sexe'] ?? '');
+        if ($sex !== '') {
+            $where[] = 'e.sexe = :sexe';
+            $params['sexe'] = $sex;
+        }
+
+        $status = (string) ($filters['statut'] ?? '1');
+        if ($status !== '') {
+            $where[] = 'e.est_actif = :statut';
+            $params['statut'] = (int) $status;
+        }
+
+        return $this->db->fetchAll(
+            "SELECT e.matricule, e.nom, e.prenom,
+                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance,
+                    e.sexe, e.lieu_naissance, e.adresse, e.telephone, e.email,
+                    e.groupe_sanguin, e.allergies, e.maladies,
+                    DATE_FORMAT(e.date_inscription, '%d/%m/%Y') AS date_inscription,
+                    CASE WHEN e.est_actif = 1 THEN 'Actif' ELSE 'Inactif' END AS statut,
+                    c.nom AS classe_nom,
+                    GROUP_CONCAT(CONCAT(pt.nom, ' ', pt.prenom, ' (', pt.lien, ' - ', pt.telephone_principal, ')') SEPARATOR ' | ') AS parents
+             FROM eleves e
+             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
+             INNER JOIN classes c ON i.classe_id = c.id
+             LEFT JOIN eleve_parent ep ON e.id = ep.eleve_id
+             LEFT JOIN parents_tuteurs pt ON ep.parent_id = pt.id
+             WHERE " . implode(' AND ', $where) . "
+             GROUP BY e.id, e.matricule, e.nom, e.prenom, e.date_naissance, e.sexe,
+                      e.lieu_naissance, e.adresse, e.telephone, e.email,
+                      e.groupe_sanguin, e.allergies, e.maladies, e.date_inscription,
+                      e.est_actif, c.nom
+             ORDER BY c.nom, e.nom, e.prenom",
+            $params
+        );
+    }
+
 }
