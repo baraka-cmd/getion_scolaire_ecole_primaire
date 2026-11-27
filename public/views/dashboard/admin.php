@@ -39,74 +39,20 @@ $extraJS = [
     'dashboard/dashboard.js',
 ];
 
-// Données pour les cartes stats (valeurs par défaut)
+// Les indicateurs initiaux sont fournis par le contrôleur/service/repository.
 $statsData = [
-    'totalEleves'      => 0,
-    'totalEnseignants' => 0,
-    'totalClasses'     => 0,
-    'tauxPresence'     => 0,
-    'paiementsMois'    => 0,
-    'messagesNonLus'   => 0,
-    'elevesCeMois'     => 0,
-    'elevesMoisDernier'=> 0,
+    'totalEleves'       => 0,
+    'totalEnseignants'  => 0,
+    'totalClasses'      => 0,
+    'tauxPresence'      => 0,
+    'paiementsMois'     => 0,
+    'messagesNonLus'    => 0,
+    'elevesCeMois'      => 0,
+    'elevesMoisDernier' => 0,
 ];
 
 try {
-    // Récupérer les stats depuis la base
-    $anneeActive = $db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1") 
-                   ?? $db->fetchColumn("SELECT id FROM annees_scolaires WHERE est_active = 1 LIMIT 1") 
-                   ?? 1;
-
-    $statsData['totalEleves'] = (int) $db->fetchColumn(
-        "SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = :annee AND statut = 'Actif'",
-        ['annee' => $anneeActive]
-    );
-
-    $statsData['totalEnseignants'] = (int) $db->fetchColumn(
-        "SELECT COUNT(*) FROM enseignants WHERE est_actif = 1"
-    );
-
-    $statsData['totalClasses'] = (int) $db->fetchColumn(
-        "SELECT COUNT(*) FROM classes WHERE annee_scolaire_id = :annee",
-        ['annee' => $anneeActive]
-    );
-
-    $absencesJour = (int) $db->fetchColumn(
-        "SELECT COUNT(*) FROM absences WHERE date_absence = CURDATE() AND type_absence = 'Absence'"
-    );
-    $presencesJour = (int) $db->fetchColumn(
-        "SELECT COUNT(*) FROM absences WHERE date_absence = CURDATE() AND type_absence = 'Présent'"
-    );
-    $totalPresence = $absencesJour + $presencesJour;
-    $statsData['tauxPresence'] = $totalPresence > 0 ? round(($presencesJour / $totalPresence) * 100, 1) : 0;
-
-    $statsData['paiementsMois'] = (float) $db->fetchColumn(
-        "SELECT COALESCE(SUM(
-            CASE WHEN v.devise_recue = 'USD' THEN v.montant_recu
-                 ELSE v.montant_recu / NULLIF(v.taux_cdf_par_usd, 0) END
-         ), 0)
-         FROM finance_versements v
-         INNER JOIN finance_affectations a ON a.versement_id = v.id
-         INNER JOIN finance_creances cr ON cr.id = a.creance_id
-         LEFT JOIN finance_annulations an ON an.versement_id = v.id
-         WHERE cr.annee_scolaire_id = :annee AND an.id IS NULL
-           AND MONTH(v.date_versement) = MONTH(CURDATE())
-           AND YEAR(v.date_versement) = YEAR(CURDATE())",
-        ['annee' => $anneeActive]
-    );
-
-    $statsData['messagesNonLus'] = (int) $db->fetchColumn(
-        "SELECT COUNT(*) FROM messages WHERE destinataire_id = :uid AND est_lu = 0 AND est_supprime_destinataire = 0",
-        ['uid' => $_SESSION['utilisateur_id']]
-    );
-
-    $statsData['elevesCeMois'] = (int) $db->fetchColumn(
-        "SELECT COUNT(*) FROM eleves WHERE MONTH(date_inscription) = MONTH(CURDATE()) AND YEAR(date_inscription) = YEAR(CURDATE())"
-    );
-    $statsData['elevesMoisDernier'] = (int) $db->fetchColumn(
-        "SELECT COUNT(*) FROM eleves WHERE MONTH(date_inscription) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AND YEAR(date_inscription) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))"
-    );
-
+    $statsData = $dashboard->getInitialStats((int) ($_SESSION['utilisateur_id'] ?? 0));
 } catch (Exception $e) {
     error_log('Erreur chargement stats dashboard: ' . $e->getMessage());
 }

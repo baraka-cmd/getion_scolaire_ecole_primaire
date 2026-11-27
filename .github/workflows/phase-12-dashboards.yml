@@ -1,0 +1,32 @@
+name: Phase 12 - Dashboard MVC and security checks
+
+on:
+  push:
+    branches: [refactor/phase-12-dashboards]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/controllers/DashboardController.php'
+      - 'src/services/DashboardService.php'
+      - 'src/repositories/DashboardRepository.php'
+      - 'public/views/dashboard/admin.php'
+      - 'tests/phase12_dashboard_mvc_smoke.php'
+      - '.github/workflows/phase-12-dashboards.yml'
+
+jobs:
+  dashboard-mvc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: PHP syntax validation
+        run: |
+          set -e
+          for file in src/controllers/DashboardController.php src/services/DashboardService.php src/repositories/DashboardRepository.php public/views/dashboard/admin.php tests/phase12_dashboard_mvc_smoke.php; do
+            php -l "$file"
+          done
+      - name: Dashboard MVC and authorization smoke
+        run: php tests/phase12_dashboard_mvc_smoke.php
