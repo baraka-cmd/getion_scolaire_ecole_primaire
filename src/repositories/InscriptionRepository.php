@@ -106,7 +106,7 @@ class InscriptionRepository
         }
         return $this->db->fetchAll(
             "SELECT c.id, c.nom, c.niveau, c.capacite_max,
-                    (SELECT COUNT(*) FROM inscriptions WHERE classe_id = c.id AND statut = 'Actif') AS nb_inscrits
+                    (SELECT COUNT(*) FROM inscriptions WHERE classe_id = c.id AND statut IN ('Actif', 'Redoublant')) AS nb_inscrits
              FROM classes c
              WHERE c.annee_scolaire_id = :aid
              ORDER BY c.niveau",
@@ -123,7 +123,7 @@ class InscriptionRepository
     {
         return $this->db->fetchAll(
             "SELECT c.*,
-                    (SELECT COUNT(*) FROM inscriptions WHERE classe_id = c.id AND statut = 'Actif') AS nb_inscrits
+                    (SELECT COUNT(*) FROM inscriptions WHERE classe_id = c.id AND statut IN ('Actif', 'Redoublant')) AS nb_inscrits
              FROM classes c
              WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
              ORDER BY c.niveau"
@@ -209,13 +209,7 @@ class InscriptionRepository
         return $value === null ? null : (int) $value;
     }
 
-    public function getClassCapacity(int $classId): ?array
-    {
-        return $this->db->fetchOne(
-            'SELECT id, capacite_max, annee_scolaire_id, est_actif FROM classes WHERE id = :id',
-            ['id' => $classId]
-        );
-    }
+    
 
     public function activeEnrollmentForStudent(int $studentId, int $yearId): ?array
     {
@@ -226,13 +220,7 @@ class InscriptionRepository
         );
     }
 
-    public function activeStudent(int $studentId): ?array
-    {
-        return $this->db->fetchOne(
-            'SELECT id, nom, prenom FROM eleves WHERE id = :id AND est_actif = 1',
-            ['id' => $studentId]
-        );
-    }
+    
 
     public function insertEnrollment(int $studentId, int $classId, int $yearId, string $status): int
     {
@@ -247,6 +235,7 @@ class InscriptionRepository
     {
         $this->db->beginTransaction();
         try {
+            $this->db->fetchOne('SELECT id FROM eleves WHERE id = :id AND est_actif = 1 FOR UPDATE', ['id' => $studentId]);
             $destination = $this->db->fetchOne(
                 "SELECT id, capacite_max, annee_scolaire_id, est_actif FROM classes WHERE id = :id FOR UPDATE",
                 ['id' => $newClassId]
@@ -261,7 +250,7 @@ class InscriptionRepository
                 return ['ok' => false, 'status' => 409, 'message' => 'L’inscription source ou la classe de destination n’est plus valide.'];
             }
             $count = (int) $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND annee_scolaire_id = :aid AND statut = 'Actif'",
+                "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND annee_scolaire_id = :aid AND statut IN ('Actif', 'Redoublant')",
                 ['cid' => $newClassId, 'aid' => $yearId]
             );
             if ($count >= (int) $destination['capacite_max']) {
