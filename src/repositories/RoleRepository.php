@@ -79,7 +79,9 @@ class RoleRepository
             $this->db->commit();
             return true;
         } catch (Throwable $e) {
-            $this->db->rollback();
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
             error_log('Erreur replaceRolePermissions: ' . $e->getMessage());
             return false;
         }
