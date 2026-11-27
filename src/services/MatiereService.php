@@ -13,6 +13,36 @@ class MatiereService
         $this->repository = $repository ?? new MatiereRepository();
     }
 
+    public function countActiveLabel(string $label, ?int $excludeId = null): int
+    {
+        return $this->repository->countActiveLabel($label, $excludeId);
+    }
+
+    public function countCode(string $code, ?int $excludeId = null): int
+    {
+        return $this->repository->countCode($code, $excludeId);
+    }
+
+    public function isActiveGroup(int $groupId): bool
+    {
+        return $this->repository->isActiveGroup($groupId);
+    }
+
+    public function countActiveChildren(int $groupId): int
+    {
+        return $this->repository->countActiveChildren($groupId);
+    }
+
+    public function countEvaluationsForSubject(int $subjectId): int
+    {
+        return $this->repository->countEvaluationsForSubject($subjectId);
+    }
+
+    public function countTimetableEntriesForSubject(int $subjectId): int
+    {
+        return $this->repository->countTimetableEntriesForSubject($subjectId);
+    }
+
     public function getPaginatedGroupHierarchy(string $search, int $limit, int $offset): array
     {
         return $this->repository->findPaginatedGroupHierarchy($search, $limit, $offset);
