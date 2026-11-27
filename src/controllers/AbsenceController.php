@@ -268,6 +268,18 @@ class AbsenceController
         return $this->studentAccessPolicy->canCurrentUserAccessStudent($studentId);
     }
 
+    public function getMarkingData(int $classId, string $date): array
+    {
+        requirePermission('absences.marquer');
+        if (hasRole('Enseignant')) {
+            $ownedClass = $this->service->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
+            if (!$ownedClass || $classId !== $ownedClass) {
+                jsonResponse(false, 'Vous ne pouvez consulter que votre classe.', [], 403);
+            }
+        }
+        return $this->service->getMarkingData($classId, $date);
+    }
+
     public function getStatsDashboard(): array
     {
         return $this->service->getDashboardStatistics(date('Y-m-d'));
