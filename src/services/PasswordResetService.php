@@ -10,7 +10,7 @@ class PasswordResetService
 {
     private PasswordResetRepository $repository;
     private AuthRateLimitService $rateLimiter;
-    private EmailService $emailService;
+    private ?EmailService $emailService;
 
     public function __construct(
         ?PasswordResetRepository $repository = null,
@@ -19,7 +19,7 @@ class PasswordResetService
     ) {
         $this->repository = $repository ?? new PasswordResetRepository();
         $this->rateLimiter = $rateLimiter ?? new AuthRateLimitService();
-        $this->emailService = $emailService ?? new EmailService();
+        $this->emailService = $emailService;
     }
 
     public function requestReset(string $email, string $schoolName): void
@@ -80,7 +80,8 @@ class PasswordResetService
             . '<p><a href="' . e($resetUrl) . '">Choisir un nouveau mot de passe</a></p>'
             . '<p>Ce lien est à usage unique et expire dans 30 minutes. Si vous n’avez pas demandé cette réinitialisation, ignorez ce message.</p>';
 
-        if (!$this->emailService->envoyerTemplate(
+        $emailService = $this->emailService ?? new EmailService();
+        if (!$emailService->envoyerTemplate(
             $user['email'],
             'Réinitialisation de votre mot de passe — ' . $schoolName,
             $content
