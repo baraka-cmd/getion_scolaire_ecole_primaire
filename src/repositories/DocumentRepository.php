@@ -170,4 +170,19 @@ class DocumentRepository
             ['limit' => $limit]
         );
     }
+
+    public function statistics(bool $admin): array
+    {
+        $visibility = $admin ? '' : 'WHERE est_public = 1';
+        $monthVisibility = $admin ? 'WHERE ' : 'WHERE est_public = 1 AND ';
+        return [
+            'total' => (int) $this->db->fetchColumn("SELECT COUNT(*) FROM documents {$visibility}"),
+            'total_size' => (int) $this->db->fetchColumn("SELECT COALESCE(SUM(taille_fichier), 0) FROM documents {$visibility}"),
+            'public_count' => (int) $this->db->fetchColumn("SELECT COUNT(*) FROM documents WHERE est_public = 1"),
+            'current_month_count' => (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM documents {$monthVisibility}MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())"
+            ),
+        ];
+    }
+
 }
