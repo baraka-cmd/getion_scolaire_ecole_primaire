@@ -6,15 +6,19 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../repositories/RoleRepository.php';
+
 class Security
 {
     private static ?Security $instance = null;
     private Database $db;
+    private RoleRepository $roleRepository;
     private ?array $userPermissions = null;
 
     private function __construct()
     {
         $this->db = Database::getInstance();
+        $this->roleRepository = new RoleRepository($this->db);
     }
 
     public static function getInstance(): self
@@ -103,54 +107,31 @@ class Security
 
     public function getRolePermissions(int $roleId): array
     {
-        return $this->db->fetchAll(
-            "SELECT p.id, p.code, p.libelle, p.module, p.action, p.description
-             FROM permissions p
-             INNER JOIN role_permission rp ON p.id = rp.permission_id
-             WHERE rp.role_id = :role_id
-             ORDER BY p.module, p.action",
-            ['role_id' => $roleId]
-        );
+        return $this->roleRepository->getRolePermissions($roleId);
     }
 
     public function getAllPermissionsGrouped(): array
     {
-        $permissions = $this->db->fetchAll(
-            "SELECT id, code, libelle, module, action, description
-             FROM permissions
-             ORDER BY module, action"
-        );
-
+        $permissions = $this->roleRepository->getAllPermissions();
         $grouped = [];
-        foreach ($permissions as $perm) {
-            $module = $perm['module'];
+        foreach ($permissions as $permission) {
+            $module = $permission['module'];
             if (!isset($grouped[$module])) {
                 $grouped[$module] = ['module' => $module, 'permissions' => []];
             }
-            $grouped[$module]['permissions'][] = $perm;
+            $grouped[$module]['permissions'][] = $permission;
         }
-
         return array_values($grouped);
     }
 
     public function getAllRoles(): array
     {
-        return $this->db->fetchAll(
-            "SELECT r.id, r.nom, r.description, r.niveau_acces, r.est_actif,
-                    COUNT(rp.id) as nb_permissions
-             FROM roles r
-             LEFT JOIN role_permission rp ON r.id = rp.role_id
-             GROUP BY r.id, r.nom, r.description, r.niveau_acces, r.est_actif
-             ORDER BY r.niveau_acces DESC"
-        );
+        return $this->roleRepository->getAllRolesWithPermissionCounts();
     }
 
     public function getRoleById(int $roleId): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT id, nom, description, niveau_acces, est_actif FROM roles WHERE id = :id",
-            ['id' => $roleId]
-        );
+        return $this->roleRepository->findById($roleId);
     }
 
     public function canAssignRole(int $roleId, ?int $targetUserId = null): bool
@@ -160,13 +141,7 @@ class Security
             return false;
         }
 
-        $actor = $this->db->fetchOne(
-            "SELECT u.role_id, r.niveau_acces
-             FROM utilisateurs u
-             INNER JOIN roles r ON r.id = u.role_id
-             WHERE u.id = :id AND u.est_actif = 1",
-            ['id' => $actorId]
-        );
+        $actor = $this->roleRepository->findActorRoleLevel($actorId);
         $targetRole = $this->getRoleById($roleId);
         if (!$actor || !$targetRole || !(int) $targetRole['est_actif']) {
             return false;
@@ -182,117 +157,68 @@ class Security
 
     public function getAssignableRoles(?int $targetUserId = null): array
     {
-        $roles = $this->db->fetchAll(
-            "SELECT id, nom, description FROM roles WHERE est_actif = 1 ORDER BY niveau_acces DESC"
-        );
-
         return array_values(array_filter(
-            $roles,
+            $this->roleRepository->getActiveRoles(),
             fn(array $role): bool => $this->canAssignRole((int) $role['id'], $targetUserId)
         ));
     }
 
     public function assignPermission(int $roleId, int $permissionId): bool
     {
-        try {
-            $this->db->query(
-                "INSERT IGNORE INTO role_permission (role_id, permission_id) VALUES (:role_id, :perm_id)",
-                ['role_id' => $roleId, 'perm_id' => $permissionId]
-            );
-            return true;
-        } catch (Exception $e) {
-            error_log('Erreur assignPermission: ' . $e->getMessage());
-            return false;
+        $success = $this->roleRepository->assignPermission($roleId, $permissionId);
+        if ($success && (int) ($_SESSION['utilisateur_role_id'] ?? 0) === $roleId) {
+            $this->refreshPermissions();
         }
+        return $success;
     }
 
     public function revokePermission(int $roleId, int $permissionId): bool
     {
-        try {
-            $this->db->query(
-                "DELETE FROM role_permission WHERE role_id = :role_id AND permission_id = :perm_id",
-                ['role_id' => $roleId, 'perm_id' => $permissionId]
-            );
-            return true;
-        } catch (Exception $e) {
-            error_log('Erreur revokePermission: ' . $e->getMessage());
-            return false;
+        $success = $this->roleRepository->revokePermission($roleId, $permissionId);
+        if ($success && (int) ($_SESSION['utilisateur_role_id'] ?? 0) === $roleId) {
+            $this->refreshPermissions();
         }
+        return $success;
     }
 
     public function updateRolePermissions(int $roleId, array $permissionIds): bool
     {
-        try {
-            $this->db->query("DELETE FROM role_permission WHERE role_id = :role_id", ['role_id' => $roleId]);
-
-            if (!empty($permissionIds)) {
-                foreach ($permissionIds as $permId) {
-                    $this->db->query(
-                        "INSERT INTO role_permission (role_id, permission_id) VALUES (:role_id, :perm_id)",
-                        ['role_id' => $roleId, 'perm_id' => $permId]
-                    );
-                }
-            }
-            return true;
-        } catch (Exception $e) {
-            error_log('Erreur updateRolePermissions: ' . $e->getMessage());
-            return false;
+        $success = $this->roleRepository->replacePermissions($roleId, $permissionIds);
+        if ($success && (int) ($_SESSION['utilisateur_role_id'] ?? 0) === $roleId) {
+            $this->refreshPermissions();
         }
+        return $success;
     }
 
     public function createRole(string $nom, string $description, int $niveauAcces = 1): ?int
     {
-        try {
-            return $this->db->insert(
-                "INSERT INTO roles (nom, description, niveau_acces, est_actif) VALUES (:nom, :desc, :niveau, 1)",
-                ['nom' => $nom, 'desc' => $description, 'niveau' => $niveauAcces]
-            );
-        } catch (Exception $e) {
-            error_log('Erreur createRole: ' . $e->getMessage());
-            return null;
-        }
+        return $this->roleRepository->createRole($nom, $description, $niveauAcces);
     }
 
     public function deleteRole(int $roleId): bool
     {
-        if ($roleId <= 6) return false;
-
-        try {
-            $this->db->query("DELETE FROM roles WHERE id = :id", ['id' => $roleId]);
-            return true;
-        } catch (Exception $e) {
-            error_log('Erreur deleteRole: ' . $e->getMessage());
+        if ($roleId <= 6) {
             return false;
         }
+        return $this->roleRepository->deleteRole($roleId);
     }
-
-    // ============================================================
-    // MÉTHODES PRIVÉES
-    // ============================================================
 
     private function loadUserPermissions(): void
     {
-        $roleId = $_SESSION['utilisateur_role_id'] ?? 0;
+        $roleId = (int) ($_SESSION['utilisateur_role_id'] ?? 0);
 
         if ($roleId === 0) {
             $this->userPermissions = [];
             return;
         }
 
-        if ((int) $roleId === 1) {
+        if ($roleId === 1) {
             $this->userPermissions = ['*'];
             return;
         }
 
-        $this->userPermissions = $this->db->fetchAll(
-            "SELECT p.code
-             FROM permissions p
-             INNER JOIN role_permission rp ON p.id = rp.permission_id
-             WHERE rp.role_id = :role_id",
-            ['role_id' => $roleId]
-        );
-
-        $this->userPermissions = array_column($this->userPermissions, 'code');
+        $permissions = $this->roleRepository->getRolePermissions($roleId);
+        $this->userPermissions = array_column($permissions, 'code');
     }
 
     public function refreshPermissions(): void
