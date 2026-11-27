@@ -121,6 +121,22 @@ class AuthRepository
         );
     }
 
+
+    public function createGoogleUserTransactional(array $data): int
+    {
+        try {
+            $this->db->beginTransaction();
+            $userId = $this->createGoogleUser($data);
+            $this->db->commit();
+            return $userId;
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
+            throw $e;
+        }
+    }
+
     public function updateSuccessfulLogin(int $userId, string $ip): void
     {
         $this->db->update(
