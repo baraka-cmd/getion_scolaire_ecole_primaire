@@ -104,8 +104,7 @@ class AttendanceRegisterService
 
     public function getRegistre(int $classeId, int $anneeId, ?string $dateReference = null): array
     {
-        $registerData = $this->repository->getRegisterData($classeId, $anneeId, '', '');
-        $classe = $registerData['classe'];
+        $classe = $this->repository->findRegisterClass($classeId, $anneeId);
         if (!$classe) throw new RuntimeException('La classe ne correspond pas à cette année scolaire.');
         // Queries above are fetched once after the school-year boundaries are known.
         $registerData = $this->repository->getRegisterData($classeId, $anneeId, $classe['date_debut'], $classe['date_fin']);
