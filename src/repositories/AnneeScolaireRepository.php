@@ -13,6 +13,76 @@ class AnneeScolaireRepository
         $this->db = $db ?? Database::getInstance();
     }
 
+    public function countLabel(string $label, ?int $excludeId = null): int
+    {
+        $sql = 'SELECT COUNT(*) FROM annees_scolaires WHERE libelle = :label';
+        $params = ['label' => $label];
+        if ($excludeId !== null) {
+            $sql .= ' AND id != :exclude_id';
+            $params['exclude_id'] = $excludeId;
+        }
+        return (int) $this->db->fetchColumn($sql, $params);
+    }
+
+    public function countOverlappingDates(string $start, string $end, ?int $excludeId = null): int
+    {
+        $sql = 'SELECT COUNT(*) FROM annees_scolaires
+                WHERE (date_debut BETWEEN :start1 AND :end1)
+                   OR (date_fin BETWEEN :start2 AND :end2)
+                   OR (date_debut <= :start3 AND date_fin >= :end3)';
+        $params = [
+            'start1' => $start, 'end1' => $end,
+            'start2' => $start, 'end2' => $end,
+            'start3' => $start, 'end3' => $end,
+        ];
+        if ($excludeId !== null) {
+            $sql = 'SELECT COUNT(*) FROM annees_scolaires WHERE id != :exclude_id AND (
+                    (date_debut BETWEEN :start1 AND :end1)
+                    OR (date_fin BETWEEN :start2 AND :end2)
+                    OR (date_debut <= :start3 AND date_fin >= :end3))';
+            $params['exclude_id'] = $excludeId;
+        }
+        return (int) $this->db->fetchColumn($sql, $params);
+    }
+
+    public function findForUpdate(int $id): ?array
+    {
+        return $this->db->fetchOne('SELECT * FROM annees_scolaires WHERE id = :id FOR UPDATE', ['id' => $id]);
+    }
+
+    public function findSchoolYearConfigurationForUpdate(): ?array
+    {
+        return $this->db->fetchOne(
+            'SELECT id, annee_scolaire_active_id FROM parametres_ecole WHERE id = 1 FOR UPDATE'
+        );
+    }
+
+    public function countEnrollments(int $yearId): int
+    {
+        return (int) $this->db->fetchColumn(
+            'SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = :year_id',
+            ['year_id' => $yearId]
+        );
+    }
+
+    public function countClasses(int $yearId): int
+    {
+        return (int) $this->db->fetchColumn(
+            'SELECT COUNT(*) FROM classes WHERE annee_scolaire_id = :year_id',
+            ['year_id' => $yearId]
+        );
+    }
+
+    public function deleteTerms(int $yearId): void
+    {
+        $this->db->delete('DELETE FROM trimestres WHERE annee_scolaire_id = :year_id', ['year_id' => $yearId]);
+    }
+
+    public function deleteYear(int $yearId): void
+    {
+        $this->db->delete('DELETE FROM annees_scolaires WHERE id = :id', ['id' => $yearId]);
+    }
+
     public function findListForAjax(): array
     {
         return $this->db->fetchAll(
