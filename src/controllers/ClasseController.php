@@ -168,7 +168,16 @@ class ClasseController
         }
 
         try {
-$classeId=$this->classeService->createWithHolder(['nom'=>formatNom($nom),'niveau'=>$niveau,'salle'=>mb_strtoupper(trim($salle)),'capacite'=>$capaciteMax,'annee'=>$anneeId,'description'=>$description ?: null],$titulaireId);
+$classeId = $this->classeService->createWithHolder(
+                [
+                    'nom' => formatNom($nom), 'niveau' => $niveau,
+                    'salle' => mb_strtoupper(trim($salle)), 'capacite' => $capaciteMax,
+                    'annee' => $anneeId, 'description' => $description ?: null
+                ],
+                $titulaireId
+            );
+            logActivity('Création', 'classes', $classeId, "Classe créée : {$nom}");
+            jsonResponse(true, 'Classe créée avec succès.', ['id' => $classeId]);
         } catch (Exception $e) {
             error_log('Erreur création classe: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la création de la classe.');
@@ -227,7 +236,17 @@ $classeId=$this->classeService->createWithHolder(['nom'=>formatNom($nom),'niveau
         }
 
         try {
-$this->classeService->updateWithHolder($id,['nom'=>formatNom($nom),'niveau'=>$niveau,'salle'=>mb_strtoupper(trim($salle)),'capacite'=>$capaciteMax,'annee'=>$anneeId,'description'=>$description ?: null,'id'=>$id],$titulaireId);
+$this->classeService->updateWithHolder(
+                $id,
+                [
+                    'nom' => formatNom($nom), 'niveau' => $niveau,
+                    'salle' => mb_strtoupper(trim($salle)), 'capacite' => $capaciteMax,
+                    'annee' => $anneeId, 'description' => $description ?: null, 'id' => $id
+                ],
+                $titulaireId
+            );
+            logActivity('Modification', 'classes', $id, "Classe modifiée : {$nom}");
+            jsonResponse(true, 'Classe modifiée avec succès.');
         } catch (Exception $e) {
             error_log('Erreur modification classe: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la modification.');
@@ -261,6 +280,8 @@ $this->classeService->updateWithHolder($id,['nom'=>formatNom($nom),'niveau'=>$ni
 
         try {
 $this->classeService->deleteWithSchedule($id);
+            logActivity('Suppression', 'classes', $id, "Classe supprimée : {$classe['nom']}");
+            jsonResponse(true, 'Classe supprimée avec succès.');
         } catch (Exception $e) {
             error_log('Erreur suppression classe: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la suppression.');
