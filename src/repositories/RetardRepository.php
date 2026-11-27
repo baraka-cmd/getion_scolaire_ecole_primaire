@@ -266,4 +266,18 @@ class RetardRepository
         return ['classe' => $class, 'eleves' => $students, 'retards' => $late];
     }
 
+
+    public function findParentRetards(int $studentId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT r.id, r.date_retard, r.heure_arrivee, r.heure_prevue, r.duree_retard,
+                    r.est_justifie, r.motif, DATE_FORMAT(r.date_retard, '%d/%m/%Y') AS date_format,
+                    DAYNAME(r.date_retard) AS jour_semaine,
+                    TIME_FORMAT(r.heure_arrivee, '%H:%i') AS heure_arrivee_format,
+                    TIME_FORMAT(r.heure_prevue, '%H:%i') AS heure_prevue_format
+             FROM retards r WHERE r.eleve_id = :eid ORDER BY r.date_retard DESC",
+            ['eid'=>$studentId]
+        );
+    }
+
 }
