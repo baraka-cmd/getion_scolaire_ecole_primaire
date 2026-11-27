@@ -329,21 +329,13 @@ class AnneeController
         try {
             $this->db->beginTransaction();
 
-            $configuration = $this->db->fetchOne(
-                "SELECT id, annee_scolaire_active_id
-                 FROM parametres_ecole
-                 WHERE id = 1
-                 FOR UPDATE"
-            );
+            $configuration = $this->getAnneeService()->findSchoolYearConfigurationForUpdate();
             if (!$configuration) {
                 $this->db->rollback();
                 jsonResponse(false, 'Configuration de l’année active introuvable. Aucune clôture effectuée.', [], 409);
             }
 
-            $annee = $this->db->fetchOne(
-                "SELECT * FROM annees_scolaires WHERE id = :id FOR UPDATE",
-                ['id' => $id]
-            );
+            $annee = $this->getAnneeService()->findForUpdate($id);
             if (!$annee) {
                 $this->db->rollback();
                 jsonResponse(false, 'Année introuvable.', [], 404);
@@ -410,7 +402,7 @@ class AnneeController
         $id = (int) post('id', 0);
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $annee = $this->db->fetchOne("SELECT * FROM annees_scolaires WHERE id = :id", ['id' => $id]);
+        $annee = $this->getAnneeService()->getById($id);
         if (!$annee) jsonResponse(false, 'Année introuvable.', [], 404);
 
         // Vérifier les inscriptions
