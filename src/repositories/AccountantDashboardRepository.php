@@ -91,7 +91,7 @@ class AccountantDashboardRepository
  LEFT JOIN finance_annulations an ON an.versement_id = v.id WHERE an.id IS NULL GROUP BY a.creance_id) p ON p.creance_id = cr.id
  WHERE cr.annee_scolaire_id = :annee GROUP BY cr.eleve_id) situations GROUP BY etat", ['annee' => $yearId]);
     }
-    public function latestReceipts(): array
+    public function latestReceipts(int $yearId): array
     {
         return $this->db->fetchAll("SELECT v.id, v.numero_recu, v.montant_recu, v.devise_recue, v.mode_paiement,
  DATE_FORMAT(v.date_versement, '%d/%m/%Y') AS date_format, e.matricule, e.nom, e.prenom,
@@ -105,6 +105,6 @@ class AccountantDashboardRepository
  SUM(CASE WHEN cr.devise = 'CDF' THEN a.montant_affecte ELSE 0 END) AS affecte_cdf
  FROM finance_affectations a INNER JOIN finance_creances cr ON cr.id = a.creance_id
  WHERE cr.annee_scolaire_id = :allocation_year GROUP BY a.versement_id) affectations ON affectations.versement_id = v.id
- WHERE an.id IS NULL ORDER BY v.date_versement DESC, v.id DESC LIMIT 8", ['allocation_year' => $this->activeYearId()]);
+ WHERE an.id IS NULL ORDER BY v.date_versement DESC, v.id DESC LIMIT 8", ['allocation_year' => $yearId]);
     }
 }
