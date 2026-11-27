@@ -32,3 +32,13 @@ La phase est une migration MVC sans changement des règles scolaires, calculs, r
 - Test local avec base de test : saisie/édition/absence, limites maxima, élève non autorisé, progression, résultats/délibération et bulletin imprimé.
 - Vérifier que les migrations/schema n'ont pas été modifiés.
 - Fusionner dans `main` seulement lorsque tout le périmètre est terminé et les vérifications sont vertes. Ne pas prétendre que les tests locaux ont été exécutés par GitHub.
+
+
+## 27 novembre 2026 — reprise complémentaire
+
+- Les requêtes de liste filtrée et de détail d'évaluation ont été déplacées de `NoteController` vers `EvaluationNoteRepository`, avec délégation par `EvaluationNoteService`.
+- Les filtres restent paramétrés ; le type d'évaluation est limité à la liste historique autorisée. Le JSON de sortie du contrôleur est conservé.
+- Le test smoke couvre maintenant la délégation de ces deux lectures.
+- Vérification GitHub Actions observée : le run déclenché par le commit de délégation du service est terminé avec succès. Le run déclenché par le dernier commit contrôleur était encore en cours lors du contrôle ; aucune conclusion n'est anticipée.
+
+La phase demeure ouverte : les mutations CRUD, la génération, la grille et la progression doivent encore être migrées et auditées. Le contrôle CI d'un lot ne valide pas à lui seul la phase complète ni la compatibilité avec la base et le navigateur.
