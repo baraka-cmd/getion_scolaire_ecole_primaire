@@ -221,7 +221,7 @@ class InscriptionRepository
     {
         return $this->db->fetchOne(
             "SELECT i.id, c.nom FROM inscriptions i INNER JOIN classes c ON c.id = i.classe_id
-             WHERE i.eleve_id = :eid AND i.annee_scolaire_id = :aid AND i.statut = 'Actif' LIMIT 1",
+             WHERE i.eleve_id = :eid AND i.annee_scolaire_id = :aid AND i.statut IN ('Actif', 'Redoublant') LIMIT 1",
             ['eid' => $studentId, 'aid' => $yearId]
         );
     }
@@ -315,7 +315,7 @@ class InscriptionRepository
                 return ['ok' => false, 'errors' => ['eleve_id' => 'Cet élève est déjà inscrit en ' . $existing['nom'] . ' pour cette année.']];
             }
             $count = (int) $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND annee_scolaire_id = :aid AND statut = 'Actif'",
+                "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND annee_scolaire_id = :aid AND statut IN ('Actif', 'Redoublant')",
                 ['cid' => $classId, 'aid' => $yearId]
             );
             if ($count >= (int) $class['capacite_max']) {
