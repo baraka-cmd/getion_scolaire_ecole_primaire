@@ -40,6 +40,23 @@ class RolePermissionService
         return array_values($grouped);
     }
 
+    public function getPermissionsForRole(int $roleId): array
+    {
+        $allPermissions = $this->getAllPermissionsGrouped();
+        $rolePermissions = $this->getRolePermissions($roleId);
+        $rolePermIds = array_column($rolePermissions, 'id');
+
+        foreach ($allPermissions as &$module) {
+            foreach ($module['permissions'] as &$permission) {
+                $permission['assigned'] = in_array($permission['id'], $rolePermIds);
+            }
+            unset($permission);
+        }
+        unset($module);
+
+        return $allPermissions;
+    }
+
     public function updatePermissions(int $roleId, array $permissionIds): bool
     {
         $success = $this->repository->replacePermissions($roleId, $permissionIds);
