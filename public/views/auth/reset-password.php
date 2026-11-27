@@ -2,7 +2,7 @@
 
 defined('ACCESS') or define('ACCESS', true);
 require_once __DIR__ . '/../../../src/config/app.php';
-require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AuthRateLimitService.php';
+require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'PasswordResetController.php';
 
 if (isLoggedIn()) {
     redirect(BASE_URL . 'dashboard');
@@ -11,88 +11,12 @@ if (isLoggedIn()) {
 header('Cache-Control: no-store, private');
 header('Referrer-Policy: no-referrer');
 
-$token = $_SERVER['REQUEST_METHOD'] === 'POST'
-    ? (string) ($_POST['token'] ?? '')
-    : (string) ($_GET['token'] ?? '');
-$tokenValidFormat = preg_match('/^[a-f0-9]{64}$/', $token) === 1;
-$reset = $tokenValidFormat
-    ? $db->fetchOne(
-        'SELECT user_id FROM password_reset_tokens
-         WHERE token_hash = :token_hash AND expires_at > NOW()',
-        ['token_hash' => hash('sha256', $token)]
-    )
-    : null;
-$errorMessage = '';
-$errors = [];
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {
-        http_response_code(419);
-        $errorMessage = 'Session expirée. Actualisez la page puis réessayez.';
-    } elseif (!$reset) {
-        $errorMessage = 'Ce lien est invalide ou expiré. Demandez une nouvelle réinitialisation.';
-    } else {
-        $password = (string) ($_POST['password'] ?? '');
-        $confirmation = (string) ($_POST['confirm_password'] ?? '');
-
-        if (mb_strlen($password) < 12) {
-            $errors['password'] = 'Le mot de passe doit contenir au moins 12 caractères.';
-        } elseif (strlen($password) > 72) {
-            $errors['password'] = 'Le mot de passe est trop long. La limite sécurisée est de 72 octets.';
-        } elseif (
-            !preg_match('/[A-Z]/', $password)
-            || !preg_match('/[a-z]/', $password)
-            || !preg_match('/[0-9]/', $password)
-        ) {
-            $errors['password'] = 'Utilisez au moins une majuscule, une minuscule et un chiffre.';
-        }
-        if ($password !== $confirmation) {
-            $errors['confirm_password'] = 'Les mots de passe ne correspondent pas.';
-        }
-
-        if (!$errors) {
-            try {
-                $db->beginTransaction();
-                $lockedReset = $db->fetchOne(
-                    'SELECT user_id FROM password_reset_tokens
-                     WHERE token_hash = :token_hash AND expires_at > NOW()
-                     FOR UPDATE',
-                    ['token_hash' => hash('sha256', $token)]
-                );
-                if (!$lockedReset) {
-                    $db->rollback();
-                    $errorMessage = 'Ce lien est invalide, expiré ou déjà utilisé.';
-                } else {
-                    $hashedPassword = password_hash($password, PASSWORD_ALGO, ['cost' => PASSWORD_COST]);
-                    $updated = $db->update(
-                        'UPDATE utilisateurs
-                         SET mot_de_passe = :password, tentatives_echecs = 0, bloque_jusqua = NULL
-                         WHERE id = :user_id AND est_actif = 1',
-                        ['password' => $hashedPassword, 'user_id' => $lockedReset['user_id']]
-                    );
-                    if ($updated !== 1) {
-                        $db->rollback();
-                        $errorMessage = 'Ce lien est invalide ou expiré. Demandez une nouvelle réinitialisation.';
-                    } else {
-                        $db->delete(
-                            'DELETE FROM password_reset_tokens WHERE user_id = :user_id',
-                            ['user_id' => $lockedReset['user_id']]
-                        );
-                        $db->commit();
-                        (new AuthRateLimitService($db))->clear('login', AuthRateLimitService::clientIp());
-                        redirect(BASE_URL . 'login?password_reset=1');
-                    }
-                }
-            } catch (Throwable $e) {
-                if ($db->getPdo()->inTransaction()) {
-                    $db->rollback();
-                }
-                error_log('Échec de validation du lien de réinitialisation (' . get_class($e) . ').');
-                $errorMessage = 'Une erreur technique est survenue. Veuillez réessayer.';
-            }
-        }
-    }
-}
+$resetController = new PasswordResetController();
+$resetState = $resetController->handleResetPassword();
+$token = $resetState['token'];
+$reset = $resetState['reset'];
+$errorMessage = $resetState['errorMessage'];
+$errors = $resetState['errors'];
 
 $pageTitle = 'Choisir un nouveau mot de passe';
 ?>
