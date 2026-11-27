@@ -65,6 +65,7 @@ La phase 2 a été mise en œuvre sur la branche `refactor/mvc-phase-0-1` par ch
 - `AuthController` conserve l'orchestration HTTP, la validation et la gestion de session, mais les requêtes de compte, la création transactionnelle, l'historique de tentative et la persistance OAuth sont délégués à `AuthAccountService`/`AuthRepository`.
 - `AuthRateLimitService` porte les règles de limitation et la validation des clés ; `AuthRateLimitRepository` porte les requêtes et la transaction atomique du compteur.
 - Les pages de récupération et de réinitialisation du mot de passe gardent leur HTML et leurs messages ; le traitement a été déplacé vers `PasswordResetController`, `PasswordResetService` et `PasswordResetRepository`. Le jeton reste haché, limité dans le temps, consommé transactionnellement et le mot de passe est mis à jour avec remise à zéro des tentatives.
+- La vue de connexion ne contient plus la requête SQL de paramètres école : elle appelle `SchoolParametersService` et `SchoolParametersRepository`, tout en conservant le cache de session et les valeurs de repli de présentation.
 
 Les contrats de routes, validation, messages, paramètres du rate-limit, réponses et présentation des vues ont été conservés dans les chemins modifiés. Aucun schéma ni donnée de base n'a été modifié.
 
@@ -73,6 +74,6 @@ Les contrats de routes, validation, messages, paramètres du rate-limit, répons
 
 ## Phase 2 — Journal de progression (27 novembre 2026)
 
-Derniers ajouts sur la branche dédiée : repositories et services pour le rate-limit et la réinitialisation du mot de passe ; contrôleurs des pages oubli/réinitialisation désormais sans SQL ; transactions de création utilisateur/Google et remplacement des permissions encapsulées dans les repositories. Les vues de récupération conservent leur structure HTML/CSS et leurs messages visibles.
+Derniers ajouts sur la branche dédiée : repositories et services pour le rate-limit, les paramètres école de la page login et la réinitialisation du mot de passe ; contrôleurs des pages oubli/réinitialisation désormais sans SQL ; vues login/forgot/reset sans SQL direct ; transactions de création utilisateur/Google et remplacement des permissions encapsulées dans les repositories.
 
 À la reprise, lire ce suivi et `docs/MVC_REFACTORING_CONTRACT.md`, récupérer la branche, exécuter `php -l` sur les fichiers modifiés et les tests `tests/auth_security_smoke.php`, `tests/google_oauth_config_smoke.php`, `tests/users_listing_smoke.php` et `tests/finance_auth_users_service_smoke.php` avec une base de test appropriée. Comparer ensuite les réponses et les flux de login, OAuth, reset, utilisateurs et rôles. Ne clôturer la validation qu'après ces résultats réels.
