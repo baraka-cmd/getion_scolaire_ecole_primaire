@@ -3,14 +3,15 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../repositories/StudentAccessRepository.php';
+require_once __DIR__ . '/../config/database.php';
 
 class StudentAccessPolicy
 {
     private StudentAccessRepository $repository;
 
-    public function __construct(?StudentAccessRepository $repository = null)
+    public function __construct(?Database $db = null, ?StudentAccessRepository $repository = null)
     {
-        $this->repository = $repository ?? new StudentAccessRepository();
+        $this->repository = $repository ?? new StudentAccessRepository($db);
     }
 
     public function canCurrentUserAccessStudent(int $studentId): bool
