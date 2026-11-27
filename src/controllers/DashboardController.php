@@ -10,13 +10,26 @@ require_once __DIR__ . '/../services/DashboardService.php';
 
 class DashboardController
 {
-    private Database $db;
     private DashboardService $dashboardService;
 
     public function __construct(?DashboardService $dashboardService = null)
     {
-        $this->db = Database::getInstance();
         $this->dashboardService = $dashboardService ?? new DashboardService();
+    }
+
+    /**
+     * Données de présentation initiale des indicateurs administratifs.
+     * La vue ne doit pas interroger directement la base.
+     */
+    public function getInitialStats(int $userId): array
+    {
+        $yearId = $this->dashboardService->getActiveYearId();
+        // Conserve le fallback historique de la page admin si aucune année n'est configurée.
+        if ($yearId <= 0) {
+            $yearId = 1;
+        }
+
+        return $this->dashboardService->getStats($yearId, $userId);
     }
 
     /**
@@ -24,8 +37,14 @@ class DashboardController
      */
     public function handleAjax(): void
     {
-        if (!isAjax() || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+        if (!isAjax() || ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             jsonResponse(false, 'Requête invalide.', [], 400);
+        }
+
+        // Ces graphiques agrègent des données scolaires et financières globales.
+        // Le contrôle est côté serveur, indépendamment de l'affichage des liens.
+        if (!hasRole(['Admin', 'Directeur'])) {
+            jsonResponse(false, 'Accès non autorisé.', [], 403);
         }
 
         $action = post('action', '');
