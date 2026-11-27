@@ -13,7 +13,6 @@ final class InMemoryEvaluationNoteRepository extends EvaluationNoteRepository
     public array $studentIds = [10, 11];
     public array $maxima = [4 => 40.0];
     public array $studentNotes = [['valeur' => 17.0]];
-    
     public function findEvaluationEntryContext(int $evaluationId): ?array
     {
         $this->calls[] = ['context', $evaluationId];
@@ -79,6 +78,7 @@ if ($service->getEntryContext(5) !== $repository->entryContext
     throw new RuntimeException('Evaluation reads were not delegated through the service.');
 }
 
+$repository->calls = [];
 $repository->existingId = 7;
 if (!$service->saveCell(2, 3, 4, 12.5, 0, 9) || $repository->calls[0] !== ['update', 7, 12.5, 0]) {
     throw new RuntimeException('An existing note was not updated.');
