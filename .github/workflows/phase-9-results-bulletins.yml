@@ -1,0 +1,51 @@
+name: Phase 9 - Results and bulletins MVC regression
+
+on:
+  push:
+    branches:
+      - refactor/phase-9-results-bulletins
+      - refactor/phase-8-evaluations-notes
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/controllers/ResultatController.php'
+      - 'src/controllers/BulletinController.php'
+      - 'src/services/ResultsBulletinService.php'
+      - 'src/repositories/ResultsBulletinRepository.php'
+      - 'src/services/AcademicResultsService.php'
+      - 'src/repositories/AcademicResultsRepository.php'
+      - 'src/services/EvaluationNoteService.php'
+      - 'src/repositories/EvaluationNoteRepository.php'
+      - 'src/policies/StudentAccessPolicy.php'
+      - 'tests/results_bulletin_service_smoke.php'
+      - 'tests/academic_results_service_smoke.php'
+      - 'tests/evaluation_note_service_smoke.php'
+      - '.github/workflows/phase-9-results-bulletins.yml'
+
+jobs:
+  php-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: PHP syntax
+        run: |
+          php -l src/controllers/ResultatController.php
+          php -l src/controllers/BulletinController.php
+          php -l src/services/ResultsBulletinService.php
+          php -l src/repositories/ResultsBulletinRepository.php
+          php -l src/services/AcademicResultsService.php
+          php -l src/repositories/AcademicResultsRepository.php
+          php -l src/services/EvaluationNoteService.php
+          php -l src/repositories/EvaluationNoteRepository.php
+          php -l src/policies/StudentAccessPolicy.php
+          php -l tests/results_bulletin_service_smoke.php
+          php -l tests/academic_results_service_smoke.php
+          php -l tests/evaluation_note_service_smoke.php
+      - name: Service and regression smoke tests
+        run: |
+          php tests/results_bulletin_service_smoke.php
+          php tests/academic_results_service_smoke.php
+          php tests/evaluation_note_service_smoke.php
