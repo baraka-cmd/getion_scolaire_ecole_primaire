@@ -218,17 +218,7 @@ class MatiereController
             foreach ($_POST['classes'] as $classeId) {
                 $classeId = (int) $classeId;
                 if ($classeId > 0) {
-                    $existe = $this->db->fetchColumn(
-                        "SELECT COUNT(*) FROM classe_matieres WHERE matiere_id = :mid AND classe_id = :cid",
-                        ['mid' => $matiereId, 'cid' => $classeId]
-                    );
-                    if ($existe == 0) {
-                        $this->db->query(
-                            "INSERT INTO classe_matieres (matiere_id, classe_id, maxima_override, est_active) 
-                             VALUES (:mid, :cid, NULL, 1)",
-                            ['mid' => $matiereId, 'cid' => $classeId]
-                        );
-                    }
+                    $this->matiereService->createClassAssociationIfMissing($matiereId, $classeId);
                 }
             }
         }
@@ -311,18 +301,12 @@ class MatiereController
                 'id'         => $id
             ];
 
-            $sql = "UPDATE matieres 
-                    SET code = :code, libelle = :libelle, description = :desc, maxima = :maxima";
-
-            // Ne changer le parent que pour les sous-matières
-            if (!$existant['est_groupe'] && $parentId > 0) {
-                $sql .= ", parent_id = :parent_id";
+            $updateParent = !$existant['est_groupe'] && $parentId > 0;
+            if ($updateParent) {
                 $updateData['parent_id'] = $parentId;
             }
 
-            $sql .= " WHERE id = :id";
-
-            $this->db->update($sql, $updateData);
+            $this->matiereService->updateSubject($updateData, $updateParent);
 
             logActivity('Modification', 'matieres', $id, "Matière modifiée : {$libelle}");
 
