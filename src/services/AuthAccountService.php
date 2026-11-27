@@ -59,6 +59,11 @@ class AuthAccountService
         return $this->repository->createGoogleUser($data);
     }
 
+    public function createGoogleUserTransactional(array $data): int
+    {
+        return $this->repository->createGoogleUserTransactional($data);
+    }
+
     public function recordSuccessfulLogin(int $userId, string $ip): void
     {
         $this->repository->updateSuccessfulLogin($userId, $ip);
