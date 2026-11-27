@@ -9,6 +9,34 @@ final class InMemoryEvaluationNoteRepository extends EvaluationNoteRepository
 {
     public mixed $existingId = null;
     public array $calls = [];
+    public array $entryContext = ['id' => 5, 'classe_id' => 2, 'groupe_id' => 8, 'type_evaluation' => 'Examen', 'annee_scolaire_id' => 3];
+    public array $studentIds = [10, 11];
+    public array $maxima = [4 => 40.0];
+    public array $studentNotes = [['valeur' => 17.0]];
+    
+    public function findEvaluationEntryContext(int $evaluationId): ?array
+    {
+        $this->calls[] = ['context', $evaluationId];
+        return $this->entryContext;
+    }
+
+    public function findActiveStudentIdsForEvaluation(int $classId, int $yearId): array
+    {
+        $this->calls[] = ['students', $classId, $yearId];
+        return $this->studentIds;
+    }
+
+    public function findActiveSubjectMaximaForEvaluation(int $classId, int $groupId, string $evaluationType): array
+    {
+        $this->calls[] = ['maxima', $classId, $groupId, $evaluationType];
+        return $this->maxima;
+    }
+
+    public function findStudentNotes(int $studentId, int $trimesterId = 0): array
+    {
+        $this->calls[] = ['student-notes', $studentId, $trimesterId];
+        return $this->studentNotes;
+    }
 
     public function __construct()
     {
@@ -43,6 +71,13 @@ final class InMemoryEvaluationNoteRepository extends EvaluationNoteRepository
 
 $repository = new InMemoryEvaluationNoteRepository();
 $service = new EvaluationNoteService($repository);
+
+if ($service->getEntryContext(5) !== $repository->entryContext
+    || $service->getActiveStudentIds(2, 3) !== [10, 11]
+    || $service->getSubjectMaxima(2, 8, 'Examen') !== [4 => 40.0]
+    || $service->getStudentNotes(10, 2) !== [['valeur' => 17.0]]) {
+    throw new RuntimeException('Evaluation reads were not delegated through the service.');
+}
 
 $repository->existingId = 7;
 if (!$service->saveCell(2, 3, 4, 12.5, 0, 9) || $repository->calls[0] !== ['update', 7, 12.5, 0]) {
