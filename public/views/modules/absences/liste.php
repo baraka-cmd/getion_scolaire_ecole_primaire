@@ -12,7 +12,6 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('absences.consulter');
 
-global $db;
 
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AbsenceController.php';
 $absenceController = new AbsenceController();
@@ -22,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
 }
 
 $classes = $absenceController->getClassesActives();
-$trimestres = $db->fetchAll("SELECT * FROM trimestres WHERE annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) ORDER BY numero");
+$trimestres = $absenceController->getActiveTrimesters();
 
 $classeId = (int) ($_GET['classe_id'] ?? 0);
 $trimestreId = (int) ($_GET['trimestre_id'] ?? 0);
