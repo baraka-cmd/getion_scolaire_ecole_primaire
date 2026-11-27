@@ -343,4 +343,100 @@ class AbsenceRepository
         return ['classe' => $class, 'eleves' => $students, 'absences' => $marked];
     }
 
+
+    public function getActiveTrimesters(): array
+    {
+        return $this->db->fetchAll('SELECT * FROM trimestres WHERE annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) ORDER BY numero');
+    }
+
+    public function getTeacherClassOverview(int $userId): ?array
+    {
+        return $this->db->fetchOne(
+            "SELECT c.id, c.nom, c.niveau, c.salle, c.capacite_max, a.libelle AS annee_libelle
+             FROM enseignants e INNER JOIN classes c ON c.id = e.classe_id
+             INNER JOIN annees_scolaires a ON c.annee_scolaire_id = a.id
+             WHERE e.utilisateur_id = :uid AND e.est_actif = 1 LIMIT 1",
+            ['uid'=>$userId]
+        );
+    }
+
+    public function getClassMonthStatistics(int $classId): array
+    {
+        return [
+            'absences_mois'=>(int)$this->db->fetchColumn(
+                "SELECT COUNT(*) FROM absences a INNER JOIN inscriptions i ON a.eleve_id = i.eleve_id
+                 WHERE i.classe_id = :cid AND a.type_absence = 'Absence'
+                   AND MONTH(a.date_absence) = MONTH(CURDATE()) AND YEAR(a.date_absence) = YEAR(CURDATE())",
+                ['cid'=>$classId]
+            ),
+            'absences_non_justifiees_mois'=>(int)$this->db->fetchColumn(
+                "SELECT COUNT(*) FROM absences a INNER JOIN inscriptions i ON a.eleve_id = i.eleve_id
+                 WHERE i.classe_id = :cid AND a.type_absence = 'Absence' AND a.est_justifiee = 0
+                   AND MONTH(a.date_absence) = MONTH(CURDATE()) AND YEAR(a.date_absence) = YEAR(CURDATE())",
+                ['cid'=>$classId]
+            )
+        ];
+    }
+
+    public function findParentProfileId(int $userId): int
+    {
+        return (int) $this->db->fetchColumn('SELECT id FROM parents_tuteurs WHERE utilisateur_id = :uid LIMIT 1',['uid'=>$userId]);
+    }
+
+    public function findParentChildren(int $parentId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe, c.nom AS classe_nom, c.niveau AS classe_niveau
+             FROM eleve_parent ep INNER JOIN eleves e ON ep.eleve_id = e.id AND e.est_actif = 1
+             LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
+             LEFT JOIN classes c ON i.classe_id = c.id
+             WHERE ep.parent_id = :pid ORDER BY ep.est_tuteur_principal DESC, e.nom",
+            ['pid'=>$parentId]
+        );
+    }
+
+    public function findParentAbsences(int $studentId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT a.id, a.date_absence, a.type_absence, a.est_justifiee, a.motif,
+                    DATE_FORMAT(a.date_absence, '%d/%m/%Y') AS date_format,
+                    DAYNAME(a.date_absence) AS jour_semaine
+             FROM absences a WHERE a.eleve_id = :eid AND a.type_absence = 'Absence'
+             ORDER BY a.date_absence DESC",
+            ['eid'=>$studentId]
+        );
+    }
+
+    public function findClassStudents(int $classId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe
+             FROM inscriptions i INNER JOIN eleves e ON i.eleve_id = e.id
+             WHERE i.classe_id = :cid AND i.statut = 'Actif' AND e.est_actif = 1 ORDER BY e.nom",
+            ['cid'=>$classId]
+        );
+    }
+
+    public function findStudentAbsencesForJustification(int $studentId): array
+    {
+        return [
+            'non_justifiees'=>$this->db->fetchAll(
+                "SELECT a.*, DATE_FORMAT(a.date_absence, '%d/%m/%Y') AS date_format,
+                        e.matricule, e.nom, e.prenom, c.nom AS classe_nom
+                 FROM absences a INNER JOIN eleves e ON a.eleve_id = e.id
+                 INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
+                 INNER JOIN classes c ON i.classe_id = c.id
+                 WHERE a.eleve_id = :eid AND a.type_absence = 'Absence' ORDER BY a.date_absence DESC",
+                ['eid'=>$studentId]
+            ),
+            'justifiees'=>$this->db->fetchAll(
+                "SELECT a.*, DATE_FORMAT(a.date_absence, '%d/%m/%Y') AS date_format,
+                        DATE_FORMAT(a.date_justification, '%d/%m/%Y') AS date_justification_format
+                 FROM absences a WHERE a.eleve_id = :eid AND a.type_absence = 'Absence'
+                   AND a.est_justifiee = 1 ORDER BY a.date_absence DESC",
+                ['eid'=>$studentId]
+            )
+        ];
+    }
+
 }
