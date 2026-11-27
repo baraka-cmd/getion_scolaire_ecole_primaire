@@ -26,6 +26,21 @@ class StudentRecordService
         return $this->repository->findRecord($studentId);
     }
 
+    public function findDetailForForm(int $studentId): ?array
+    {
+        return $studentId > 0 ? $this->repository->findDetailForForm($studentId) : null;
+    }
+
+    public function getActiveClassesForForms(): array
+    {
+        return $this->repository->getActiveClassesForForms();
+    }
+
+    public function enrollmentHistory(int $studentId): array
+    {
+        return $studentId > 0 ? $this->repository->enrollmentHistory($studentId) : [];
+    }
+
     public function getAcademicAndAttendanceHistory(int $studentId): array
     {
         if ($studentId <= 0) {
