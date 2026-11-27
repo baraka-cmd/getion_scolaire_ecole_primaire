@@ -25,4 +25,5 @@ class PaymentReadService
         } else throw new InvalidArgumentException('Page financière non prise en charge.');
         return $data;
     }
+public function className(int $classId): ?string { return $this->repository->className($classId); }
 }
