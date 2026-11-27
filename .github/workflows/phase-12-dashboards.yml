@@ -9,7 +9,8 @@ on:
       - 'src/controllers/DashboardController.php'
       - 'src/services/DashboardService.php'
       - 'src/repositories/DashboardRepository.php'
-      - 'public/views/dashboard/admin.php'\n      - 'public/views/dashboard/enseignant.php'\n      - 'src/controllers/TeacherDashboardController.php'\n      - 'src/services/TeacherDashboardService.php'\n      - 'src/repositories/TeacherDashboardRepository.php'\n      - 'tests/teacher_dashboard_mvc_smoke.php'
+      - 'public/views/dashboard/admin.php'
+      - 'public/views/dashboard/enseignant.php'\n      - 'src/controllers/TeacherDashboardController.php'\n      - 'src/services/TeacherDashboardService.php'\n      - 'src/repositories/TeacherDashboardRepository.php'\n      - 'tests/teacher_dashboard_mvc_smoke.php'
       - 'tests/phase12_dashboard_mvc_smoke.php'
       - '.github/workflows/phase-12-dashboards.yml'
 
