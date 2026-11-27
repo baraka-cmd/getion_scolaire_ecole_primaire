@@ -9,14 +9,17 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../services/RetardService.php';
+require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
 
 class RetardController
 {
     private RetardService $retardService;
+    private StudentAccessPolicy $studentAccessPolicy;
 
-    public function __construct(?RetardService $retardService = null)
+    public function __construct(?RetardService $retardService = null, ?StudentAccessPolicy $studentAccessPolicy = null)
     {
         $this->retardService = $retardService ?? new RetardService();
+        $this->studentAccessPolicy = $studentAccessPolicy ?? new StudentAccessPolicy();
     }
 
     /**
@@ -68,69 +71,28 @@ class RetardController
     public function enregistrerRetard(): void
     {
         requirePermission('retards.enregistrer');
-
-        $eleveId      = (int) post('eleve_id', 0);
-        $dateRetard   = post('date_retard', date('Y-m-d'));
-        $heureArrivee = post('heure_arrivee', '');
-        $heurePrevue  = post('heure_prevue', '07:30');
-        $motif        = post('motif', '');
-        $estJustifie  = (int) post('est_justifie', 0);
-
+        $eleveId = (int) post('eleve_id', 0);
         if ($eleveId <= 0) jsonResponse(false, 'ID élève invalide.', [], 400);
+        if (!$this->studentAccessPolicy->canCurrentUserAccessStudent($eleveId)) jsonResponse(false, 'Élève introuvable ou non autorisé.', [], 404);
+        $dateRetard = post('date_retard', date('Y-m-d'));
+        $heureArrivee = post('heure_arrivee', '');
+        $heurePrevue = post('heure_prevue', '07:30');
+        $motif = post('motif', '');
+        $estJustifie = (int) post('est_justifie', 0);
         if (empty($heureArrivee)) jsonResponse(false, 'L\'heure d\'arrivée est obligatoire.', [], 400);
-
-        // Calculer la durée du retard en minutes
         $dureeRetard = $this->retardService->calculateDuration($heurePrevue, $heureArrivee);
-
-        if ($dureeRetard <= 0) {
-            jsonResponse(false, 'L\'heure d\'arrivée doit être après l\'heure prévue.', [], 400);
-        }
-
-        // Vérifier que l'élève existe et est inscrit
+        if ($dureeRetard <= 0) jsonResponse(false, 'L\'heure d\'arrivée doit être après l\'heure prévue.', [], 400);
         $eleve = $this->retardService->findActiveStudent($eleveId);
-
         if (!$eleve) jsonResponse(false, 'Élève introuvable ou non inscrit.', [], 404);
-
-        // Vérifier si un retard existe déjà pour cette date
-        if ($this->retardService->existsForDate($eleveId, $dateRetard)) {
-            jsonResponse(false, 'Un retard a déjà été enregistré pour cet élève à cette date.', [], 409);
-        }
-
+        if ($this->retardService->existsForDate($eleveId, $dateRetard)) jsonResponse(false, 'Un retard a déjà été enregistré pour cet élève à cette date.', [], 409);
         try {
-            $retardId = $this->retardService->createRetard(
-                $eleveId,
-                $dateRetard,
-                $heureArrivee,
-                $heurePrevue,
-                $dureeRetard,
-                $motif,
-                $estJustifie,
-                (int) $_SESSION['utilisateur_id']
-            );
-
-            // Vérifier le nombre de retards et alerter si nécessaire
+            $retardId = $this->retardService->createRetard($eleveId, $dateRetard, $heureArrivee, $heurePrevue, $dureeRetard, $motif, $estJustifie, (int) $_SESSION['utilisateur_id']);
             $nbRetards = $this->retardService->countForStudent($eleveId);
-
-            $message = 'Retard enregistré avec succès.';
-            $alerte = null;
-
-            if ($nbRetards >= 10) {
-                $alerte = '⚠️ Cet élève totalise ' . $nbRetards . ' retards. Une convocation des parents est recommandée.';
-            } elseif ($nbRetards >= 5) {
-                $alerte = '⚠️ Cet élève totalise ' . $nbRetards . ' retards. Une alerte aux parents est recommandée.';
-            } elseif ($nbRetards >= 3) {
-                $alerte = 'Cet élève totalise ' . $nbRetards . ' retards.';
-            }
-
+            $alerte = $nbRetards >= 10 ? '⚠️ Cet élève totalise ' . $nbRetards . ' retards. Une convocation des parents est recommandée.'
+                : ($nbRetards >= 5 ? '⚠️ Cet élève totalise ' . $nbRetards . ' retards. Une alerte aux parents est recommandée.'
+                : ($nbRetards >= 3 ? 'Cet élève totalise ' . $nbRetards . ' retards.' : null));
             logActivity('Création', 'retards', $retardId, "Retard de {$eleve['nom']} {$eleve['prenom']} — {$dureeRetard} min");
-
-            jsonResponse(true, $message, [
-                'retard_id'    => $retardId,
-                'duree_retard' => $dureeRetard,
-                'nb_retards'   => $nbRetards,
-                'alerte'       => $alerte
-            ]);
-
+            jsonResponse(true, 'Retard enregistré avec succès.', ['retard_id'=>$retardId,'duree_retard'=>$dureeRetard,'nb_retards'=>$nbRetards,'alerte'=>$alerte]);
         } catch (Exception $e) {
             error_log('Erreur enregistrement retard: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de l\'enregistrement du retard.');
@@ -200,15 +162,12 @@ class RetardController
     public function justifierRetard(): void
     {
         $retardId = (int) post('retard_id', 0);
-        $motif    = post('motif', '');
-
+        $motif = post('motif', '');
         if ($retardId <= 0) jsonResponse(false, 'ID retard invalide.', [], 400);
         if (empty($motif)) jsonResponse(false, 'Le motif est obligatoire.', [], 422);
-
-        if (!$this->retardService->justify($retardId, $motif)) {
-            jsonResponse(false, 'Retard introuvable.', [], 404);
-        }
-
+        $studentId = $this->retardService->findStudentIdForRetard($retardId);
+        if ($studentId === null || !$this->studentAccessPolicy->canCurrentUserAccessStudent($studentId)) jsonResponse(false, 'Retard introuvable.', [], 404);
+        if (!$this->retardService->justify($retardId, $motif)) jsonResponse(false, 'Retard introuvable.', [], 404);
         logActivity('Justification', 'retards', $retardId, 'Retard justifié');
         jsonResponse(true, 'Retard justifié avec succès.');
     }
@@ -224,22 +183,12 @@ class RetardController
     {
         $eleveId = (int) post('eleve_id', 0);
         if ($eleveId <= 0) jsonResponse(false, 'ID élève invalide.', [], 400);
-        if (hasRole('Enseignant')) {
-            $ownedClass = $this->retardService->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
-            if (!$ownedClass || !$this->retardService->studentBelongsToClass($eleveId, $ownedClass)) {
-                jsonResponse(false, 'Élève introuvable.', [], 404);
-            }
-        }
+        if (!$this->studentAccessPolicy->canCurrentUserAccessStudent($eleveId)) jsonResponse(false, 'Élève introuvable.', [], 404);
         $retards = $this->retardService->getStudentHistory($eleveId);
         $nbRetards = count($retards);
         $totalDuree = array_sum(array_column($retards, 'duree_retard'));
         $moyenneDuree = $nbRetards > 0 ? round($totalDuree / $nbRetards, 1) : 0;
-        jsonResponse(true, 'Retards récupérés.', [
-            'retards' => $retards,
-            'nb_retards' => $nbRetards,
-            'total_duree' => $totalDuree,
-            'moyenne_duree' => $moyenneDuree
-        ]);
+        jsonResponse(true, 'Retards récupérés.', ['retards'=>$retards,'nb_retards'=>$nbRetards,'total_duree'=>$totalDuree,'moyenne_duree'=>$moyenneDuree]);
     }
 
     // ============================================================
@@ -252,12 +201,21 @@ class RetardController
     public function supprimerRetard(): void
     {
         requirePermission('retards.supprimer');
-
         $retardId = (int) post('retard_id', 0);
         if ($retardId <= 0) jsonResponse(false, 'ID retard invalide.', [], 400);
-
+        $studentId = $this->retardService->findStudentIdForRetard($retardId);
+        if ($studentId === null || !$this->studentAccessPolicy->canCurrentUserAccessStudent($studentId)) jsonResponse(false, 'Retard introuvable.', [], 404);
         $this->retardService->delete($retardId);
         jsonResponse(true, 'Retard supprimé avec succès.');
+    }
+
+    public function getMarkingData(int $classId, string $date): array
+    {
+        if (hasRole('Enseignant')) {
+            $ownedClass = $this->retardService->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
+            if (!$ownedClass || $classId !== $ownedClass) jsonResponse(false, 'Vous ne pouvez consulter que votre classe.', [], 403);
+        }
+        return $this->retardService->getMarkingData($classId, $date);
     }
 
     public function getStatsGlobales(): array
