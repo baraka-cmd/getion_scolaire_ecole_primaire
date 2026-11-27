@@ -51,6 +51,17 @@ class StudentAccessRepositoryFake extends StudentAccessRepository
     public function teacherAssignedToStudent(int $userId, int $studentId): bool { return $this->teacherAssigned; }
 }
 
+class DocumentRepositoryFake extends DocumentRepository
+{
+    public array $lastArgs = [];
+    public function __construct() {}
+    public function paginateVisible(array $filters, int $page, int $perPage, bool $admin): array
+    {
+        $this->lastArgs = compact('filters', 'page', 'perPage', 'admin');
+        return ['documents' => [], 'total' => 0, 'total_fichiers' => 0, 'taille_totale_octets' => 0, 'par_categorie' => []];
+    }
+}
+
 $repository = new StudentRecordRepositoryFake();
 $service = new StudentRecordService($repository);
 $page = $service->paginate(['recherche' => 'A'], 0, 25, 'Parent', 9);
