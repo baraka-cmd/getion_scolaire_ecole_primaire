@@ -159,6 +159,21 @@ class FinanceRepository
         return (int) $this->db->fetchColumn($sql, $params) > 0;
     }
 
+    public function schoolYearExists(int $yearId): bool
+    {
+        return (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM annees_scolaires WHERE id = :id", ['id' => $yearId]
+        ) > 0;
+    }
+
+    public function classBelongsToYear(int $classId, int $yearId): bool
+    {
+        return (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM classes WHERE id = :id AND annee_scolaire_id = :annee",
+            ['id' => $classId, 'annee' => $yearId]
+        ) > 0;
+    }
+
     public function createFee(array $data): int
     {
         return (int) $this->db->insert(
