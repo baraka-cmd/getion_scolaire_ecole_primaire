@@ -8,12 +8,12 @@ require_once __DIR__ . '/AcademicResultsService.php';
 class InscriptionService
 {
     private InscriptionRepository $repository;
-    private AcademicResultsService $academicResults;
+    private ?AcademicResultsService $academicResults;
 
     public function __construct(?InscriptionRepository $repository = null, ?AcademicResultsService $academicResults = null)
     {
         $this->repository = $repository ?? new InscriptionRepository();
-        $this->academicResults = $academicResults ?? new AcademicResultsService();
+        $this->academicResults = $academicResults;
     }
 
     public function paginate(array $filters, int $page, int $perPage): array
@@ -121,7 +121,7 @@ class InscriptionService
         }
 
         $students = $this->repository->transitionStudents($sourceClassId, $sourceYearId);
-        $annual = $this->academicResults->getAnnualResultsForClass($sourceClassId, $sourceYearId);
+        $annual = ($this->academicResults ?? new AcademicResultsService())->getAnnualResultsForClass($sourceClassId, $sourceYearId);
         $byStudent = [];
         foreach (($annual['resultats'] ?? []) as $result) $byStudent[(int) $result['eleve_id']] = $result;
         foreach ($students as &$student) {
