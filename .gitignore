@@ -4,6 +4,8 @@
 /vendor/
 /storage/
 /public/assets/uploads/
+/public/uploads/*
+!/public/uploads/.gitkeep
 /public/assets/fontawesome/js/
 /public/assets/fontawesome/metadata/
 /public/assets/fontawesome/sprites/
