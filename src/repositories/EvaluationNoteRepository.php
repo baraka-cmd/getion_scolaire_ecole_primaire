@@ -306,4 +306,66 @@ class EvaluationNoteRepository
     {
         return $this->db->fetchAll("SELECT m.id, m.libelle FROM matieres m WHERE m.est_groupe = 1 AND m.est_actif = 1 ORDER BY m.id");
     }
+
+    public function findEvaluationAccessContext(int $evaluationId): ?array
+    {
+        return $this->db->fetchOne("SELECT ev.classe_id, t.annee_scolaire_id FROM evaluations ev INNER JOIN trimestres t ON t.id = ev.trimestre_id INNER JOIN classes c ON c.id = ev.classe_id AND c.annee_scolaire_id = t.annee_scolaire_id WHERE ev.id = :id", ['id' => $evaluationId]);
+    }
+
+    public function teacherHasClassAssignment(int $userId, int $classId, int $yearId): bool
+    {
+        return (bool) $this->db->fetchColumn("SELECT EXISTS (SELECT 1 FROM enseignants ens INNER JOIN classes c ON c.id = ens.classe_id WHERE ens.utilisateur_id = :user_id AND ens.est_actif = 1 AND c.id = :class_id AND c.annee_scolaire_id = :year_id AND c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole WHERE id = 1))", ['user_id'=>$userId,'class_id'=>$classId,'year_id'=>$yearId]);
+    }
+
+    public function findEvaluationIdsForProgression(int $termId, int $classId, string $type): array
+    {
+        return $this->db->fetchAll("SELECT id FROM evaluations WHERE trimestre_id = :tid AND classe_id = :cid AND type_evaluation = :type", ['tid'=>$termId,'cid'=>$classId,'type'=>$type]);
+    }
+
+    public function countNotesForEvaluationIds(array $evaluationIds): int
+    {
+        if (!$evaluationIds) return 0;
+        $marks = implode(',', array_fill(0, count($evaluationIds), '?'));
+        return (int) $this->db->fetchColumn("SELECT COUNT(*) FROM notes WHERE evaluation_id IN ({$marks})", array_values($evaluationIds));
+    }
+
+    public function countActiveStudentsInClass(int $classId): int
+    {
+        return (int) $this->db->fetchColumn("SELECT COUNT(*) FROM inscriptions i INNER JOIN classes c ON c.id = i.classe_id AND c.annee_scolaire_id = i.annee_scolaire_id WHERE i.classe_id = :cid AND i.statut = 'Actif'", ['cid'=>$classId]);
+    }
+
+    public function countActiveSubjectsForClassGroup(int $classId, int $groupId): int
+    {
+        return (int) $this->db->fetchColumn("SELECT COUNT(*) FROM classe_matieres cm INNER JOIN matieres sm ON sm.id = cm.matiere_id WHERE cm.classe_id = :cid AND cm.est_active = 1 AND sm.parent_id = :gid AND sm.est_groupe = 0 AND sm.est_actif = 1", ['cid'=>$classId,'gid'=>$groupId]);
+    }
+
+    public function findActiveClasses(): array
+    {
+        return $this->db->fetchAll("SELECT c.* FROM classes c WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) ORDER BY c.niveau");
+    }
+
+    public function findActiveTerms(): array
+    {
+        return $this->db->fetchAll("SELECT t.* FROM trimestres t WHERE t.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) ORDER BY t.numero");
+    }
+
+    public function findCurrentActiveTerm(): ?array
+    {
+        return $this->db->fetchOne("SELECT t.* FROM trimestres t WHERE t.est_actif = 1 AND t.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1) LIMIT 1");
+    }
+
+    public function findActiveGroupsWithSubjectCounts(): array
+    {
+        return $this->db->fetchAll("SELECT m.*, (SELECT COUNT(*) FROM matieres sm WHERE sm.parent_id = m.id AND sm.est_groupe = 0 AND sm.est_actif = 1) AS nb_sous_matieres FROM matieres m WHERE m.est_groupe = 1 AND m.est_actif = 1 ORDER BY m.libelle");
+    }
+
+    public function findSubjectsForClassGroup(int $groupId, int $classId): array
+    {
+        return $this->findActiveSubjectsForClassGroup($classId, $groupId);
+    }
+
+    public function findEvaluationById(int $id): ?array
+    {
+        return $this->db->fetchOne("SELECT ev.*, t.libelle AS trimestre_libelle, c.nom AS classe_nom, m.libelle AS groupe_libelle FROM evaluations ev INNER JOIN trimestres t ON ev.trimestre_id = t.id INNER JOIN classes c ON c.id = ev.classe_id INNER JOIN matieres m ON m.id = ev.groupe_id WHERE ev.id = :id", ['id'=>$id]);
+    }
 }
