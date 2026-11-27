@@ -96,6 +96,8 @@ class RetardController
                 : ($nbRetards >= 3 ? 'Cet élève totalise ' . $nbRetards . ' retards.' : null));
             logActivity('Création', 'retards', $retardId, "Retard de {$eleve['nom']} {$eleve['prenom']} — {$dureeRetard} min");
             jsonResponse(true, 'Retard enregistré avec succès.', ['retard_id'=>$retardId,'duree_retard'=>$dureeRetard,'nb_retards'=>$nbRetards,'alerte'=>$alerte]);
+        } catch (DomainException $e) {
+            jsonResponse(false, $e->getMessage(), [], 409);
         } catch (Exception $e) {
             error_log('Erreur enregistrement retard: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de l\'enregistrement du retard.');
