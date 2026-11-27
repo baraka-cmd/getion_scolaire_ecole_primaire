@@ -42,22 +42,35 @@ class RetardRepository
         int $justified,
         int $userId
     ): int {
-        return $this->db->insert(
-            'INSERT INTO retards
-                (eleve_id, date_retard, heure_arrivee, heure_prevue, duree_retard,
-                 motif, est_justifie, saisie_par, created_at)
-             VALUES (:student_id, :date, :arrival, :expected, :duration, :reason, :justified, :user_id, NOW())',
-            [
-                'student_id' => $studentId,
-                'date' => $date,
-                'arrival' => $arrivalTime,
-                'expected' => $expectedTime,
-                'duration' => $duration,
-                'reason' => $reason,
-                'justified' => $justified,
-                'user_id' => $userId,
-            ]
-        );
+        // Lock the student row so concurrent requests for the same learner serialize.
+        $this->db->beginTransaction();
+        try {
+            $student = $this->db->fetchOne(
+                "SELECT e.id FROM eleves e INNER JOIN inscriptions i ON i.eleve_id = e.id
+                 WHERE e.id = :student_id AND e.est_actif = 1 AND i.statut = 'Actif'
+                 FOR UPDATE",
+                ['student_id'=>$studentId]
+            );
+            if (!$student) throw new DomainException('Élève introuvable ou non inscrit.');
+            $duplicate = $this->db->fetchColumn(
+                'SELECT id FROM retards WHERE eleve_id = :student_id AND date_retard = :date FOR UPDATE',
+                ['student_id'=>$studentId,'date'=>$date]
+            );
+            if ($duplicate !== null) throw new DomainException('Un retard a déjà été enregistré pour cet élève à cette date.');
+            $id = $this->db->insert(
+                'INSERT INTO retards
+                    (eleve_id, date_retard, heure_arrivee, heure_prevue, duree_retard,
+                     motif, est_justifie, saisie_par, created_at)
+                 VALUES (:student_id, :date, :arrival, :expected, :duration, :reason, :justified, :user_id, NOW())',
+                ['student_id'=>$studentId,'date'=>$date,'arrival'=>$arrivalTime,'expected'=>$expectedTime,
+                 'duration'=>$duration,'reason'=>$reason,'justified'=>$justified,'user_id'=>$userId]
+            );
+            $this->db->commit();
+            return $id;
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
     }
 
     public function countForStudent(int $studentId): int
