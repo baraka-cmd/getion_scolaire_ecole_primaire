@@ -80,92 +80,30 @@ class UtilisateurController
      */
     private function getListe(): void
     {
-        $page       = max(1, (int) post('page', 1));
-        $recherche  = post('recherche', '');
-        $role       = post('role', '');
-        $statut     = post('statut', '');
-        $ordre      = post('ordre', 'nom');
-        $direction  = post('direction', 'ASC');
-        $parPage    = ITEMS_PER_PAGE;
+        $page = max(1, (int) post('page', 1));
+        $recherche = post('recherche', '');
+        $role = post('role', '');
+        $statut = post('statut', '');
+        $ordre = post('ordre', 'nom');
+        $direction = post('direction', 'ASC');
+        $parPage = ITEMS_PER_PAGE;
 
-        $where = [];
-        $params = [];
-
-        if (!empty($recherche)) {
-            $where[] = "(u.nom LIKE :recherche1 OR u.prenom LIKE :recherche2 OR u.email LIKE :recherche3 OR u.login LIKE :recherche4)";
-            $params['recherche1'] = "%{$recherche}%";
-            $params['recherche2'] = "%{$recherche}%";
-            $params['recherche3'] = "%{$recherche}%";
-            $params['recherche4'] = "%{$recherche}%";
-        }
-
-        if (!empty($role)) {
-            $where[] = "u.role_id = :role";
-            $params['role'] = (int) $role;
-        }
-
-        if ($statut !== '') {
-            $where[] = "u.est_actif = :statut";
-            $params['statut'] = (int) $statut;
-        }
-
-        $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
-
-        $colonnesAutorisees = [
-            'id' => 'u.id',
-            'nom' => 'u.nom',
-            'prenom' => 'u.prenom',
-            'email' => 'u.email',
-            'login' => 'u.login',
-            'role_nom' => 'r.nom',
-            'derniere_connexion' => 'u.derniere_connexion',
-            'est_actif' => 'u.est_actif',
-        ];
-        $ordre = $colonnesAutorisees[$ordre] ?? $colonnesAutorisees['nom'];
-        $direction = in_array(strtoupper($direction), ['ASC', 'DESC'], true)
-            ? strtoupper($direction)
-            : 'ASC';
-
-        // Nombre total
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM utilisateurs u
-             LEFT JOIN roles r ON u.role_id = r.id
-             {$whereClause}",
-            $params
+        $result = $this->accountService->getAdminList(
+            $page,
+            $parPage,
+            $recherche,
+            $role,
+            $statut,
+            $ordre,
+            $direction
         );
-
-        // Liste paginée
-        $offset = ($page - 1) * $parPage;
-        $utilisateurs = $this->db->fetchAll(
-            "SELECT u.id, u.nom, u.prenom, u.email, u.telephone, u.login, u.photo,
-                    u.est_actif, u.derniere_connexion, u.created_at,
-                    COALESCE(r.nom, 'Rôle inconnu') AS role_nom, r.id AS role_id
-             FROM utilisateurs u
-             LEFT JOIN roles r ON u.role_id = r.id
-             {$whereClause}
-             ORDER BY {$ordre} {$direction}, u.id ASC
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, [
-                'limit' => $parPage,
-                'offset' => $offset
-            ])
-        );
-
-        // Formater les données
-        foreach ($utilisateurs as &$user) {
-            $user['derniere_connexion'] = $user['derniere_connexion'] 
-                ? formatDateTime($user['derniere_connexion']) 
-                : 'Jamais';
-            $user['date_creation'] = formatDate($user['created_at']);
-            $user['initials'] = mb_strtoupper(mb_substr($user['prenom'], 0, 1) . mb_substr($user['nom'], 0, 1));
-        }
 
         jsonResponse(true, 'Liste récupérée.', [
-            'utilisateurs' => $utilisateurs,
-            'total'        => $total,
+            'utilisateurs' => $result['utilisateurs'],
+            'total'        => $result['total'],
             'page'         => $page,
             'par_page'     => $parPage,
-            'pages'        => ceil($total / $parPage)
+            'pages'        => ceil($result['total'] / $parPage)
         ]);
     }
 
