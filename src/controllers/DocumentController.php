@@ -12,7 +12,6 @@ require_once __DIR__ . '/../services/DocumentService.php';
 
 class DocumentController
 {
-    private Database $db;
     private DocumentService $documentService;
     private string $uploadDir;
     private array $allowedExtensions;
@@ -20,7 +19,6 @@ class DocumentController
 
     public function __construct(?DocumentService $documentService = null)
     {
-        $this->db = Database::getInstance();
         $this->documentService = $documentService ?? new DocumentService();
         $this->uploadDir = DOCUMENTS_STORAGE_PATH;
         $this->allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'jpg', 'jpeg', 'png', 'gif', 'txt', 'ppt', 'pptx'];
@@ -122,6 +120,14 @@ class DocumentController
 
         $fichiers = $_FILES['fichiers'];
         $nbFichiers = count($fichiers['name']);
+        if ($nbFichiers > 20) {
+            jsonResponse(false, 'Vous ne pouvez envoyer que 20 fichiers au maximum par opération.', [], 422);
+        }
+        foreach (['name', 'size', 'tmp_name', 'error'] as $field) {
+            if (!isset($fichiers[$field]) || !is_array($fichiers[$field]) || count($fichiers[$field]) !== $nbFichiers) {
+                jsonResponse(false, 'Structure de fichiers invalide.', [], 422);
+            }
+        }
         $uploades = 0;
         $erreurs = [];
         $documentsUploades = [];
@@ -145,14 +151,19 @@ class DocumentController
             $tmpName     = $fichiers['tmp_name'][$i];
             $error       = $fichiers['error'][$i];
 
-            // Vérifier les erreurs PHP
+            // Vérifier les erreurs PHP et confirmer qu'il s'agit d'un vrai upload HTTP.
             if ($error !== UPLOAD_ERR_OK) {
                 $erreurs[] = "{$nomOriginal} : erreur lors de l'upload (code {$error}).";
                 continue;
             }
+            if (!is_uploaded_file($tmpName) || !is_file($tmpName)) {
+                $erreurs[] = "{$nomOriginal} : fichier temporaire invalide.";
+                continue;
+            }
 
-            // Vérifier la taille
-            if ($taille > $this->maxFileSize) {
+            // Vérifier la taille côté serveur, pas uniquement la valeur fournie par le navigateur.
+            $tailleReelle = filesize($tmpName);
+            if ($tailleReelle === false || $tailleReelle <= 0 || $tailleReelle > $this->maxFileSize) {
                 $erreurs[] = "{$nomOriginal} : fichier trop volumineux (max 10 Mo).";
                 continue;
             }
@@ -166,8 +177,8 @@ class DocumentController
 
             // Vérifier le type MIME
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mimeType = finfo_file($finfo, $tmpName);
-            finfo_close($finfo);
+            $mimeType = $finfo !== false ? finfo_file($finfo, $tmpName) : false;
+            if ($finfo !== false) finfo_close($finfo);
 
             $mimesAutorises = [
                 'application/pdf',
@@ -184,7 +195,7 @@ class DocumentController
                 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
             ];
 
-            if (!in_array($mimeType, $mimesAutorises)) {
+            if (!is_string($mimeType) || !in_array($mimeType, $mimesAutorises, true)) {
                 $erreurs[] = "{$nomOriginal} : type de fichier non autorisé.";
                 continue;
             }
@@ -193,14 +204,8 @@ class DocumentController
             $nomBase = pathinfo($nomOriginal, PATHINFO_FILENAME);
             $nomBase = preg_replace('/[^a-zA-Z0-9_-]/', '_', $nomBase);
             $nomBase = substr($nomBase, 0, 100);
-            $nomUnique = $nomBase . '_' . date('Ymd_His') . '.' . $extension;
-
-            // Vérifier que le nom n'existe pas déjà
-            $compteur = 1;
-            while (file_exists($this->uploadDir . $nomUnique)) {
-                $nomUnique = $nomBase . '_' . date('Ymd_His') . '_' . $compteur . '.' . $extension;
-                $compteur++;
-            }
+            // Nom opaque non prévisible : évite collisions et divulgation d'informations via le chemin.
+            $nomUnique = bin2hex(random_bytes(16)) . '.' . $extension;
             $cheminDestination = $this->uploadDir . $nomUnique;
 
             // Déplacer le fichier
@@ -275,15 +280,15 @@ class DocumentController
 
         if (!$document) jsonResponse(false, 'Document introuvable.', [], 404);
 
-        // Supprimer le fichier physique
+        // Supprimer d'abord la référence en base. Si l'opération DB échoue, le fichier reste intact.
         $cheminPhysique = $this->resolveDocumentPath((string) $document['chemin_fichier']);
-
-        if ($cheminPhysique !== null && is_file($cheminPhysique)) {
-            unlink($cheminPhysique);
-        }
-
-        // Supprimer de la base
         $this->documentService->delete($docId);
+
+        // Un échec de nettoyage physique crée au pire un fichier orphelin privé,
+        // jamais une référence DB pointant vers un fichier supprimé.
+        if ($cheminPhysique !== null && is_file($cheminPhysique) && !unlink($cheminPhysique)) {
+            error_log('Impossible de supprimer le fichier privé du document ID ' . $docId);
+        }
 
         logActivity('Suppression', 'documents', $docId, "Document supprimé : {$document['nom_fichier']}");
 
