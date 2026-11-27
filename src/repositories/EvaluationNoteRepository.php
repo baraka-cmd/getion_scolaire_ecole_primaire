@@ -149,4 +149,76 @@ class EvaluationNoteRepository
             $params
         );
     }
+    public function findEvaluationList(array $filters): array
+    {
+        $where = [];
+        $params = [];
+
+        if (($filters['annee_id'] ?? 0) > 0) {
+            $where[] = "t.annee_scolaire_id = :aid";
+            $params['aid'] = (int) $filters['annee_id'];
+        }
+        if (($filters['trimestre_id'] ?? 0) > 0) {
+            $where[] = "ev.trimestre_id = :tid";
+            $params['tid'] = (int) $filters['trimestre_id'];
+        }
+        if (($filters['classe_id'] ?? 0) > 0) {
+            $where[] = "ev.classe_id = :cid";
+            $params['cid'] = (int) $filters['classe_id'];
+        }
+        if (($filters['groupe_id'] ?? 0) > 0) {
+            $where[] = "ev.groupe_id = :gid";
+            $params['gid'] = (int) $filters['groupe_id'];
+        }
+        $allowedTypes = ['Période 1', 'Période 2', 'Examen'];
+        if (in_array($filters['type_evaluation'] ?? '', $allowedTypes, true)) {
+            $where[] = "ev.type_evaluation = :type";
+            $params['type'] = $filters['type_evaluation'];
+        }
+
+        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+        return $this->db->fetchAll(
+            "SELECT ev.*,
+                    t.libelle AS trimestre_libelle,
+                    t.numero AS trimestre_numero,
+                    t.est_actif AS trimestre_actif,
+                    c.nom AS classe_nom,
+                    c.niveau AS classe_niveau,
+                    m.libelle AS groupe_libelle,
+                    m.code AS groupe_code,
+                    (SELECT COUNT(*) FROM notes n WHERE n.evaluation_id = ev.id) AS nb_notes_saisies,
+                    (SELECT COUNT(*) FROM inscriptions i
+                     WHERE i.classe_id = ev.classe_id AND i.annee_scolaire_id = c.annee_scolaire_id
+                       AND i.statut = 'Actif')
+                    * (SELECT COUNT(*)
+                       FROM classe_matieres cm
+                       INNER JOIN matieres sm ON sm.id = cm.matiere_id
+                       WHERE cm.classe_id = ev.classe_id AND cm.est_active = 1
+                         AND sm.parent_id = ev.groupe_id AND sm.est_groupe = 0 AND sm.est_actif = 1) AS nb_notes_attendues
+             FROM evaluations ev
+             INNER JOIN trimestres t ON ev.trimestre_id = t.id
+             INNER JOIN classes c ON ev.classe_id = c.id AND c.annee_scolaire_id = t.annee_scolaire_id
+             INNER JOIN matieres m ON ev.groupe_id = m.id
+             {$whereClause}
+             ORDER BY t.numero, c.niveau, FIELD(ev.type_evaluation, 'Période 1', 'Période 2', 'Examen')",
+            $params
+        );
+    }
+
+    public function findEvaluationDetails(int $evaluationId): ?array
+    {
+        return $this->db->fetchOne(
+            "SELECT ev.*,
+                    t.libelle AS trimestre_libelle,
+                    c.nom AS classe_nom,
+                    m.libelle AS groupe_libelle
+             FROM evaluations ev
+             INNER JOIN trimestres t ON ev.trimestre_id = t.id
+             INNER JOIN classes c ON ev.classe_id = c.id AND c.annee_scolaire_id = t.annee_scolaire_id
+             INNER JOIN matieres m ON ev.groupe_id = m.id
+             WHERE ev.id = :id",
+            ['id' => $evaluationId]
+        );
+    }
+
 }
