@@ -287,63 +287,51 @@ class EleveController
     {
         requirePermission('eleves.modifier');
 
-        $id               = (int) post('id', 0);
-        $nom              = post('nom', '');
-        $prenom           = post('prenom', '');
-        $dateNaissance    = post('date_naissance', '');
-        $lieuNaissance    = post('lieu_naissance', '');
-        $sexe             = post('sexe', '');
-        $adresse          = post('adresse', '');
-        $telephone        = post('telephone', '');
-        $email            = post('email', '');
-        $groupeSanguin    = post('groupe_sanguin', '');
-        $allergies        = post('allergies', '');
-        $maladies         = post('maladies', '');
+        $id = (int) post('id', 0);
+        $nom = post('nom', '');
+        $prenom = post('prenom', '');
+        $dateNaissance = post('date_naissance', '');
+        $lieuNaissance = post('lieu_naissance', '');
+        $sexe = post('sexe', '');
+        $adresse = post('adresse', '');
+        $telephone = post('telephone', '');
+        $email = post('email', '');
+        $groupeSanguin = post('groupe_sanguin', '');
+        $allergies = post('allergies', '');
+        $maladies = post('maladies', '');
 
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
-
-        $existant = $this->db->fetchOne("SELECT id FROM eleves WHERE id = :id", ['id' => $id]);
-        if (!$existant) jsonResponse(false, 'Élève introuvable.', [], 404);
+        if (!$this->studentRecordService->findRecord($id)) {
+            jsonResponse(false, 'Élève introuvable.', [], 404);
+        }
 
         $errors = [];
-
         if (isBlank($nom)) $errors['nom'] = 'Le nom est obligatoire.';
         if (isBlank($prenom)) $errors['prenom'] = 'Le prénom est obligatoire.';
         if (isBlank($dateNaissance)) $errors['date_naissance'] = 'La date de naissance est obligatoire.';
         elseif (!isValidDate($dateNaissance)) $errors['date_naissance'] = 'Date invalide.';
-        if (!in_array($sexe, ['M', 'F'])) $errors['sexe'] = 'Sexe invalide.';
+        if (!in_array($sexe, ['M', 'F'], true)) $errors['sexe'] = 'Sexe invalide.';
 
         if (!empty($errors)) {
             jsonResponse(false, 'Veuillez corriger les erreurs.', ['errors' => $errors], 422);
         }
 
         try {
-            $this->db->update(
-                "UPDATE eleves 
-                 SET nom = :nom, prenom = :prenom, date_naissance = :dn, lieu_naissance = :ln,
-                     sexe = :sexe, adresse = :adresse, telephone = :tel, email = :email,
-                     groupe_sanguin = :gs, allergies = :allergies, maladies = :maladies
-                 WHERE id = :id",
-                [
-                    'nom'        => formatNom($nom),
-                    'prenom'     => formatNom($prenom),
-                    'dn'         => $dateNaissance,
-                    'ln'         => $lieuNaissance ?: null,
-                    'sexe'       => $sexe,
-                    'adresse'    => $adresse ?: null,
-                    'tel'        => $telephone ?: null,
-                    'email'      => $email ?: null,
-                    'gs'         => $groupeSanguin ?: null,
-                    'allergies'  => $allergies ?: null,
-                    'maladies'   => $maladies ?: null,
-                    'id'         => $id
-                ]
-            );
-
+            $this->studentRecordService->updateProfile($id, [
+                'nom' => formatNom($nom),
+                'prenom' => formatNom($prenom),
+                'date_naissance' => $dateNaissance,
+                'lieu_naissance' => $lieuNaissance ?: null,
+                'sexe' => $sexe,
+                'adresse' => $adresse ?: null,
+                'telephone' => $telephone ?: null,
+                'email' => $email ?: null,
+                'groupe_sanguin' => $groupeSanguin ?: null,
+                'allergies' => $allergies ?: null,
+                'maladies' => $maladies ?: null,
+            ]);
             logActivity('Modification', 'eleves', $id, "Élève modifié : {$nom} {$prenom}");
-
             jsonResponse(true, 'Élève modifié avec succès.');
-
         } catch (Exception $e) {
             error_log('Erreur modification élève: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la modification.');
@@ -359,27 +347,15 @@ class EleveController
 
         $id = (int) post('id', 0);
         $motif = post('motif', '');
-
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $eleve = $this->db->fetchOne("SELECT id, nom, prenom FROM eleves WHERE id = :id", ['id' => $id]);
+        $eleve = $this->studentRecordService->findRecord($id);
         if (!$eleve) jsonResponse(false, 'Élève introuvable.', [], 404);
 
         try {
-            // Désactiver l'élève
-            $this->db->update("UPDATE eleves SET est_actif = 0 WHERE id = :id", ['id' => $id]);
-
-            // Mettre fin à l'inscription active
-            $this->db->update(
-                "UPDATE inscriptions SET statut = :statut, motif_statut = :motif, date_changement_statut = CURDATE()
-                 WHERE eleve_id = :eid AND statut = 'Actif'",
-                ['statut' => 'Abandon', 'motif' => $motif ?: 'Désactivation', 'eid' => $id]
-            );
-
+            $this->studentRecordService->deactivate($id, $motif ?: 'Désactivation');
             logActivity('Suppression', 'eleves', $id, "Élève désactivé : {$eleve['nom']} {$eleve['prenom']}");
-
             jsonResponse(true, 'Élève désactivé avec succès.');
-
         } catch (Exception $e) {
             error_log('Erreur suppression élève: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la désactivation.');
@@ -393,53 +369,32 @@ class EleveController
     {
         requirePermission('inscriptions.modifier');
 
-        $eleveId       = (int) post('eleve_id', 0);
-        $ancienneClasseId = (int) post('ancienne_classe_id', 0);
-        $nouvelleClasseId  = (int) post('nouvelle_classe_id', 0);
-        $motif         = post('motif', '');
+        $eleveId = (int) post('eleve_id', 0);
+        // Le champ ancienne_classe_id reste accepté pour compatibilité client,
+        // mais le repository détermine la classe source depuis la base.
+        $nouvelleClasseId = (int) post('nouvelle_classe_id', 0);
+        $motif = post('motif', '');
 
         if ($eleveId <= 0 || $nouvelleClasseId <= 0) {
             jsonResponse(false, 'Paramètres invalides.', [], 400);
         }
 
-        // Vérifier la capacité
-        $capacite = (int) $this->db->fetchColumn(
-            "SELECT capacite_max FROM classes WHERE id = :cid", ['cid' => $nouvelleClasseId]
-        );
-        $nbEleves = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif'",
-            ['cid' => $nouvelleClasseId]
-        );
-        if ($nbEleves >= $capacite) {
-            jsonResponse(false, "Classe complète ({$capacite} élèves max).", [], 409);
-        }
-
         try {
-            $this->db->beginTransaction();
-
-            // Terminer l'ancienne inscription
-            $this->db->update(
-                "UPDATE inscriptions SET statut = 'Transféré', motif_statut = :motif, date_changement_statut = CURDATE()
-                 WHERE eleve_id = :eid AND classe_id = :cid AND statut = 'Actif'",
-                ['motif' => $motif ?: 'Changement de classe', 'eid' => $eleveId, 'cid' => $ancienneClasseId]
+            $result = $this->studentRecordService->transferEnrollment(
+                $eleveId,
+                $nouvelleClasseId,
+                $motif ?: 'Changement de classe'
             );
+            if (!$result['success']) {
+                if (($result['reason'] ?? '') === 'NO_ACTIVE_ENROLLMENT') {
+                    jsonResponse(false, 'Aucune inscription active à transférer.', [], 409);
+                }
+                jsonResponse(false, "Classe complète ({$result['capacity']} élèves max).", [], 409);
+            }
 
-            // Créer la nouvelle inscription
-            $anneeActive = $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-            $this->db->query(
-                "INSERT INTO inscriptions (eleve_id, classe_id, annee_scolaire_id, date_inscription, statut)
-                 VALUES (:eid, :cid, :aid, CURDATE(), 'Actif')",
-                ['eid' => $eleveId, 'cid' => $nouvelleClasseId, 'aid' => $anneeActive]
-            );
-
-            $this->db->commit();
-
-            logActivity('Modification', 'eleves', $eleveId, "Changement de classe");
-
+            logActivity('Modification', 'eleves', $eleveId, 'Changement de classe');
             jsonResponse(true, 'Classe changée avec succès.');
-
         } catch (Exception $e) {
-            $this->db->rollback();
             error_log('Erreur changement classe: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors du changement de classe.');
         }
