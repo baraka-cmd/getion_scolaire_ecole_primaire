@@ -66,68 +66,21 @@ class EnseignantController
      */
     private function getListe(): void
     {
-        $page       = max(1, (int) post('page', 1));
-        $recherche  = post('recherche', '');
-        $specialite = post('specialite', '');
-        $statut     = post('statut', '');
-        $ordre      = post('ordre', 'nom');
-        $direction  = post('direction', 'ASC');
-        $parPage    = ITEMS_PER_PAGE;
-
-        $where = [];
-        $params = [];
-
-        if (!empty($recherche)) {
-            $where[] = "(e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3 OR e.email LIKE :r4 OR e.specialite LIKE :r5)";
-            $params['r1'] = "%{$recherche}%";
-            $params['r2'] = "%{$recherche}%";
-            $params['r3'] = "%{$recherche}%";
-            $params['r4'] = "%{$recherche}%";
-            $params['r5'] = "%{$recherche}%";
-        }
-
-        if (!empty($specialite)) {
-            $where[] = "e.specialite = :specialite";
-            $params['specialite'] = $specialite;
-        }
-
-        if ($statut !== '') {
-            $where[] = "e.est_actif = :statut";
-            $params['statut'] = (int) $statut;
-        }
-
-        $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
-
-        $colonnesAutorisees = ['id', 'nom', 'prenom', 'matricule', 'specialite', 'classe_nom', 'date_embauche'];
-        if (!in_array($ordre, $colonnesAutorisees)) $ordre = 'nom';
-        if (!in_array(strtoupper($direction), ['ASC', 'DESC'])) $direction = 'ASC';
-
-        $orderMap = ['classe_nom' => 'c.nom'];
-        $orderCol = $orderMap[$ordre] ?? 'e.' . $ordre;
-
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM enseignants e LEFT JOIN classes c ON e.classe_id = c.id {$whereClause}",
-            $params
-        );
-
-        $offset = ($page - 1) * $parPage;
-        $enseignants = $this->db->fetchAll(
-            "SELECT e.*, c.nom AS classe_nom, c.niveau AS classe_niveau,
-                    DATE_FORMAT(e.date_embauche, '%d/%m/%Y') AS date_embauche_format,
-                    (SELECT COUNT(*) FROM inscriptions i WHERE i.classe_id = c.id AND i.statut = 'Actif') AS nb_eleves
-             FROM enseignants e
-             LEFT JOIN classes c ON e.classe_id = c.id
-             {$whereClause}
-             ORDER BY {$orderCol} {$direction}
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, ['limit' => $parPage, 'offset' => $offset])
-        );
+        $page = max(1, (int) post('page', 1));
+        $parPage = ITEMS_PER_PAGE;
+        $result = $this->enseignantService->paginate([
+            'recherche' => post('recherche', ''),
+            'specialite' => post('specialite', ''),
+            'statut' => post('statut', ''),
+            'ordre' => post('ordre', 'nom'),
+            'direction' => post('direction', 'ASC'),
+        ], $page, $parPage);
 
         jsonResponse(true, 'Liste récupérée.', [
-            'enseignants' => $enseignants,
-            'total'       => $total,
-            'page'        => $page,
-            'pages'       => ceil($total / $parPage)
+            'enseignants' => $result['enseignants'],
+            'total' => $result['total'],
+            'page' => $page,
+            'pages' => ceil($result['total'] / $parPage)
         ]);
     }
 
