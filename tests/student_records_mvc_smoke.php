@@ -8,6 +8,8 @@ require_once __DIR__ . '/../src/repositories/StudentRecordRepository.php';
 require_once __DIR__ . '/../src/services/StudentRecordService.php';
 require_once __DIR__ . '/../src/repositories/StudentAccessRepository.php';
 require_once __DIR__ . '/../src/policies/StudentAccessPolicy.php';
+require_once __DIR__ . '/../src/repositories/DocumentRepository.php';
+require_once __DIR__ . '/../src/services/DocumentService.php';
 
 function studentAssert(bool $condition, string $message): void
 {
@@ -85,3 +87,10 @@ studentAssert($policy->canCurrentUserAccessStudent(17), 'administrateur autoris�
 studentAssert(!$policy->canCurrentUserAccessStudent(0), 'ID invalide refusé');
 
 echo "OK - contrats MVC dossiers élèves\n";
+
+$documentRepository = new DocumentRepositoryFake();
+$documentService = new DocumentService($documentRepository);
+$documentService->paginateVisible(['categorie' => 'Cours'], 0, 20, false);
+studentAssert($documentRepository->lastArgs['page'] === 1, 'page documents normalisée');
+studentAssert($documentRepository->lastArgs['admin'] === false, 'règle de visibilité transmise');
+echo "OK - contrats MVC dossiers élèves et documents\\n";
