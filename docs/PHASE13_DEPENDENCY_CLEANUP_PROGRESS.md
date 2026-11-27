@@ -29,8 +29,10 @@ Contrôleurs à examiner et à traiter par lots ciblés :
 - [x] Référence et périmètre du dépôt vérifiés : `main` à `5e150f9`.
 - [x] Inventaire initial des contrôleurs contenant des responsabilités DB commencé.
 - [ ] Tracer chaque dépendance à travers le dépôt (références, appels, routes, vues).
-- [ ] Extraire les responsabilités candidates par domaine, sans déplacement mécanique.
-- [ ] Ajouter/adapter les tests de contrat et de comportement.
+- [x] Lot contrôlé ClasseController : écritures classe/titulaire/planning déléguées au repository via service ; transactions centralisées ; dépendance DB directe retirée.
+- [ ] Continuer le traçage et l'extraction des autres contrôleurs listés, sans déplacement mécanique.
+- [x] Ajouter un smoke test de contrat MVC et un workflow CI ciblé pour le lot ClasseController.
+- [ ] Ajouter/adapter les tests de comportement des autres domaines.
 - [ ] Vérifier le diff, les contrôles CI et les tests XAMPP.
 - [ ] Fusionner uniquement après validation de tous les critères.
 
