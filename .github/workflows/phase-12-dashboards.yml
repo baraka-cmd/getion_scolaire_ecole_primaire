@@ -37,6 +37,11 @@ on:
       - 'src/services/PaymentReadService.php'
       - 'src/repositories/PaymentReadRepository.php'
       - 'tests/financial_views_mvc_read_smoke.php'
+      - 'public/views/modules/enseignants/liste.php'
+      - 'src/controllers/TeacherListReadController.php'
+      - 'src/services/TeacherListService.php'
+      - 'src/repositories/TeacherListRepository.php'
+      - 'tests/teacher_list_mvc_smoke.php'
       - '.github/workflows/phase-12-dashboards.yml'
 
 jobs:
@@ -51,7 +56,7 @@ jobs:
       - name: PHP syntax validation
         run: |
           set -e
-          for file in src/controllers/DashboardController.php src/services/DashboardService.php src/repositories/DashboardRepository.php public/views/dashboard/admin.php tests/phase12_dashboard_mvc_smoke.php src/controllers/TeacherDashboardController.php src/services/TeacherDashboardService.php src/repositories/TeacherDashboardRepository.php public/views/dashboard/enseignant.php tests/teacher_dashboard_mvc_smoke.php src/controllers/ParentDashboardController.php src/services/ParentDashboardService.php src/repositories/ParentDashboardRepository.php public/views/dashboard/parent.php tests/parent_dashboard_mvc_smoke.php src/controllers/SecretaryDashboardController.php src/services/SecretaryDashboardService.php src/repositories/SecretaryDashboardRepository.php public/views/dashboard/secretaire.php src/controllers/AccountantDashboardController.php src/services/AccountantDashboardService.php src/repositories/AccountantDashboardRepository.php public/views/dashboard/comptable.php tests/phase12_secretary_accountant_mvc_smoke.php src/controllers/PaymentReadController.php src/services/PaymentReadService.php src/repositories/PaymentReadRepository.php public/views/modules/paiements/liste.php public/views/modules/paiements/impayes.php public/views/modules/frais/liste.php tests/financial_views_mvc_read_smoke.php; do
+          for file in src/controllers/DashboardController.php src/services/DashboardService.php src/repositories/DashboardRepository.php public/views/dashboard/admin.php tests/phase12_dashboard_mvc_smoke.php src/controllers/TeacherDashboardController.php src/services/TeacherDashboardService.php src/repositories/TeacherDashboardRepository.php public/views/dashboard/enseignant.php tests/teacher_dashboard_mvc_smoke.php src/controllers/ParentDashboardController.php src/services/ParentDashboardService.php src/repositories/ParentDashboardRepository.php public/views/dashboard/parent.php tests/parent_dashboard_mvc_smoke.php src/controllers/SecretaryDashboardController.php src/services/SecretaryDashboardService.php src/repositories/SecretaryDashboardRepository.php public/views/dashboard/secretaire.php src/controllers/AccountantDashboardController.php src/services/AccountantDashboardService.php src/repositories/AccountantDashboardRepository.php public/views/dashboard/comptable.php tests/phase12_secretary_accountant_mvc_smoke.php src/controllers/PaymentReadController.php src/services/PaymentReadService.php src/repositories/PaymentReadRepository.php public/views/modules/paiements/liste.php public/views/modules/paiements/impayes.php public/views/modules/frais/liste.php tests/financial_views_mvc_read_smoke.php src/controllers/TeacherListReadController.php src/services/TeacherListService.php src/repositories/TeacherListRepository.php public/views/modules/enseignants/liste.php tests/teacher_list_mvc_smoke.php; do
             php -l "$file"
           done
       - name: Dashboard MVC and authorization smoke
@@ -61,3 +66,4 @@ jobs:
           php tests/parent_dashboard_mvc_smoke.php
           php tests/phase12_secretary_accountant_mvc_smoke.php
           php tests/financial_views_mvc_read_smoke.php
+          php tests/teacher_list_mvc_smoke.php
