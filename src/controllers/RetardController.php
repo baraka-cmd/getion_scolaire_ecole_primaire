@@ -215,6 +215,14 @@ class RetardController
         jsonResponse(true, 'Retard supprimé avec succès.');
     }
 
+    public function getParentHistory(int $studentId): array
+    {
+        if (!$this->studentAccessPolicy->canCurrentUserAccessStudent($studentId)) {
+            return [];
+        }
+        return $this->retardService->getParentHistory($studentId);
+    }
+
     public function getMarkingData(int $classId, string $date): array
     {
         if (hasRole('Enseignant')) {
