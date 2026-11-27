@@ -10,7 +10,6 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('inscriptions.consulter');
 
-global $db;
 
 // Le contrôleur reste responsable du traitement AJAX ; les données de filtre passent par le service.
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'InscriptionController.php';
