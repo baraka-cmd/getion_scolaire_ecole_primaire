@@ -89,14 +89,19 @@ class InscriptionController
     private function inscrire(): void
     {
         requirePermission('inscriptions.creer');
-        $studentId = (int) post('eleve_id', 0);
-        $classId = (int) post('classe_id', 0);
-        $result = $this->inscriptionService->createEnrollment($studentId, $classId, (string) post('statut', 'Actif'));
-        if (!$result['ok']) {
-            jsonResponse(false, $result['message'] ?? 'Veuillez corriger les erreurs.', ['errors' => $result['errors'] ?? []], $result['status'] ?? 422);
+        try {
+            $result = $this->inscriptionService->createEnrollment(
+                (int) post('eleve_id', 0),
+                (int) post('classe_id', 0),
+                (string) post('statut', 'Actif')
+            );
+            if (!$result['ok']) jsonResponse(false, $result['message'] ?? 'Veuillez corriger les erreurs.', ['errors' => $result['errors'] ?? []], $result['status'] ?? 422);
+            logActivity('Création', 'inscriptions', $result['id'], "Inscription : {$result['student']['nom']} {$result['student']['prenom']}");
+            jsonResponse(true, 'Élève inscrit avec succès.', ['id' => $result['id']]);
+        } catch (Throwable $e) {
+            error_log('Erreur inscription: ' . $e->getMessage());
+            jsonResponse(false, 'Erreur lors de l\'inscription.');
         }
-        logActivity('Création', 'inscriptions', $result['id'], "Inscription : {$result['student']['nom']} {$result['student']['prenom']}");
-        jsonResponse(true, 'Élève inscrit avec succès.', ['id' => $result['id']]);
     }
 
     // ============================================================
@@ -106,15 +111,16 @@ class InscriptionController
     private function changerClasse(): void
     {
         requirePermission('inscriptions.modifier');
-        $result = $this->inscriptionService->changeClass(
-            (int) post('eleve_id', 0),
-            (int) post('ancienne_classe_id', 0),
-            (int) post('nouvelle_classe_id', 0),
-            (string) post('motif', 'Changement de classe')
-        );
-        if (!$result['ok']) jsonResponse(false, $result['message'], [], $result['status']);
-        logActivity('Modification', 'inscriptions', null, 'Changement de classe élève ' . (int) post('eleve_id', 0));
-        jsonResponse(true, 'Changement de classe effectué avec succès.');
+        try {
+            $studentId = (int) post('eleve_id', 0);
+            $result = $this->inscriptionService->changeClass($studentId, (int) post('ancienne_classe_id', 0), (int) post('nouvelle_classe_id', 0), (string) post('motif', 'Changement de classe'));
+            if (!$result['ok']) jsonResponse(false, $result['message'], [], $result['status']);
+            logActivity('Modification', 'inscriptions', null, 'Changement de classe élève ' . $studentId);
+            jsonResponse(true, 'Changement de classe effectué avec succès.');
+        } catch (Throwable $e) {
+            error_log('Erreur changement classe: ' . $e->getMessage());
+            jsonResponse(false, 'Erreur lors du changement de classe.');
+        }
     }
 
     // ============================================================
@@ -124,14 +130,17 @@ class InscriptionController
     private function desinscrire(): void
     {
         requirePermission('inscriptions.modifier');
-        $result = $this->inscriptionService->discontinue(
-            (int) post('inscription_id', 0),
-            (string) post('statut', 'Abandon'),
-            (string) post('motif', '')
-        );
-        if (!$result['ok']) jsonResponse(false, $result['message'], [], $result['status']);
-        logActivity('Modification', 'inscriptions', (int) post('inscription_id', 0), 'Désinscription : ' . (string) post('statut', 'Abandon'));
-        jsonResponse(true, 'Statut mis à jour avec succès.');
+        try {
+            $enrollmentId = (int) post('inscription_id', 0);
+            $status = (string) post('statut', 'Abandon');
+            $result = $this->inscriptionService->discontinue($enrollmentId, $status, (string) post('motif', ''));
+            if (!$result['ok']) jsonResponse(false, $result['message'], [], $result['status']);
+            logActivity('Modification', 'inscriptions', $enrollmentId, 'Désinscription : ' . $status);
+            jsonResponse(true, 'Statut mis à jour avec succès.');
+        } catch (Throwable $e) {
+            error_log('Erreur désinscription: ' . $e->getMessage());
+            jsonResponse(false, 'Erreur lors de la mise à jour.');
+        }
     }
 
     // ============================================================
