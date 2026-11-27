@@ -9,16 +9,19 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../services/AcademicResultsService.php';
+require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
 
 class BulletinController
 {
     private Database $db;
     private AcademicResultsService $academicResults;
+    private StudentAccessPolicy $studentAccessPolicy;
 
     public function __construct()
     {
         $this->db = Database::getInstance();
         $this->academicResults = new AcademicResultsService();
+        $this->studentAccessPolicy = new StudentAccessPolicy($this->db);
     }
 
     /**
@@ -268,6 +271,10 @@ class BulletinController
         $anneeId = (int) post('annee_id', 0);
 
         if ($eleveId <= 0) jsonResponse(false, 'ID élève invalide.', [], 400);
+
+        if (!$this->studentAccessPolicy->canCurrentUserAccessStudent($eleveId)) {
+            jsonResponse(false, 'Élève introuvable.', [], 404);
+        }
 
         if ($anneeId <= 0) {
             $anneeId = (int) $this->db->fetchColumn(
