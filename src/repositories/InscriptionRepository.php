@@ -295,4 +295,40 @@ class InscriptionRepository
         );
     }
 
+    
+    public function createEnrollmentSafely(int $studentId, int $classId, int $yearId, string $status): array
+    {
+        $this->db->beginTransaction();
+        try {
+            $student = $this->activeStudent($studentId);
+            $class = $this->db->fetchOne(
+                "SELECT id, capacite_max, annee_scolaire_id, est_actif FROM classes WHERE id = :id FOR UPDATE",
+                ['id' => $classId]
+            );
+            if (!$student || !$class || (int) $class['est_actif'] !== 1 || (int) $class['annee_scolaire_id'] !== $yearId) {
+                $this->db->rollback();
+                return ['ok' => false, 'errors' => ['eleve_id' => !$student ? 'Élève introuvable ou inactif.' : 'Classe ou année scolaire invalide.']];
+            }
+            $existing = $this->activeEnrollmentForStudent($studentId, $yearId);
+            if ($existing) {
+                $this->db->rollback();
+                return ['ok' => false, 'errors' => ['eleve_id' => 'Cet élève est déjà inscrit en ' . $existing['nom'] . ' pour cette année.']];
+            }
+            $count = (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND annee_scolaire_id = :aid AND statut = 'Actif'",
+                ['cid' => $classId, 'aid' => $yearId]
+            );
+            if ($count >= (int) $class['capacite_max']) {
+                $this->db->rollback();
+                return ['ok' => false, 'errors' => ['classe_id' => 'Classe complète (' . (int) $class['capacite_max'] . ' élèves maximum).']];
+            }
+            $id = $this->insertEnrollment($studentId, $classId, $yearId, $status);
+            $this->db->commit();
+            return ['ok' => true, 'id' => $id, 'student' => $student];
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
+
 }
