@@ -83,13 +83,13 @@ class RoleController
             jsonResponse(false, 'ID du rôle invalide.', [], 400);
         }
 
-        $role = $this->security->getRoleById($roleId);
+        $role = $this->roleService->getRole($roleId);
         if (!$role) {
             jsonResponse(false, 'Rôle introuvable.', [], 404);
         }
 
-        $permissions = $this->security->getRolePermissions($roleId);
-        $allPermissions = $this->security->getAllPermissionsGrouped();
+        $permissions = $this->roleService->getRolePermissions($roleId);
+        $allPermissions = $this->roleService->getAllPermissionsGrouped();
 
         jsonResponse(true, 'Rôle récupéré.', [
             'role' => $role,
@@ -125,7 +125,7 @@ class RoleController
     // Filtrer les valeurs invalides
     $permissionIds = array_filter($permissionIds, function($id) { return $id > 0; });
 
-    $success = $this->security->updateRolePermissions($roleId, $permissionIds);
+    $success = $this->roleService->updatePermissions($roleId, $permissionIds);
 
     if ($success) {
         logActivity('Modification', 'roles', $roleId, 'Permissions mises à jour');
@@ -208,7 +208,7 @@ class RoleController
             jsonResponse(false, "Impossible de supprimer ce rôle : {$usersCount} utilisateur(s) l'utilisent.", [], 409);
         }
 
-        $success = $this->security->deleteRole($roleId);
+        $success = $this->roleService->deleteRole($roleId);
 
         if ($success) {
             logActivity('Suppression', 'roles', $roleId, 'Rôle supprimé');
@@ -232,7 +232,7 @@ class RoleController
             jsonResponse(false, 'Paramètres invalides.', [], 400);
         }
 
-        $success = $this->security->assignPermission($roleId, $permissionId);
+        $success = $this->roleService->assignPermission($roleId, $permissionId);
 
         if ($success) {
             jsonResponse(true, 'Permission assignée.');
@@ -255,7 +255,7 @@ class RoleController
             jsonResponse(false, 'Paramètres invalides.', [], 400);
         }
 
-        $success = $this->security->revokePermission($roleId, $permissionId);
+        $success = $this->roleService->revokePermission($roleId, $permissionId);
 
         if ($success) {
             jsonResponse(true, 'Permission révoquée.');
