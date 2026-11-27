@@ -53,6 +53,29 @@ class UserRepository
         );
     }
 
+
+    public function createTransactional(array $data): int
+    {
+        try {
+            $this->db->beginTransaction();
+            $userId = $this->create($data);
+            $this->db->commit();
+            return $userId;
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
+            throw $e;
+        }
+    }
+
+    public function getActiveRoles(): array
+    {
+        return $this->db->fetchAll(
+            'SELECT id, nom, description FROM roles WHERE est_actif = 1 ORDER BY niveau_acces DESC'
+        );
+    }
+
     public function update(int $userId, array $data): void
     {
         $data['id'] = $userId;
