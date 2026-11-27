@@ -352,7 +352,7 @@ class StudentRecordRepository
         }
     }
 
-    public function transferEnrollment(int $studentId, int $oldClassId, int $newClassId, string $reason): array
+    public function transferEnrollment(int $studentId, int $newClassId, string $reason): array
     {
         $capacity = (int) $this->db->fetchColumn(
             'SELECT capacite_max FROM classes WHERE id = :cid', ['cid' => $newClassId]
@@ -370,8 +370,8 @@ class StudentRecordRepository
             $this->db->update(
                 "UPDATE inscriptions
                  SET statut = 'Transféré', motif_statut = :motif, date_changement_statut = CURDATE()
-                 WHERE eleve_id = :eid AND classe_id = :cid AND statut = 'Actif'",
-                ['motif' => $reason, 'eid' => $studentId, 'cid' => $oldClassId]
+                 WHERE eleve_id = :eid AND statut = 'Actif'",
+                ['motif' => $reason, 'eid' => $studentId]
             );
             $activeYear = $this->db->fetchColumn(
                 'SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1'
