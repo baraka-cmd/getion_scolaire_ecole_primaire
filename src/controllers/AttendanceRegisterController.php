@@ -67,108 +67,40 @@ class AttendanceRegisterController
     {
         requirePermission('absences.marquer');
         Security::getInstance()->validateCsrf();
-
         $classeId = (int) post('classe_id', 0);
         $date = post('date_appel', '');
-        if ($date !== date('Y-m-d')) {
-            jsonResponse(false, 'La date de l’appel est automatiquement fixée à la date du jour.', [], 422);
-        }
-        $presentIds = $_POST['eleves_presents'] ?? [];
-        if (!is_array($presentIds)) {
-            jsonResponse(false, 'Liste de présences invalide.', [], 422);
-        }
-        $normalizedPresentIds = [];
-        foreach ($presentIds as $presentId) {
-            if (
-                (!is_int($presentId) && !is_string($presentId))
-                || filter_var($presentId, FILTER_VALIDATE_INT) === false
-                || (int) $presentId <= 0
-            ) {
+        if ($date !== date('Y-m-d')) jsonResponse(false, 'La date de l’appel est automatiquement fixée à la date du jour.', [], 422);
+        $submitted = $_POST['eleves_presents'] ?? [];
+        if (!is_array($submitted)) jsonResponse(false, 'Liste de présences invalide.', [], 422);
+        $normalized = [];
+        foreach ($submitted as $id) {
+            if ((!is_int($id) && !is_string($id)) || filter_var($id, FILTER_VALIDATE_INT) === false || (int) $id <= 0) {
                 jsonResponse(false, 'La liste contient un identifiant d’élève invalide.', [], 422);
             }
-            $normalizedPresentIds[] = (int) $presentId;
+            $normalized[] = (int) $id;
         }
         $annee = $this->getClassePourDate($classeId, $date);
         $this->requireClassAccess($classeId, (int) $annee['annee_scolaire_id']);
-        if ($this->attendanceRegisterService->getClosureForDate(
-            (int) $annee['annee_scolaire_id'],
-            $date,
-            $classeId,
-            $annee['nom']
-        ) !== null) {
+        if ($this->attendanceRegisterService->getClosureForDate((int) $annee['annee_scolaire_id'], $date, $classeId, $annee['nom']) !== null) {
             jsonResponse(false, 'Cette date est indiquée comme congé dans le calendrier scolaire.', [], 409);
         }
-        $jourPlanifie = $this->attendanceRegisterService->isScheduledDay(
-            $classeId,
-            (int) $annee['annee_scolaire_id'],
-            $date
-        );
-
-        $eleves = $this->getElevesAppel($classeId, (int) $annee['annee_scolaire_id']);
-        if (!$eleves) {
-            jsonResponse(false, 'Aucun élève actif n’est inscrit dans cette classe pour cette année.', [], 409);
-        }
-        $idsAutorises = array_map('intval', array_column($eleves, 'id'));
-        $presentIds = array_values(array_unique($normalizedPresentIds));
-        if (array_diff($presentIds, $idsAutorises)) {
-            jsonResponse(false, 'La liste contient un élève qui ne fait pas partie de cette classe.', [], 422);
-        }
-
+        $scheduled = $this->attendanceRegisterService->isScheduledDay($classeId, (int) $annee['annee_scolaire_id'], $date);
+        $students = $this->getElevesAppel($classeId, (int) $annee['annee_scolaire_id']);
+        if (!$students) jsonResponse(false, 'Aucun élève actif n’est inscrit dans cette classe pour cette année.', [], 409);
+        $studentIds = array_map('intval', array_column($students, 'id'));
+        $presentIds = array_values(array_unique($normalized));
+        if (array_diff($presentIds, $studentIds)) jsonResponse(false, 'La liste contient un élève qui ne fait pas partie de cette classe.', [], 422);
         try {
-            $this->db->beginTransaction();
-            $appel = $this->db->fetchOne(
-                'SELECT statut FROM appels_presence
-                 WHERE classe_id = :classe AND date_appel = :date FOR UPDATE',
-                ['classe' => $classeId, 'date' => $date]
+            $result = $this->attendanceRegisterService->saveDailyCall(
+                $classeId, (int) $annee['annee_scolaire_id'], $date, $studentIds, $presentIds,
+                (int) ($_SESSION['utilisateur_id'] ?? 0), $scheduled !== false
             );
-            if ($appel && $appel['statut'] === 'conge') {
-                $this->db->rollback();
-                jsonResponse(false, 'Cette journée est déjà enregistrée comme congé.', [], 409);
-            }
-            if ($jourPlanifie === false && (!$appel || $appel['statut'] !== 'valide')) {
-                $this->db->rollback();
-                jsonResponse(false, 'Cette date n’est pas un jour de classe selon l’emploi du temps.', [], 409);
-            }
-
-            foreach ($eleves as $eleve) {
-                $isPresent = in_array((int) $eleve['id'], $presentIds, true);
-                $this->db->query(
-                    "INSERT INTO absences
-                        (eleve_id, date_absence, type_absence, est_justifiee, saisie_par, created_at)
-                     VALUES (:eleve, :date, :type, 0, :utilisateur, NOW())
-                     ON DUPLICATE KEY UPDATE
-                        type_absence = VALUES(type_absence),
-                        est_justifiee = IF(VALUES(type_absence) = 'Présent', 0, est_justifiee),
-                        motif = IF(VALUES(type_absence) = 'Présent', NULL, motif),
-                        date_justification = IF(VALUES(type_absence) = 'Présent', NULL, date_justification),
-                        saisie_par = VALUES(saisie_par)",
-                    [
-                        'eleve' => $eleve['id'],
-                        'date' => $date,
-                        'type' => $isPresent ? 'Présent' : 'Absence',
-                        'utilisateur' => (int) $_SESSION['utilisateur_id']
-                    ]
-                );
-            }
-            $this->db->query(
-                "INSERT INTO appels_presence
-                    (classe_id, annee_scolaire_id, date_appel, statut, traite_par, traite_le)
-                 VALUES (:classe, :annee, :date, 'valide', :utilisateur, NOW())
-                 ON DUPLICATE KEY UPDATE
-                    statut = 'valide', motif_conge = NULL,
-                    traite_par = VALUES(traite_par), traite_le = NOW()",
-                [
-                    'classe' => $classeId,
-                    'annee' => $annee['annee_scolaire_id'],
-                    'date' => $date,
-                    'utilisateur' => (int) $_SESSION['utilisateur_id']
-                ]
-            );
-            $this->db->commit();
+            if ($result === 'holiday') jsonResponse(false, 'Cette journée est déjà enregistrée comme congé.', [], 409);
+            if ($result === 'not_scheduled') jsonResponse(false, 'Cette date n’est pas un jour de classe selon l’emploi du temps.', [], 409);
+            if ($result === 'enrollment_changed') jsonResponse(false, 'La liste des élèves a changé. Rechargez le pointage avant de valider.', [], 409);
             logActivity('Pointage', 'appels_presence', null, "Appel validé — classe {$classeId} — {$date}");
             jsonResponse(true, 'Appel validé. Les élèves non cochés sont enregistrés absents.');
         } catch (Throwable $e) {
-            $this->db->rollback();
             error_log('Erreur validation appel: ' . $e->getMessage());
             jsonResponse(false, 'Impossible de valider l’appel.', [], 500);
         }
@@ -178,53 +110,18 @@ class AttendanceRegisterController
     {
         requirePermission('absences.marquer');
         Security::getInstance()->validateCsrf();
-
         $classeId = (int) post('classe_id', 0);
         $date = post('date_appel', '');
         $motif = trim((string) post('motif_conge', ''));
-        if ($motif === '' || mb_strlen($motif) > 255) {
-            jsonResponse(false, 'Indiquez un motif de congé de 1 à 255 caractères.', [], 422);
-        }
+        if ($motif === '' || mb_strlen($motif) > 255) jsonResponse(false, 'Indiquez un motif de congé de 1 à 255 caractères.', [], 422);
         $annee = $this->getClassePourDate($classeId, $date);
         $this->requireClassAccess($classeId, (int) $annee['annee_scolaire_id']);
-        $this->db->beginTransaction();
         try {
-            $appel = $this->db->fetchOne(
-                'SELECT statut FROM appels_presence
-                 WHERE classe_id = :classe AND date_appel = :date FOR UPDATE',
-                ['classe' => $classeId, 'date' => $date]
-            );
-            $marquesExistantes = (int) $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM absences a
-                 INNER JOIN inscriptions i ON i.eleve_id = a.eleve_id
-                 WHERE i.classe_id = :classe AND i.annee_scolaire_id = :annee
-                   AND a.date_absence = :date",
-                ['classe' => $classeId, 'annee' => $annee['annee_scolaire_id'], 'date' => $date]
-            );
-            if (($appel && $appel['statut'] === 'valide') || $marquesExistantes > 0) {
-                $this->db->rollback();
-                jsonResponse(false, 'Des pointages existent déjà pour cette date. Corrigez-les avant de déclarer un congé.', [], 409);
-            }
-
-            $this->db->query(
-                "INSERT INTO appels_presence
-                    (classe_id, annee_scolaire_id, date_appel, statut, motif_conge, traite_par, traite_le)
-                 VALUES (:classe, :annee, :date, 'conge', :motif, :utilisateur, NOW())
-                 ON DUPLICATE KEY UPDATE
-                    statut = 'conge', motif_conge = VALUES(motif_conge),
-                    traite_par = VALUES(traite_par), traite_le = NOW()",
-                [
-                    'classe' => $classeId,
-                    'annee' => $annee['annee_scolaire_id'],
-                    'date' => $date,
-                    'motif' => $motif,
-                    'utilisateur' => (int) $_SESSION['utilisateur_id']
-                ]
-            );
-            $this->db->commit();
+            $result = $this->attendanceRegisterService->saveManualClosure($classeId, (int) $annee['annee_scolaire_id'], $date, $motif, (int) ($_SESSION['utilisateur_id'] ?? 0));
+            if ($result === 'already_marked') jsonResponse(false, 'Des pointages existent déjà pour cette date. Corrigez-les avant de déclarer un congé.', [], 409);
         } catch (Throwable $e) {
-            $this->db->rollback();
-            throw $e;
+            error_log('Erreur congé présence: ' . $e->getMessage());
+            jsonResponse(false, 'Impossible d’enregistrer le congé.', [], 500);
         }
         logActivity('Congé scolaire', 'appels_presence', null, "Classe {$classeId} — {$date} — {$motif}");
         jsonResponse(true, 'Le jour de congé est enregistré; il sera barré en rouge dans le registre.');
@@ -234,21 +131,12 @@ class AttendanceRegisterController
     {
         requirePermission('absences.marquer');
         Security::getInstance()->validateCsrf();
-
         $classeId = (int) post('classe_id', 0);
         $date = post('date_appel', '');
         $annee = $this->getClassePourDate($classeId, $date);
         $this->requireClassAccess($classeId, (int) $annee['annee_scolaire_id']);
-
-        $deleted = $this->db->delete(
-            "DELETE FROM appels_presence
-             WHERE classe_id = :classe AND annee_scolaire_id = :annee
-               AND date_appel = :date AND statut = 'conge'",
-            ['classe' => $classeId, 'annee' => $annee['annee_scolaire_id'], 'date' => $date]
-        );
-        if ($deleted === 0) {
-            jsonResponse(false, 'Aucun congé manuel à annuler pour cette date.', [], 409);
-        }
+        $deleted = $this->attendanceRegisterService->cancelManualClosure($classeId, (int) $annee['annee_scolaire_id'], $date);
+        if ($deleted === 0) jsonResponse(false, 'Aucun congé manuel à annuler pour cette date.', [], 409);
         logActivity('Réouverture', 'appels_presence', null, "Classe {$classeId} — {$date}");
         jsonResponse(true, 'Le congé manuel a été annulé. Vous pouvez maintenant faire l’appel.');
     }
