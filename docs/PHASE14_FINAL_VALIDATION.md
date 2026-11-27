@@ -30,7 +30,7 @@
 ## Résultats observables de cette session
 
 - Les workflows de Phase 13 et Phase 4 ont réussi sur la tête de PR #13 (SHA `2850848959ffb50282ebb1be42fe5ce142953d71`). La PR #13 a été fusionnée ensuite en `22db6febb94081cc6ccf82b58d9c510d543cd68c`.
-- Aucun workflow n'était retourné pour la branche `main` par la requête Actions ciblée ; il faut donc exécuter la nouvelle suite globale sur une PR et examiner son résultat.
+- La nouvelle suite globale Phase 14 a été exécutée sur la tête de PR SHA `29b6407ff615814aabb89a18529fb84df1f5c1f8` : **succès**. Elle a linté tous les PHP suivis et exécuté les 38 scripts de `tests/` sans échec. [Run global](https://github.com/baraka-cmd/getion_scolaire_ecole_primaire/actions/runs/46046515027). Le workflow Phase 4 déclenché sur la même PR a également réussi.
 - Le clonage dans cet environnement a échoué car la résolution réseau GitHub n'est pas disponible. PHP/XAMPP et la base locale ne sont pas accessibles ici ; aucun test local ni test d'intégration DB ne peut être déclaré exécuté.
 - Le code et les documents montrent encore une dette MVC connue : accès SQL dans des vues historiques, responsabilités DB dans plusieurs contrôleurs (ex. EffectifController, EmploiController, ParentController, BulletinController, EnseignantController, EleveController, StatistiqueController) et migration dashboard incomplète.
 
@@ -43,10 +43,10 @@ Le workflow `.github/workflows/phase-14-global-validation.yml` :
 
 ## Décision de clôture
 
-**Phase 14 : validation documentaire et mise en place de la suite globale en cours ; pas de certification finale de non-régression.**
+**Phase 14 : lint global + 38 scripts de tests sans base validés en CI. La certification complète de non-régression reste ouverte** tant que les dettes MVC recensées et les tests fonctionnels XAMPP/base de données ne sont pas traités.
 
 La branche `main` est clonable comme snapshot de travail, mais elle ne peut pas être qualifiée de « MVC appliqué partout et prêt à validation finale » sur la seule base des merges. Avant de certifier le clone :
-- obtenir une exécution verte du workflow Phase 14 ;
+- conserver l'exécution verte du workflow Phase 14 sur le commit de validation ;
 - résoudre les dettes documentées des phases 3, 4, 8–13, surtout vues dashboard et responsabilités controller ;
 - lancer sous XAMPP avec une base de test les parcours auth/roles, élèves/parents/documents, enseignants/affectations, inscriptions, présences, notes/bulletins, paiements/annulations/reçus, notifications/uploads et dashboards multi-rôles ;
 - comparer routes, réponses JSON/AJAX, règles de calcul, permissions et rendu avec le comportement antérieur.
