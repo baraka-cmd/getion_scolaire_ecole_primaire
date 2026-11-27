@@ -13,6 +13,7 @@ on:
       - 'src/repositories/RetardRepository.php'
       - 'src/repositories/AttendanceRegisterRepository.php'
       - 'src/policies/StudentAccessPolicy.php'
+      - 'public/assets/js/modules/retards.js'
       - 'tests/phase7_attendance_mvc_smoke.php'
       - 'tests/absence_service_smoke.php'
       - 'tests/retard_service_smoke.php'
