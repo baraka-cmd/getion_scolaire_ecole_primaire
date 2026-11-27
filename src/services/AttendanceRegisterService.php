@@ -106,8 +106,7 @@ class AttendanceRegisterService
     {
         $classe = $this->repository->findRegisterClass($classeId, $anneeId);
         if (!$classe) throw new RuntimeException('La classe ne correspond pas à cette année scolaire.');
-        // Queries above are fetched once after the school-year boundaries are known.
-        $registerData = $this->repository->getRegisterData($classeId, $anneeId, $classe['date_debut'], $classe['date_fin']);
+                $registerData = $this->repository->getRegisterData($classeId, $anneeId, $classe['date_debut'], $classe['date_fin']);
         $eleves = $registerData['eleves'];
         $appels = $registerData['appels'];
         $absences = $registerData['absences'];
@@ -116,7 +115,7 @@ class AttendanceRegisterService
         $evenements = $this->getClosuresInRange($anneeId, $classe['date_debut'], $classe['date_fin']);
         $marques = [];
         foreach ($absences as $absence) $marques[$absence['date_absence']][(int) $absence['eleve_id']] = $absence;
-        $joursCours = $this->attendanceRegisterService->getScheduledDayRows($classeId, $anneeId);
+        $joursCours = $this->getScheduledDayRows($classeId, $anneeId);
         $joursSemaine = [
             'Monday' => 'Lundi', 'Tuesday' => 'Mardi', 'Wednesday' => 'Mercredi',
             'Thursday' => 'Jeudi', 'Friday' => 'Vendredi', 'Saturday' => 'Samedi'
@@ -187,7 +186,7 @@ class AttendanceRegisterService
                 $fermeture = $isInSchoolYear && $appel && $appel['statut'] === 'conge'
                     ? $appel['motif_conge']
                     : ($isInSchoolYear
-                        ? $this->attendanceRegisterService->getClosureFromEvents(
+                        ? $this->getClosureFromEvents(
                             $evenements,
                             $date,
                             $classeId,
