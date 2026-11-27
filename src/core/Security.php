@@ -7,18 +7,19 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../repositories/RoleRepository.php';
+require_once __DIR__ . '/../repositories/UserRepository.php';
 
 class Security
 {
     private static ?Security $instance = null;
-    private Database $db;
     private RoleRepository $roleRepository;
+    private UserRepository $userRepository;
     private ?array $userPermissions = null;
 
     private function __construct()
     {
-        $this->db = Database::getInstance();
-        $this->roleRepository = new RoleRepository($this->db);
+        $this->roleRepository = new RoleRepository();
+        $this->userRepository = new UserRepository();
     }
 
     public static function getInstance(): self
@@ -280,13 +281,7 @@ class Security
             $this->terminateSession('Session expirée.');
         }
 
-        $user = $this->db->fetchOne(
-            "SELECT u.role_id, r.nom AS role_nom
-             FROM utilisateurs u
-             INNER JOIN roles r ON r.id = u.role_id
-             WHERE u.id = :id AND u.est_actif = 1 AND r.est_actif = 1",
-            ['id' => (int) $_SESSION['utilisateur_id']]
-        );
+        $user = $this->userRepository->findActiveSessionIdentity((int) $_SESSION['utilisateur_id']);
         if (!$user) {
             $this->terminateSession('Votre compte n’est plus actif. Veuillez vous reconnecter.');
         }
