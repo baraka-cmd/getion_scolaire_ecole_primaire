@@ -484,39 +484,13 @@ class NoteController
             return false;
         }
 
-        $evaluation = $this->db->fetchOne(
-            "SELECT ev.classe_id, t.annee_scolaire_id
-             FROM evaluations ev
-             INNER JOIN trimestres t ON t.id = ev.trimestre_id
-             INNER JOIN classes c ON c.id = ev.classe_id
-                 AND c.annee_scolaire_id = t.annee_scolaire_id
-             WHERE ev.id = :id",
-            ['id' => $evaluationId]
-        );
+        $evaluation = $this->evaluationNoteService->getEvaluationAccessContext($evaluationId);
         if (!$evaluation) {
             return false;
         }
 
         if (hasRole('Enseignant')) {
-            return (bool) $this->db->fetchColumn(
-                "SELECT EXISTS (
-                    SELECT 1
-                    FROM enseignants ens
-                    INNER JOIN classes c ON c.id = ens.classe_id
-                    WHERE ens.utilisateur_id = :user_id
-                      AND ens.est_actif = 1
-                      AND c.id = :class_id
-                      AND c.annee_scolaire_id = :year_id
-                      AND c.annee_scolaire_id = (
-                          SELECT annee_scolaire_active_id FROM parametres_ecole WHERE id = 1
-                      )
-                )",
-                [
-                    'user_id' => (int) ($_SESSION['utilisateur_id'] ?? 0),
-                    'class_id' => $evaluation['classe_id'],
-                    'year_id' => $evaluation['annee_scolaire_id'],
-                ]
-            );
+            return $this->evaluationNoteService->teacherHasClassAssignment((int) ($_SESSION['utilisateur_id'] ?? 0), (int) $evaluation['classe_id'], (int) $evaluation['annee_scolaire_id']);
         }
 
         return can('notes.saisir');
@@ -535,13 +509,7 @@ class NoteController
             jsonResponse(false, 'Classe et trimestre obligatoires.', [], 400);
         }
 
-        $anneeCoherente = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*)
-             FROM classes c
-             INNER JOIN trimestres t ON t.annee_scolaire_id = c.annee_scolaire_id
-             WHERE c.id = :cid AND t.id = :tid",
-            ['cid' => $classeId, 'tid' => $trimestreId]
-        );
+        $anneeCoherente = $this->evaluationNoteService->classAndTermAreConsistent($classeId, $trimestreId) ? 1 : 0;
         if ($anneeCoherente !== 1) {
             jsonResponse(false, 'La classe et le trimestre doivent appartenir à la même année scolaire.', [], 400);
         }
@@ -550,11 +518,7 @@ class NoteController
 
         $types = ['Période 1', 'Période 2', 'Examen'];
         foreach ($types as $type) {
-            $evaluations = $this->db->fetchAll(
-                "SELECT id FROM evaluations 
-                 WHERE trimestre_id = :tid AND classe_id = :cid AND type_evaluation = :type",
-                ['tid' => $trimestreId, 'cid' => $classeId, 'type' => $type]
-            );
+            $evaluations = $this->evaluationNoteService->getEvaluationIdsForProgression($trimestreId, $classeId, $type);
 
             $nbNotes = 0;
             $nbAttendues = 0;
@@ -563,32 +527,15 @@ class NoteController
                 $evalIds = array_column($evaluations, 'id');
                 $placeholders = implode(',', array_fill(0, count($evalIds), '?'));
 
-                $nbNotes = (int) $this->db->fetchColumn(
-                    "SELECT COUNT(*) FROM notes WHERE evaluation_id IN ({$placeholders})",
-                    $evalIds
-                );
+                $nbNotes = $this->evaluationNoteService->countNotesForEvaluationIds($evalIds);
 
-                $nbEleves = (int) $this->db->fetchColumn(
-                    "SELECT COUNT(*)
-                     FROM inscriptions i
-                     INNER JOIN classes c ON c.id = i.classe_id AND c.annee_scolaire_id = i.annee_scolaire_id
-                     WHERE i.classe_id = :cid AND i.statut = 'Actif'",
-                    ['cid' => $classeId]
-                );
+                $nbEleves = $this->evaluationNoteService->countActiveStudentsInClass($classeId);
 
                 $totalSousMatieres = 0;
                 foreach ($evalIds as $eid) {
-                    $eval = $this->db->fetchOne("SELECT groupe_id FROM evaluations WHERE id = :id", ['id' => $eid]);
+                    $eval = $this->evaluationNoteService->getEvaluationDetails((int) $eid);
                     if ($eval) {
-                        $nbSM = (int) $this->db->fetchColumn(
-                            "SELECT COUNT(*)
-                             FROM classe_matieres cm
-                             INNER JOIN matieres sm ON sm.id = cm.matiere_id
-                             WHERE cm.classe_id = :cid AND cm.est_active = 1
-                               AND sm.parent_id = :gid AND sm.est_groupe = 0 AND sm.est_actif = 1",
-                            ['cid' => $classeId, 'gid' => $eval['groupe_id']]
-                        );
-                        $totalSousMatieres += $nbSM;
+                        $totalSousMatieres += $this->evaluationNoteService->countActiveSubjectsForClassGroup($classeId, (int) $eval['groupe_id']);
                     }
                 }
 
@@ -639,11 +586,8 @@ class NoteController
      */
     public function getClassesActives(): array
     {
-        return $this->db->fetchAll(
-            "SELECT c.* FROM classes c
-             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY c.niveau"
-        );
+        return $this->evaluationNoteService->getActiveClasses();
+
     }
 
     /**
@@ -651,11 +595,8 @@ class NoteController
      */
     public function getTrimestresActifs(): array
     {
-        return $this->db->fetchAll(
-            "SELECT t.* FROM trimestres t
-             WHERE t.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY t.numero"
-        );
+        return $this->evaluationNoteService->getActiveTerms();
+
     }
 
     /**
@@ -663,12 +604,8 @@ class NoteController
      */
     public function getTrimestreActif(): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT t.* FROM trimestres t
-             WHERE t.est_actif = 1 
-             AND t.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             LIMIT 1"
-        );
+        return $this->evaluationNoteService->getCurrentActiveTerm();
+
     }
 
     /**
@@ -676,13 +613,8 @@ class NoteController
      */
     public function getGroupesActifs(): array
     {
-        return $this->db->fetchAll(
-            "SELECT m.*, 
-                    (SELECT COUNT(*) FROM matieres sm WHERE sm.parent_id = m.id AND sm.est_groupe = 0 AND sm.est_actif = 1) AS nb_sous_matieres
-             FROM matieres m
-             WHERE m.est_groupe = 1 AND m.est_actif = 1
-             ORDER BY m.libelle"
-        );
+        return $this->evaluationNoteService->getActiveGroupsWithSubjectCounts();
+
     }
 
     /**
@@ -690,17 +622,8 @@ class NoteController
      */
     public function getSousMatieresByGroupe(int $groupeId, int $classeId): array
     {
-        return $this->db->fetchAll(
-            "SELECT m.id, m.libelle, m.code, 
-                    COALESCE(cm.maxima_override, m.maxima) AS maxima
-             FROM matieres m
-             INNER JOIN classe_matieres cm ON m.id = cm.matiere_id AND cm.classe_id = :cid AND cm.est_active = 1
-             WHERE m.parent_id = :gid 
-             AND m.est_groupe = 0 
-             AND m.est_actif = 1
-             ORDER BY m.id",
-            ['gid' => $groupeId, 'cid' => $classeId]
-        );
+        return $this->evaluationNoteService->getSubjectsForClassGroup($groupeId, $classeId);
+
     }
 
     /**
@@ -708,17 +631,7 @@ class NoteController
      */
     public function getEvaluationById(int $id): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT ev.*, 
-                    t.libelle AS trimestre_libelle,
-                    c.nom AS classe_nom,
-                    m.libelle AS groupe_libelle
-             FROM evaluations ev
-             INNER JOIN trimestres t ON ev.trimestre_id = t.id
-             INNER JOIN classes c ON ev.classe_id = c.id
-             INNER JOIN matieres m ON ev.groupe_id = m.id
-             WHERE ev.id = :id",
-            ['id' => $id]
-        );
+        return $this->evaluationNoteService->getEvaluationById($id);
+
     }
 }
