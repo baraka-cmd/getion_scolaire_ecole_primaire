@@ -13,6 +13,53 @@ class EvaluationNoteService
         $this->repository = $repository ?? new EvaluationNoteRepository();
     }
 
+
+    public function classAndTermAreConsistent(int $classId, int $termId): bool
+    {
+        return $classId > 0 && $termId > 0
+            && $this->repository->isClassAndTermConsistent($classId, $termId);
+    }
+
+    public function evaluationAlreadyExists(int $termId, int $classId, int $groupId, string $type): bool
+    {
+        return $termId > 0 && $classId > 0 && $groupId > 0 && $type !== ''
+            && $this->repository->evaluationExists($termId, $classId, $groupId, $type);
+    }
+
+    public function createEvaluation(int $termId, int $groupId, int $classId, string $type, string $date): int
+    {
+        if ($termId <= 0 || $groupId <= 0 || $classId <= 0 || $type === '' || $date === '') {
+            throw new InvalidArgumentException('Evaluation data is incomplete.');
+        }
+        return $this->repository->insertEvaluation($termId, $groupId, $classId, $type, $date);
+    }
+
+    public function evaluationExists(int $evaluationId): bool
+    {
+        return $evaluationId > 0 && $this->repository->evaluationIdExists($evaluationId);
+    }
+
+    public function countEvaluationNotes(int $evaluationId): int
+    {
+        return $evaluationId > 0 ? $this->repository->countNotesForEvaluation($evaluationId) : 0;
+    }
+
+    public function updateEvaluationDate(int $evaluationId, string $date): void
+    {
+        if ($evaluationId <= 0 || $date === '') {
+            throw new InvalidArgumentException('Evaluation identifier and date are required.');
+        }
+        $this->repository->updateEvaluationDate($evaluationId, $date);
+    }
+
+    public function deleteEvaluation(int $evaluationId): void
+    {
+        if ($evaluationId <= 0) {
+            throw new InvalidArgumentException('Evaluation identifier is required.');
+        }
+        $this->repository->deleteEvaluation($evaluationId);
+    }
+
     public function getEvaluationList(array $filters): array
     {
         return $this->repository->findEvaluationList($filters);
