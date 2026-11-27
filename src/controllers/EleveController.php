@@ -633,12 +633,7 @@ class EleveController
      */
     public function getClasses(): array
     {
-        return $this->db->fetchAll(
-            "SELECT c.id, c.nom, c.niveau
-             FROM classes c
-             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY c.niveau"
-        );
+        return $this->studentRecordService->getActiveClassesForForms();
     }
 
     /**
@@ -651,21 +646,7 @@ class EleveController
 
     public function getEleveDetail(int $id): ?array
     {
-        return $this->db->fetchOne(
-            "SELECT e.*, 
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age,
-                    c.nom AS classe_nom, c.id AS classe_id, c.niveau AS classe_niveau,
-                    i.date_inscription AS date_inscription_classe,
-                    i.statut AS statut_inscription,
-                    CONCAT(COALESCE(ens.prenom, ''), ' ', COALESCE(ens.nom, '')) AS titulaire_nom
-             FROM eleves e
-             LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             LEFT JOIN classes c ON i.classe_id = c.id
-             LEFT JOIN enseignants ens ON c.id = ens.classe_id AND ens.est_actif = 1
-             WHERE e.id = :id",
-            ['id' => $id]
-        );
+        return $this->studentRecordService->findDetailForForm($id);
     }
 
     /**
@@ -681,14 +662,8 @@ class EleveController
      */
     public function getHistoriqueInscriptions(int $eleveId): array
     {
-        return $this->db->fetchAll(
-            "SELECT i.*, c.nom AS classe_nom, a.libelle AS annee_libelle
-             FROM inscriptions i
-             INNER JOIN classes c ON i.classe_id = c.id
-             INNER JOIN annees_scolaires a ON i.annee_scolaire_id = a.id
-             WHERE i.eleve_id = :eid
-             ORDER BY i.date_inscription DESC",
-            ['eid' => $eleveId]
-        );
+        return $this->studentRecordService->enrollmentHistory($eleveId);
     }
+
+}
 }
