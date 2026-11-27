@@ -125,6 +125,26 @@ class MatiereRepository
         );
     }
 
+    public function createClassAssociationIfMissing(int $subjectId, int $classId): void
+    {
+        if ($this->hasClassAssociation($subjectId, $classId)) {
+            return;
+        }
+        $this->createClassAssociation($subjectId, $classId, null);
+    }
+
+    public function updateSubject(array $data, bool $updateParent): void
+    {
+        $sql = 'UPDATE matieres SET code = :code, libelle = :libelle, description = :desc, maxima = :maxima';
+        if ($updateParent && (int) ($data['parent_id'] ?? 0) > 0) {
+            $sql .= ', parent_id = :parent_id';
+        } else {
+            unset($data['parent_id']);
+        }
+        $sql .= ' WHERE id = :id';
+        $this->db->update($sql, $data);
+    }
+
     public function findGroups(): array
     {
         return $this->db->fetchAll(
