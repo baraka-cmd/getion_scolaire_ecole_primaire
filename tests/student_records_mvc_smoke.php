@@ -43,6 +43,8 @@ class StudentRecordRepositoryFake extends StudentRecordRepository
     public function recentGrades(int $studentId): array { return [['valeur' => 15]]; }
     public function recentAbsences(int $studentId): array { return []; }
     public function payments(int $studentId): array { return []; }
+    public function summaryStats(): array { return ['total_actifs' => 8, 'total_garcons' => 4, 'total_filles' => 4, 'nouvelles_inscriptions' => 2]; }
+    public function exportRows(array $filters, string $role, int $userId): array { $this->received['export'] = compact('filters', 'role', 'userId'); return [['matricule' => 'EL-1']]; }
 }
 
 class StudentAccessRepositoryFake extends StudentAccessRepository
@@ -82,6 +84,10 @@ studentAssert($service->getActiveClassesForForms()[0]['id'] === 3, 'classes form
 studentAssert($service->enrollmentHistory(17)[0]['classe_nom'] === 'A', 'historique inscriptions délégué');
 $history = $service->getAcademicAndAttendanceHistory(17);
 studentAssert(isset($history['notes'], $history['absences'], $history['paiements']), 'structure historique stable');
+$stats = $service->summaryStats();
+studentAssert($stats['total_actifs'] === 8 && $stats['total_filles'] === 4, 'statistiques liste transmises');
+$export = $service->exportRows(['classe_id' => 2], 'Parent', 9);
+studentAssert($export[0]['matricule'] === 'EL-1', 'export délégué au repository');
 
 $accessRepository = new StudentAccessRepositoryFake();
 $policy = new StudentAccessPolicy(null, $accessRepository);
