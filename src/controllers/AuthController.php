@@ -16,7 +16,7 @@ class AuthController
 
     public function __construct()
     {
-        $this->rateLimiter = new AuthRateLimitService(Database::getInstance());
+        $this->rateLimiter = new AuthRateLimitService();
         $this->accountService = new AuthAccountService();
     }
 
