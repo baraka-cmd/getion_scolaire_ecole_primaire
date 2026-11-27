@@ -42,7 +42,11 @@ class RolePermissionService
 
     public function updatePermissions(int $roleId, array $permissionIds): bool
     {
-        return $this->security->updateRolePermissions($roleId, $permissionIds);
+        $success = $this->repository->replacePermissions($roleId, $permissionIds);
+        if ($success && (int) ($_SESSION['utilisateur_role_id'] ?? 0) === $roleId) {
+            $this->security->refreshPermissions();
+        }
+        return $success;
     }
 
     public function createRole(string $name, string $description, int $accessLevel): ?int
