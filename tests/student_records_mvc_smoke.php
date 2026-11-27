@@ -106,4 +106,6 @@ $documentService = new DocumentService($documentRepository);
 $documentService->paginateVisible(['categorie' => 'Cours'], 0, 20, false);
 studentAssert($documentRepository->lastArgs['page'] === 1, 'page documents normalisée');
 studentAssert($documentRepository->lastArgs['admin'] === false, 'règle de visibilité transmise');
+$documentStats = $documentService->statistics(true);
+studentAssert($documentStats['total'] === 3 && $documentStats['public_count'] === 2, 'statistiques documents déléguées');
 echo "OK - contrats MVC dossiers élèves et documents\\n";
