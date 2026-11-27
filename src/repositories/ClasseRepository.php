@@ -67,6 +67,56 @@ class ClasseRepository
         return ['total' => $total, 'classes' => $rows];
     }
 
+    public function countNameInYear(string $name, int $yearId, ?int $excludeId = null): int
+    {
+        $sql = 'SELECT COUNT(*) FROM classes WHERE nom = :name AND annee_scolaire_id = :year_id';
+        $params = ['name' => $name, 'year_id' => $yearId];
+        if ($excludeId !== null) {
+            $sql .= ' AND id != :exclude_id';
+            $params['exclude_id'] = $excludeId;
+        }
+        return (int) $this->db->fetchColumn($sql, $params);
+    }
+
+    public function countRoomInYear(string $room, int $yearId, ?int $excludeId = null): int
+    {
+        $sql = 'SELECT COUNT(*) FROM classes WHERE salle = :room AND annee_scolaire_id = :year_id';
+        $params = ['room' => $room, 'year_id' => $yearId];
+        if ($excludeId !== null) {
+            $sql .= ' AND id != :exclude_id';
+            $params['exclude_id'] = $excludeId;
+        }
+        return (int) $this->db->fetchColumn($sql, $params);
+    }
+
+    public function findBasic(int $classId): ?array
+    {
+        return $this->db->fetchOne('SELECT id, nom FROM classes WHERE id = :id', ['id' => $classId]);
+    }
+
+    public function countActiveStudents(int $classId): int
+    {
+        return (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :class_id AND statut = 'Actif'",
+            ['class_id' => $classId]
+        );
+    }
+
+    public function countStudents(int $classId): int
+    {
+        return (int) $this->db->fetchColumn('SELECT COUNT(*) FROM inscriptions WHERE classe_id = :class_id', ['class_id' => $classId]);
+    }
+
+    public function countEvaluations(int $classId): int
+    {
+        return (int) $this->db->fetchColumn('SELECT COUNT(*) FROM evaluations WHERE classe_id = :class_id', ['class_id' => $classId]);
+    }
+
+    public function findTeacherClass(int $teacherId): ?array
+    {
+        return $this->db->fetchOne('SELECT classe_id FROM enseignants WHERE id = :teacher_id', ['teacher_id' => $teacherId]);
+    }
+
     public function findForAjax(int $id): ?array
     {
         return $this->db->fetchOne(
