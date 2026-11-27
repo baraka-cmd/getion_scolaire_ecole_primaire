@@ -339,4 +339,21 @@ class AttendanceRegisterService
 
     }
 
+
+    public function findClassForDate(int $classId): ?array { return $this->repository->findClassForDate($classId); }
+    public function classBelongsToTeacher(int $userId, int $classId): bool { return $this->repository->findClassOwner($userId, $classId); }
+    public function findStudentsForCall(int $classId, int $yearId): array { return $this->repository->findStudentsForCall($classId, $yearId); }
+    public function saveDailyCall(int $classId, int $yearId, string $date, array $studentIds, array $presentIds, int $userId, bool $scheduled): string
+    {
+        return $this->repository->saveDailyCall($classId, $yearId, $date, $studentIds, $presentIds, $userId, $scheduled);
+    }
+    public function saveManualClosure(int $classId, int $yearId, string $date, string $reason, int $userId): string
+    {
+        return $this->repository->saveManualClosure($classId, $yearId, $date, $reason, $userId);
+    }
+    public function cancelManualClosure(int $classId, int $yearId, string $date): int
+    {
+        return $this->repository->cancelManualClosure($classId, $yearId, $date);
+    }
+
 }
