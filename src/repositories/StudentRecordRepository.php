@@ -355,7 +355,7 @@ class StudentRecordRepository
     public function transferEnrollment(int $studentId, int $newClassId, string $reason): array
     {
         $hasActiveEnrollment = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions WHERE eleve_id = :eid AND statut = 'Actif'",
+            "SELECT COUNT(*) FROM inscriptions WHERE eleve_id = :eid AND statut = 'Actif' AND annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)",
             ['eid' => $studentId]
         );
         if ($hasActiveEnrollment === 0) {
@@ -377,7 +377,8 @@ class StudentRecordRepository
             $this->db->update(
                 "UPDATE inscriptions
                  SET statut = 'Transféré', motif_statut = :motif, date_changement_statut = CURDATE()
-                 WHERE eleve_id = :eid AND statut = 'Actif'",
+                 WHERE eleve_id = :eid AND statut = 'Actif'
+                   AND annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)",
                 ['motif' => $reason, 'eid' => $studentId]
             );
             $activeYear = $this->db->fetchColumn(
