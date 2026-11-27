@@ -63,4 +63,34 @@ class StudentRecordService
         return $this->repository->exportRows($filters, $role, $userId);
     }
 
+
+    public function updateProfile(int $studentId, array $data): void
+    {
+        if ($studentId <= 0) {
+            throw new InvalidArgumentException('Identifiant élève invalide.');
+        }
+        $this->repository->updateProfile($studentId, $data);
+    }
+
+    public function deactivate(int $studentId, string $reason): void
+    {
+        if ($studentId <= 0) {
+            throw new InvalidArgumentException('Identifiant élève invalide.');
+        }
+        $this->repository->deactivate($studentId, $reason !== '' ? $reason : 'Désactivation');
+    }
+
+    public function transferEnrollment(int $studentId, int $oldClassId, int $newClassId, string $reason): array
+    {
+        if ($studentId <= 0 || $newClassId <= 0 || $oldClassId <= 0 || $newClassId === $oldClassId) {
+            throw new InvalidArgumentException('Paramètres de transfert invalides.');
+        }
+        return $this->repository->transferEnrollment(
+            $studentId,
+            $oldClassId,
+            $newClassId,
+            $reason !== '' ? $reason : 'Changement de classe'
+        );
+    }
+
 }
