@@ -19,8 +19,9 @@ class AccountantDashboardService
             $key = $month->format('Y-m');
             $chartRows[] = ['label' => $month->format('m/Y'), 'amount' => round($monthlyByKey[$key] ?? 0, 2)];
         }
+        $studentStateRows = $this->repository->studentDebtStates($yearId);
         $states = ['soldee' => 0, 'partielle' => 0, 'impayee' => 0];
-        foreach ($this->repository->studentDebtStates($yearId) as $state) {
+        foreach ($studentStateRows as $state) {
             if (isset($states[$state['etat']])) $states[$state['etat']] = (int) $state['nombre'];
         }
         return [
@@ -34,8 +35,8 @@ class AccountantDashboardService
             'monthlyChartRows' => $chartRows,
             'studentStateCounts' => $states,
             'classBalances' => $this->repository->classBalances($yearId),
-            'studentStates' => $this->repository->studentDebtStates($yearId),
-            'derniersVersements' => $this->repository->latestReceipts(),
+            'studentStates' => $studentStateRows,
+            'derniersVersements' => $this->repository->latestReceipts($yearId),
         ];
     }
 }
