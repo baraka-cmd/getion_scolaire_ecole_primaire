@@ -18,7 +18,7 @@ if (preg_match('/\$db\s*->\s*(?:fetchAll|fetchOne|fetchColumn)\s*\(/', $view)) {
 if (!str_contains($view, 'ParentDashboardController') || !str_contains($view, 'getViewData')) {
     throw new RuntimeException('Parent dashboard view must delegate preparation to its controller.');
 }
-if (!str_contains($repository, 'WHERE ep.parent_id = :pid AND e.est_actif = 1') || !str_contains($repository, "['pid' => $parentId]")) {
+if (!str_contains($repository, 'WHERE ep.parent_id = :pid AND e.est_actif = 1') || !str_contains($repository, "['pid' => \$parentId]")) {
     throw new RuntimeException('Parent-child relationship scoping must remain in the repository query.');
 }
 if (!str_contains($service, 'childrenForParent($parentId)')) {
