@@ -12,15 +12,15 @@ requirePermission('inscriptions.creer');
 
 global $db;
 
-// Charger le contrôleur
-require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'InscriptionController.php';
-$inscriptionController = new InscriptionController();
+// Charger le service de lecture des données du formulaire
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'InscriptionService.php';
+$inscriptionService = new InscriptionService();
 
 // Récupérer les élèves non inscrits cette année
-$elevesNonInscrits = $inscriptionController->getElevesNonInscrits();
+$elevesNonInscrits = $inscriptionService->getUnenrolledStudents();
 
 // Récupérer les classes avec capacités
-$classesActives = $inscriptionController->getClassesActives();
+$classesActives = $inscriptionService->getActiveClasses();
 
 // Messages
 $successMessage = '';
