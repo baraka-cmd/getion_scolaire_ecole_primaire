@@ -58,7 +58,8 @@ Dépendance attendue : View/HTTP → Controller → Service → Repository → D
 |---|---|---|
 | 0 | Audit complet en lecture seule : comprendre le dépôt et cartographier les fonctionnalités | Audit préliminaire déjà réalisé dans le chat antérieur ; utiliser ses constats, vérifier uniquement les points nécessaires à l'écriture |
 | 1 | Infrastructure et démarrage : bootstrap, routage, réponses, helpers | Analyse préalable réalisée ; mise en œuvre MVC progressive en cours sur branche dédiée |
-| 2 | Authentification et permissions : connexion, sessions, rôles, utilisateurs, récupération du mot de passe | Implémentation MVC des parcours ciblés réalisée sur `refactor/mvc-phase-0-1`; contrôleurs, services et repositories séparés, compatibilité conservée. Clôture technique soumise au lint PHP et aux tests de non-régression réels, encore à exécuter localement |
+| 2 | Authentification et permissions : connexion, sessions, rôles, utilisateurs, récupération du mot de passe | Migration MVC des parcours ciblés effectuée sur la branche dédiée ; vérification locale des contrats et tests encore requise avant clôture |
+| 3 | Référentiels scolaires : années, classes, matières, périodes, paramètres | Extraction progressive des requêtes de lecture/listing et du service de paramètres réalisée ; mutations CRUD des années/classes/matières encore à migrer. Voir `docs/ARCHITECTURE.md` |
 
 ## Interdictions explicites
 
