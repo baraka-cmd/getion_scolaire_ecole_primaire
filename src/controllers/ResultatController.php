@@ -9,12 +9,14 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../services/AcademicResultsService.php';
+require_once __DIR__ . '/../services/ResultsBulletinService.php';
 require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
 
 class ResultatController
 {
     private Database $db;
     private AcademicResultsService $academicResults;
+    private ResultsBulletinService $resultsBulletinService;
     private StudentAccessPolicy $studentAccessPolicy;
     private array $bulletinPlacesCache = [];
 
@@ -22,6 +24,7 @@ class ResultatController
     {
         $this->db = Database::getInstance();
         $this->academicResults = new AcademicResultsService();
+        $this->resultsBulletinService = new ResultsBulletinService();
         $this->studentAccessPolicy = new StudentAccessPolicy($this->db);
     }
 
@@ -87,22 +90,11 @@ public function handleAjax(): void
 
         // Si pas d'année spécifiée, prendre l'année active
         if ($anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn(
-                "SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1"
-            );
+            $anneeId = $this->resultsBulletinService->getActiveSchoolYearId();
         }
 
         // Récupérer les infos de l'élève
-        $eleve = $this->db->fetchOne(
-            "SELECT e.*, c.nom AS classe_nom, c.niveau AS classe_niveau, c.id AS classe_id,
-                    DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format,
-                    TIMESTAMPDIFF(YEAR, e.date_naissance, CURDATE()) AS age
-             FROM eleves e
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             INNER JOIN classes c ON i.classe_id = c.id AND c.annee_scolaire_id = i.annee_scolaire_id
-             WHERE e.id = :eid AND i.annee_scolaire_id = :aid",
-            ['eid' => $eleveId, 'aid' => $anneeId]
-        );
+        $eleve = $this->resultsBulletinService->getStudentForResults($eleveId, $anneeId);
 
         if (!$eleve) jsonResponse(false, 'Élève introuvable ou non inscrit.', [], 404);
 
