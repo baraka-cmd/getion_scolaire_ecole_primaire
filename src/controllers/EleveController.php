@@ -671,4 +671,15 @@ class EleveController
         return $this->studentRecordService->summaryStats();
     }
 
+    /** Données d'export filtrées selon le rôle de la session courante. */
+    public function getExportRows(array $filters): array
+    {
+        $role = hasRole('Parent') ? 'Parent' : (hasRole('Enseignant') ? 'Enseignant' : '');
+        return $this->studentRecordService->exportRows(
+            $filters,
+            $role,
+            (int) ($_SESSION['utilisateur_id'] ?? 0)
+        );
+    }
+
 }
