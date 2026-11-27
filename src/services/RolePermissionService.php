@@ -18,22 +18,52 @@ class RolePermissionService
 
     public function getRole(int $roleId): ?array
     {
-        return $this->security->getRoleById($roleId);
+        return $this->repository->findById($roleId);
     }
 
     public function getRolePermissions(int $roleId): array
     {
-        return $this->security->getRolePermissions($roleId);
+        return $this->repository->getRolePermissions($roleId);
     }
 
     public function getAllPermissionsGrouped(): array
     {
-        return $this->security->getAllPermissionsGrouped();
+        $permissions = $this->repository->getAllPermissions();
+        $grouped = [];
+        foreach ($permissions as $permission) {
+            $module = $permission['module'];
+            if (!isset($grouped[$module])) {
+                $grouped[$module] = ['module' => $module, 'permissions' => []];
+            }
+            $grouped[$module]['permissions'][] = $permission;
+        }
+        return array_values($grouped);
+    }
+
+    public function getPermissionsForRole(int $roleId): array
+    {
+        $allPermissions = $this->getAllPermissionsGrouped();
+        $rolePermissions = $this->getRolePermissions($roleId);
+        $rolePermIds = array_column($rolePermissions, 'id');
+
+        foreach ($allPermissions as &$module) {
+            foreach ($module['permissions'] as &$permission) {
+                $permission['assigned'] = in_array($permission['id'], $rolePermIds);
+            }
+            unset($permission);
+        }
+        unset($module);
+
+        return $allPermissions;
     }
 
     public function updatePermissions(int $roleId, array $permissionIds): bool
     {
-        return $this->security->updateRolePermissions($roleId, $permissionIds);
+        $success = $this->repository->replacePermissions($roleId, $permissionIds);
+        if ($success && (int) ($_SESSION['utilisateur_role_id'] ?? 0) === $roleId) {
+            $this->security->refreshPermissions();
+        }
+        return $success;
     }
 
     public function createRole(string $name, string $description, int $accessLevel): ?int
@@ -41,7 +71,7 @@ class RolePermissionService
         if ($this->repository->existsByName($name)) {
             throw new DomainException('Ce rôle existe déjà.');
         }
-        return $this->security->createRole($name, $description, $accessLevel);
+        return $this->repository->createRole($name, $description, $accessLevel);
     }
 
     public function countUsers(int $roleId): int
@@ -56,21 +86,33 @@ class RolePermissionService
 
     public function deleteRole(int $roleId): bool
     {
-        return $this->security->deleteRole($roleId);
+        $success = $this->repository->deleteRole($roleId);
+        if ($success && (int) ($_SESSION['utilisateur_role_id'] ?? 0) === $roleId) {
+            $this->security->refreshPermissions();
+        }
+        return $success;
     }
 
     public function assignPermission(int $roleId, int $permissionId): bool
     {
-        return $this->security->assignPermission($roleId, $permissionId);
+        $success = $this->repository->assignPermission($roleId, $permissionId);
+        if ($success && (int) ($_SESSION['utilisateur_role_id'] ?? 0) === $roleId) {
+            $this->security->refreshPermissions();
+        }
+        return $success;
     }
 
     public function revokePermission(int $roleId, int $permissionId): bool
     {
-        return $this->security->revokePermission($roleId, $permissionId);
+        $success = $this->repository->revokePermission($roleId, $permissionId);
+        if ($success && (int) ($_SESSION['utilisateur_role_id'] ?? 0) === $roleId) {
+            $this->security->refreshPermissions();
+        }
+        return $success;
     }
 
     public function getAllRoles(): array
     {
-        return $this->security->getAllRoles();
+        return $this->repository->getAllRolesWithPermissionCounts();
     }
 }

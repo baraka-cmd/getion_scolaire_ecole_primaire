@@ -108,10 +108,7 @@ class AnneeController
         } elseif (!preg_match('/^\d{4}-\d{4}$/', $libelle)) {
             $errors['libelle'] = 'Format invalide (ex: 2026-2027).';
         } else {
-            $existe = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM annees_scolaires WHERE libelle = :libelle",
-                ['libelle' => $libelle]
-            );
+            $existe = $this->getAnneeService()->countLabel($libelle);
             if ($existe > 0) $errors['libelle'] = 'Cette année scolaire existe déjà.';
         }
 
@@ -144,17 +141,7 @@ class AnneeController
 
         // Vérifier le chevauchement avec d'autres années
         if (!isBlank($dateDebut) && !isBlank($dateFin) && empty($errors)) {
-            $chevauche = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM annees_scolaires 
-                 WHERE (date_debut BETWEEN :debut AND :fin) 
-                    OR (date_fin BETWEEN :debut2 AND :fin2)
-                    OR (date_debut <= :debut3 AND date_fin >= :fin3)",
-                [
-                    'debut' => $dateDebut, 'fin' => $dateFin,
-                    'debut2' => $dateDebut, 'fin2' => $dateFin,
-                    'debut3' => $dateDebut, 'fin3' => $dateFin
-                ]
-            );
+            $chevauche = $this->getAnneeService()->countOverlappingDates($dateDebut, $dateFin);
             if ($chevauche > 0) {
                 $errors['date_debut'] = 'Cette période chevauche une année existante.';
             }
@@ -211,7 +198,7 @@ class AnneeController
 
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $annee = $this->db->fetchOne("SELECT * FROM annees_scolaires WHERE id = :id", ['id' => $id]);
+        $annee = $this->getAnneeService()->getById($id);
         if (!$annee) jsonResponse(false, 'Année introuvable.', [], 404);
 
         // Ne pas modifier une année clôturée
@@ -224,10 +211,7 @@ class AnneeController
         if (isBlank($libelle)) $errors['libelle'] = 'Le libellé est obligatoire.';
         elseif (!preg_match('/^\d{4}-\d{4}$/', $libelle)) $errors['libelle'] = 'Format invalide.';
         else {
-            $existe = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM annees_scolaires WHERE libelle = :libelle AND id != :id",
-                ['libelle' => $libelle, 'id' => $id]
-            );
+            $existe = $this->getAnneeService()->countLabel($libelle, $id);
             if ($existe > 0) $errors['libelle'] = 'Cette année existe déjà.';
         }
 
@@ -248,20 +232,7 @@ class AnneeController
 
         // Vérifier le chevauchement
         if (!isBlank($dateDebut) && !isBlank($dateFin) && empty($errors)) {
-            $chevauche = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM annees_scolaires 
-                 WHERE id != :id AND (
-                     (date_debut BETWEEN :debut AND :fin) 
-                     OR (date_fin BETWEEN :debut2 AND :fin2)
-                     OR (date_debut <= :debut3 AND date_fin >= :fin3)
-                 )",
-                [
-                    'id' => $id,
-                    'debut' => $dateDebut, 'fin' => $dateFin,
-                    'debut2' => $dateDebut, 'fin2' => $dateFin,
-                    'debut3' => $dateDebut, 'fin3' => $dateFin
-                ]
-            );
+            $chevauche = $this->getAnneeService()->countOverlappingDates($dateDebut, $dateFin, $id);
             if ($chevauche > 0) $errors['date_debut'] = 'Cette période chevauche une autre année.';
         }
 
@@ -304,21 +275,13 @@ class AnneeController
         try {
             $this->db->beginTransaction();
 
-            $configuration = $this->db->fetchOne(
-                "SELECT id, annee_scolaire_active_id
-                 FROM parametres_ecole
-                 WHERE id = 1
-                 FOR UPDATE"
-            );
+            $configuration = $this->getAnneeService()->findSchoolYearConfigurationForUpdate();
             if (!$configuration) {
                 $this->db->rollback();
                 jsonResponse(false, 'Configuration de l’année active introuvable.', [], 500);
             }
 
-            $annee = $this->db->fetchOne(
-                "SELECT * FROM annees_scolaires WHERE id = :id FOR UPDATE",
-                ['id' => $id]
-            );
+            $annee = $this->getAnneeService()->findForUpdate($id);
             if (!$annee) {
                 $this->db->rollback();
                 jsonResponse(false, 'Année introuvable.', [], 404);
@@ -366,21 +329,13 @@ class AnneeController
         try {
             $this->db->beginTransaction();
 
-            $configuration = $this->db->fetchOne(
-                "SELECT id, annee_scolaire_active_id
-                 FROM parametres_ecole
-                 WHERE id = 1
-                 FOR UPDATE"
-            );
+            $configuration = $this->getAnneeService()->findSchoolYearConfigurationForUpdate();
             if (!$configuration) {
                 $this->db->rollback();
                 jsonResponse(false, 'Configuration de l’année active introuvable. Aucune clôture effectuée.', [], 409);
             }
 
-            $annee = $this->db->fetchOne(
-                "SELECT * FROM annees_scolaires WHERE id = :id FOR UPDATE",
-                ['id' => $id]
-            );
+            $annee = $this->getAnneeService()->findForUpdate($id);
             if (!$annee) {
                 $this->db->rollback();
                 jsonResponse(false, 'Année introuvable.', [], 404);
@@ -447,32 +402,26 @@ class AnneeController
         $id = (int) post('id', 0);
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $annee = $this->db->fetchOne("SELECT * FROM annees_scolaires WHERE id = :id", ['id' => $id]);
+        $annee = $this->getAnneeService()->getById($id);
         if (!$annee) jsonResponse(false, 'Année introuvable.', [], 404);
 
         // Vérifier les inscriptions
-        $nbInscriptions = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = :aid",
-            ['aid' => $id]
-        );
+        $nbInscriptions = $this->getAnneeService()->countEnrollments($id);
         if ($nbInscriptions > 0) {
             jsonResponse(false, "Impossible de supprimer : {$nbInscriptions} élève(s) inscrit(s).", [], 409);
         }
 
         // Vérifier les classes
-        $nbClasses = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM classes WHERE annee_scolaire_id = :aid",
-            ['aid' => $id]
-        );
+        $nbClasses = $this->getAnneeService()->countClasses($id);
         if ($nbClasses > 0) {
             jsonResponse(false, "Impossible de supprimer : {$nbClasses} classe(s) liée(s).", [], 409);
         }
 
         try {
             // Supprimer les trimestres
-            $this->db->delete("DELETE FROM trimestres WHERE annee_scolaire_id = :aid", ['aid' => $id]);
+            $this->getAnneeService()->deleteTerms($id);
             // Supprimer l'année
-            $this->db->delete("DELETE FROM annees_scolaires WHERE id = :id", ['id' => $id]);
+            $this->getAnneeService()->deleteYear($id);
 
             logActivity('Suppression', 'annees_scolaires', $id, "Année supprimée : {$annee['libelle']}");
 

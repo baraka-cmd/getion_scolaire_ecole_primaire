@@ -13,6 +13,114 @@ class ClasseRepository
         $this->db = $db ?? Database::getInstance();
     }
 
+    public function findPaginatedList(
+        string $search,
+        int $schoolYearId,
+        string $orderBy,
+        string $direction,
+        int $limit,
+        int $offset
+    ): array {
+        $allowedOrder = ['id', 'nom', 'niveau', 'salle', 'capacite_max', 'nb_eleves'];
+        if (!in_array($orderBy, $allowedOrder, true)) {
+            $orderBy = 'niveau';
+        }
+        $direction = strtoupper($direction);
+        if (!in_array($direction, ['ASC', 'DESC'], true)) {
+            $direction = 'ASC';
+        }
+
+        $conditions = [];
+        $params = [];
+        if ($search !== '') {
+            $conditions[] = '(c.nom LIKE :search_name OR c.salle LIKE :search_room)';
+            $params['search_name'] = '%' . $search . '%';
+            $params['search_room'] = '%' . $search . '%';
+        }
+        if ($schoolYearId > 0) {
+            $conditions[] = 'c.annee_scolaire_id = :school_year_id';
+            $params['school_year_id'] = $schoolYearId;
+        } else {
+            $conditions[] = 'c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)';
+        }
+        $where = 'WHERE ' . implode(' AND ', $conditions);
+        $total = (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM classes c {$where}",
+            $params
+        );
+        $orderExpression = $orderBy === 'nb_eleves' ? 'nb_eleves' : 'c.' . $orderBy;
+        $rows = $this->db->fetchAll(
+            "SELECT c.*,
+                    COALESCE(e.nom, '—') AS titulaire_nom,
+                    COALESCE(e.prenom, '') AS titulaire_prenom,
+                    e.id AS titulaire_id,
+                    (SELECT COUNT(*) FROM inscriptions i WHERE i.classe_id = c.id AND i.statut = 'Actif') AS nb_eleves,
+                    a.libelle AS annee_libelle
+             FROM classes c
+             LEFT JOIN enseignants e ON c.id = e.classe_id AND e.est_actif = 1
+             INNER JOIN annees_scolaires a ON c.annee_scolaire_id = a.id
+             {$where}
+             ORDER BY {$orderExpression} {$direction}
+             LIMIT :limit OFFSET :offset",
+            array_merge($params, ['limit' => $limit, 'offset' => $offset])
+        );
+        return ['total' => $total, 'classes' => $rows];
+    }
+
+    public function countNameInYear(string $name, int $yearId, ?int $excludeId = null): int
+    {
+        $sql = 'SELECT COUNT(*) FROM classes WHERE nom = :name AND annee_scolaire_id = :year_id';
+        $params = ['name' => $name, 'year_id' => $yearId];
+        if ($excludeId !== null) {
+            $sql .= ' AND id != :exclude_id';
+            $params['exclude_id'] = $excludeId;
+        }
+        return (int) $this->db->fetchColumn($sql, $params);
+    }
+
+    public function countRoomInYear(string $room, int $yearId, ?int $excludeId = null): int
+    {
+        $sql = 'SELECT COUNT(*) FROM classes WHERE salle = :room AND annee_scolaire_id = :year_id';
+        $params = ['room' => $room, 'year_id' => $yearId];
+        if ($excludeId !== null) {
+            $sql .= ' AND id != :exclude_id';
+            $params['exclude_id'] = $excludeId;
+        }
+        return (int) $this->db->fetchColumn($sql, $params);
+    }
+
+    public function findBasic(int $classId): ?array
+    {
+        return $this->db->fetchOne('SELECT id, nom FROM classes WHERE id = :id', ['id' => $classId]);
+    }
+
+    public function countActiveStudents(int $classId): int
+    {
+        return (int) $this->db->fetchColumn(
+            "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :class_id AND statut = 'Actif'",
+            ['class_id' => $classId]
+        );
+    }
+
+    public function countStudents(int $classId): int
+    {
+        return (int) $this->db->fetchColumn('SELECT COUNT(*) FROM inscriptions WHERE classe_id = :class_id', ['class_id' => $classId]);
+    }
+
+    public function countEvaluations(int $classId): int
+    {
+        return (int) $this->db->fetchColumn('SELECT COUNT(*) FROM evaluations WHERE classe_id = :class_id', ['class_id' => $classId]);
+    }
+
+    public function findTeacherClass(int $teacherId): ?int
+    {
+        $classId = $this->db->fetchColumn(
+            'SELECT classe_id FROM enseignants WHERE id = :teacher_id',
+            ['teacher_id' => $teacherId]
+        );
+        return $classId === false || $classId === null ? null : (int) $classId;
+    }
+
     public function findForAjax(int $id): ?array
     {
         return $this->db->fetchOne(

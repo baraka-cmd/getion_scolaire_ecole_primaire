@@ -13,6 +13,48 @@ class AuthRepository
         $this->db = $db ?? Database::getInstance();
     }
 
+
+    public function emailExists(string $email): bool
+    {
+        return $this->db->exists(
+            'SELECT id FROM utilisateurs WHERE email = :email',
+            ['email' => $email]
+        );
+    }
+
+    public function createRegisteredUser(array $data): int
+    {
+        try {
+            $this->db->beginTransaction();
+            $userId = (int) $this->db->insert(
+                'INSERT INTO utilisateurs (nom, prenom, email, telephone, login, mot_de_passe, role_id, est_actif)
+                 VALUES (:nom, :prenom, :email, :telephone, :login, :password, :role_id, 1)',
+                $data
+            );
+            $this->db->commit();
+            return $userId;
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
+            throw $e;
+        }
+    }
+
+    public function logFailedAttempt(?int $userId, string $email, string $ip, string $browser): void
+    {
+        $this->db->query(
+            "INSERT INTO logs_activites (utilisateur_id, action, description, adresse_ip, navigateur)
+             VALUES (:uid, 'Tentative échouée', :description, :ip, :navigateur)",
+            [
+                'uid' => $userId,
+                'description' => 'Tentative de connexion avec empreinte email: ' . hash('sha256', mb_strtolower(trim($email))),
+                'ip' => $ip,
+                'navigateur' => $browser,
+            ]
+        );
+    }
+
     public function findByEmail(string $email): ?array
     {
         return $this->db->fetchOne(
@@ -77,6 +119,22 @@ class AuthRepository
              VALUES (:nom, :prenom, :email, :login, :google_id, :photo, :role_id, 1)',
             $data
         );
+    }
+
+
+    public function createGoogleUserTransactional(array $data): int
+    {
+        try {
+            $this->db->beginTransaction();
+            $userId = $this->createGoogleUser($data);
+            $this->db->commit();
+            return $userId;
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollback();
+            }
+            throw $e;
+        }
     }
 
     public function updateSuccessfulLogin(int $userId, string $ip): void

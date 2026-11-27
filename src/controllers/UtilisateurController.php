@@ -10,13 +10,11 @@ require_once __DIR__ . '/../services/UserAccountService.php';
 
 class UtilisateurController
 {
-    private Database $db;
     private Security $security;
     private UserAccountService $accountService;
 
     public function __construct(?UserAccountService $accountService = null)
     {
-        $this->db = Database::getInstance();
         $this->security = Security::getInstance();
         $this->accountService = $accountService ?? new UserAccountService();
     }
@@ -80,92 +78,30 @@ class UtilisateurController
      */
     private function getListe(): void
     {
-        $page       = max(1, (int) post('page', 1));
-        $recherche  = post('recherche', '');
-        $role       = post('role', '');
-        $statut     = post('statut', '');
-        $ordre      = post('ordre', 'nom');
-        $direction  = post('direction', 'ASC');
-        $parPage    = ITEMS_PER_PAGE;
+        $page = max(1, (int) post('page', 1));
+        $recherche = post('recherche', '');
+        $role = post('role', '');
+        $statut = post('statut', '');
+        $ordre = post('ordre', 'nom');
+        $direction = post('direction', 'ASC');
+        $parPage = ITEMS_PER_PAGE;
 
-        $where = [];
-        $params = [];
-
-        if (!empty($recherche)) {
-            $where[] = "(u.nom LIKE :recherche1 OR u.prenom LIKE :recherche2 OR u.email LIKE :recherche3 OR u.login LIKE :recherche4)";
-            $params['recherche1'] = "%{$recherche}%";
-            $params['recherche2'] = "%{$recherche}%";
-            $params['recherche3'] = "%{$recherche}%";
-            $params['recherche4'] = "%{$recherche}%";
-        }
-
-        if (!empty($role)) {
-            $where[] = "u.role_id = :role";
-            $params['role'] = (int) $role;
-        }
-
-        if ($statut !== '') {
-            $where[] = "u.est_actif = :statut";
-            $params['statut'] = (int) $statut;
-        }
-
-        $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
-
-        $colonnesAutorisees = [
-            'id' => 'u.id',
-            'nom' => 'u.nom',
-            'prenom' => 'u.prenom',
-            'email' => 'u.email',
-            'login' => 'u.login',
-            'role_nom' => 'r.nom',
-            'derniere_connexion' => 'u.derniere_connexion',
-            'est_actif' => 'u.est_actif',
-        ];
-        $ordre = $colonnesAutorisees[$ordre] ?? $colonnesAutorisees['nom'];
-        $direction = in_array(strtoupper($direction), ['ASC', 'DESC'], true)
-            ? strtoupper($direction)
-            : 'ASC';
-
-        // Nombre total
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM utilisateurs u
-             LEFT JOIN roles r ON u.role_id = r.id
-             {$whereClause}",
-            $params
+        $result = $this->accountService->getAdminList(
+            $page,
+            $parPage,
+            $recherche,
+            $role,
+            $statut,
+            $ordre,
+            $direction
         );
-
-        // Liste paginée
-        $offset = ($page - 1) * $parPage;
-        $utilisateurs = $this->db->fetchAll(
-            "SELECT u.id, u.nom, u.prenom, u.email, u.telephone, u.login, u.photo,
-                    u.est_actif, u.derniere_connexion, u.created_at,
-                    COALESCE(r.nom, 'Rôle inconnu') AS role_nom, r.id AS role_id
-             FROM utilisateurs u
-             LEFT JOIN roles r ON u.role_id = r.id
-             {$whereClause}
-             ORDER BY {$ordre} {$direction}, u.id ASC
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, [
-                'limit' => $parPage,
-                'offset' => $offset
-            ])
-        );
-
-        // Formater les données
-        foreach ($utilisateurs as &$user) {
-            $user['derniere_connexion'] = $user['derniere_connexion'] 
-                ? formatDateTime($user['derniere_connexion']) 
-                : 'Jamais';
-            $user['date_creation'] = formatDate($user['created_at']);
-            $user['initials'] = mb_strtoupper(mb_substr($user['prenom'], 0, 1) . mb_substr($user['nom'], 0, 1));
-        }
 
         jsonResponse(true, 'Liste récupérée.', [
-            'utilisateurs' => $utilisateurs,
-            'total'        => $total,
+            'utilisateurs' => $result['utilisateurs'],
+            'total'        => $result['total'],
             'page'         => $page,
             'par_page'     => $parPage,
-            'pages'        => ceil($total / $parPage)
+            'pages'        => ceil($result['total'] / $parPage)
         ]);
     }
 
@@ -180,34 +116,13 @@ class UtilisateurController
             jsonResponse(false, 'ID invalide.', [], 400);
         }
 
-        $utilisateur = $this->db->fetchOne(
-            "SELECT u.id, u.nom, u.prenom, u.email, u.telephone, u.login, u.photo,
-                    u.est_actif, u.derniere_connexion, u.created_at,
-                    u.role_id, r.nom AS role_nom
-             FROM utilisateurs u
-             INNER JOIN roles r ON u.role_id = r.id
-             WHERE u.id = :id",
-            ['id' => $id]
-        );
+        $utilisateur = $this->accountService->getAdminDetails($id);
 
         if (!$utilisateur) {
             jsonResponse(false, 'Utilisateur introuvable.', [], 404);
         }
 
-        $utilisateur['derniere_connexion'] = $utilisateur['derniere_connexion'] 
-            ? formatDateTime($utilisateur['derniere_connexion']) 
-            : 'Jamais';
-        $utilisateur['date_creation'] = formatDate($utilisateur['created_at']);
-
-        // Historique des connexions
-        $historique = $this->db->fetchAll(
-            "SELECT action, description, date_action
-             FROM logs_activites
-             WHERE utilisateur_id = :uid AND action IN ('Connexion', 'Tentative échouée', 'Déconnexion')
-             ORDER BY date_action DESC
-             LIMIT 20",
-            ['uid' => $id]
-        );
+        $historique = $this->accountService->getAuthenticationHistory($id);
 
         jsonResponse(true, 'Utilisateur récupéré.', [
             'utilisateur' => $utilisateur,
@@ -271,11 +186,9 @@ class UtilisateurController
         }
 
         try {
-            $this->db->beginTransaction();
-
             $hashedPassword = password_hash($password, PASSWORD_ALGO, ['cost' => PASSWORD_COST]);
 
-            $userId = $this->accountService->create([
+            $userId = $this->accountService->createTransactional([
                 'nom'       => formatNom($nom),
                 'prenom'    => formatNom($prenom),
                 'email'     => mb_strtolower(trim($email)),
@@ -285,14 +198,11 @@ class UtilisateurController
                 'role_id'   => $roleId,
             ]);
 
-            $this->db->commit();
-
             logActivity('Création', 'utilisateurs', $userId, "Création de l'utilisateur {$nom} {$prenom}");
 
             jsonResponse(true, 'Utilisateur créé avec succès.', ['id' => $userId]);
 
         } catch (Exception $e) {
-            $this->db->rollback();
             error_log('Erreur création utilisateur: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la création de l\'utilisateur.');
         }
@@ -517,9 +427,7 @@ class UtilisateurController
      */
     public function getRoles(): array
     {
-        return $this->db->fetchAll(
-            "SELECT id, nom, description FROM roles WHERE est_actif = 1 ORDER BY niveau_acces DESC"
-        );
+        return $this->accountService->getActiveRoles();
     }
 
     public function getAssignableRoles(?int $targetUserId = null): array

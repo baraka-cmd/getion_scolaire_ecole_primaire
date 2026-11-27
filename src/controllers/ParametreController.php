@@ -8,14 +8,16 @@
 
 defined('ACCESS') or die('Accès interdit');
 
+require_once __DIR__ . '/../services/SchoolSettingsService.php';
+
 class ParametreController
 {
-    private Database $db;
+    private SchoolSettingsService $settingsService;
     private string $uploadDir;
 
-    public function __construct()
+    public function __construct(?SchoolSettingsService $settingsService = null)
     {
-        $this->db = Database::getInstance();
+        $this->settingsService = $settingsService ?? new SchoolSettingsService();
         $this->uploadDir = UPLOADS_PATH . 'logos' . DIRECTORY_SEPARATOR;
         if (!is_dir($this->uploadDir)) {
             mkdir($this->uploadDir, 0755, true);
@@ -64,7 +66,7 @@ class ParametreController
 
     private function getParametres(): void
     {
-        $params = $this->db->fetchOne("SELECT * FROM parametres_ecole WHERE id = 1");
+        $params = $this->settingsService->getSettings();
 
         if (!$params) {
             // Valeurs par défaut si la table est vide
@@ -96,13 +98,13 @@ class ParametreController
 
         // Récupérer le libellé de l'année active
         if ($params['annee_scolaire_active_id']) {
-            $annee = $this->db->fetchOne("SELECT libelle FROM annees_scolaires WHERE id = :id", ['id' => $params['annee_scolaire_active_id']]);
+            $annee = $this->settingsService->getYearLabel((int) $params['annee_scolaire_active_id']);
             $params['annee_active_libelle'] = $annee ? $annee['libelle'] : '';
         }
 
         // Récupérer le libellé du trimestre actif
         if ($params['trimestre_actif_id']) {
-            $trimestre = $this->db->fetchOne("SELECT libelle FROM trimestres WHERE id = :id", ['id' => $params['trimestre_actif_id']]);
+            $trimestre = $this->settingsService->getTermLabel((int) $params['trimestre_actif_id']);
             $params['trimestre_actif_libelle'] = $trimestre ? $trimestre['libelle'] : '';
         }
 
@@ -161,137 +163,34 @@ class ParametreController
             jsonResponse(false, 'Veuillez corriger les erreurs.', ['errors' => $errors], 422);
         }
 
-        $annee = $this->db->fetchOne(
-            "SELECT id FROM annees_scolaires WHERE id = :id",
-            ['id' => $anneeActiveId]
-        );
-        $trimestre = $this->db->fetchOne(
-            "SELECT id FROM trimestres WHERE id = :id AND annee_scolaire_id = :annee_id",
-            ['id' => $trimestreActifId, 'annee_id' => $anneeActiveId]
-        );
-        if (!$annee || !$trimestre) {
+        if (!$this->settingsService->hasValidYearAndTerm($anneeActiveId, $trimestreActifId)) {
             jsonResponse(false, 'Le trimestre sélectionné ne correspond pas à l’année scolaire choisie.', [], 422);
         }
 
         try {
-            $this->db->beginTransaction();
-            $paramsExistants = $this->db->fetchOne("SELECT * FROM parametres_ecole WHERE id = 1");
-            $baremeNoteMax = (float) ($paramsExistants['bareme_note_max'] ?? 20);
-            $moyennePassage = (float) ($paramsExistants['moyenne_passage'] ?? 10);
-            $pourcentageInterro = (float) ($paramsExistants['pourcentage_interro'] ?? 30);
-            $pourcentageDevoir = (float) ($paramsExistants['pourcentage_devoir'] ?? 30);
-            $pourcentageExamen = (float) ($paramsExistants['pourcentage_examen'] ?? 40);
+            $this->settingsService->saveSettings([
+                'nom_ecole' => $nomEcole,
+                'devise' => $devise,
+                'taux_cdf_par_usd' => $tauxCdfParUsd,
+                'adresse' => $adresse ?: null,
+                'telephone' => $telephone ?: null,
+                'email' => $email ?: null,
+                'site_web' => $siteWeb ?: null,
+                'pays' => $pays ?: null,
+                'province' => $province ?: null,
+                'ministere' => $ministere ?: null,
+                'ville' => $ville ?: null,
+                'commune' => $commune ?: null,
+                'code_etab' => $codeEtablissement ?: null,
+                'theme_interface' => $themeInterface,
+                'annee_id' => $anneeActiveId,
+                'trim_id' => $trimestreActifId,
+                'format_mat' => $formatMatricule,
+            ]);
 
-            // Vérifier si la ligne existe
-            $existe = $paramsExistants !== null;
-
-            if ($existe) {
-                // Mettre à jour
-                $this->db->update(
-                    "UPDATE parametres_ecole SET 
-                        nom_ecole = :nom_ecole,
-                        devise = :devise,
-                        taux_cdf_par_usd = :taux_cdf_par_usd,
-                        adresse = :adresse,
-                        telephone = :telephone,
-                        email = :email,
-                        site_web = :site_web,
-                        pays = :pays,
-                        province = :province,
-                        ministere = :ministere,
-                        ville = :ville,
-                        commune_territoire = :commune,
-                        code_etablissement = :code_etab,
-                        theme_interface = :theme_interface,
-                        annee_scolaire_active_id = :annee_id,
-                        trimestre_actif_id = :trim_id,
-                        bareme_note_max = :bareme,
-                        moyenne_passage = :moyenne,
-                        pourcentage_interro = :pct_interro,
-                        pourcentage_devoir = :pct_devoir,
-                        pourcentage_examen = :pct_examen,
-                        format_matricule = :format_mat
-                     WHERE id = 1",
-                    [
-                        'nom_ecole'   => $nomEcole,
-                        'devise'      => $devise,
-                        'taux_cdf_par_usd' => $tauxCdfParUsd,
-                        'adresse'     => $adresse ?: null,
-                        'telephone'   => $telephone ?: null,
-                        'email'       => $email ?: null,
-                        'site_web'    => $siteWeb ?: null,
-                        'pays'        => $pays ?: null,
-                        'province'    => $province ?: null,
-                        'ministere'   => $ministere ?: null,
-                        'ville'       => $ville ?: null,
-                        'commune'     => $commune ?: null,
-                        'code_etab'   => $codeEtablissement ?: null,
-                        'theme_interface' => $themeInterface,
-                        'annee_id'    => $anneeActiveId,
-                        'trim_id'     => $trimestreActifId,
-                        'bareme'      => $baremeNoteMax,
-                        'moyenne'     => $moyennePassage,
-                        'pct_interro' => $pourcentageInterro,
-                        'pct_devoir'  => $pourcentageDevoir,
-                        'pct_examen'  => $pourcentageExamen,
-                        'format_mat'  => $formatMatricule
-                    ]
-                );
-            } else {
-                // Créer
-                $this->db->insert(
-                    "INSERT INTO parametres_ecole (nom_ecole, devise, taux_cdf_par_usd, adresse, telephone, email, site_web,
-                     pays, province, ministere, ville, commune_territoire, code_etablissement,
-                     theme_interface, annee_scolaire_active_id, trimestre_actif_id, bareme_note_max, moyenne_passage,
-                     pourcentage_interro, pourcentage_devoir, pourcentage_examen, format_matricule)
-                     VALUES (:nom_ecole, :devise, :taux_cdf_par_usd, :adresse, :telephone, :email, :site_web,
-                     :pays, :province, :ministere, :ville, :commune, :code_etab,
-                     :theme_interface, :annee_id, :trim_id, :bareme, :moyenne, :pct_interro, :pct_devoir, :pct_examen, :format_mat)",
-                    [
-                        'nom_ecole'   => $nomEcole,
-                        'devise'      => $devise,
-                        'taux_cdf_par_usd' => $tauxCdfParUsd,
-                        'adresse'     => $adresse ?: null,
-                        'telephone'   => $telephone ?: null,
-                        'email'       => $email ?: null,
-                        'site_web'    => $siteWeb ?: null,
-                        'pays'        => $pays ?: null,
-                        'province'    => $province ?: null,
-                        'ministere'   => $ministere ?: null,
-                        'ville'       => $ville ?: null,
-                        'commune'     => $commune ?: null,
-                        'code_etab'   => $codeEtablissement ?: null,
-                        'theme_interface' => $themeInterface,
-                        'annee_id'    => $anneeActiveId,
-                        'trim_id'     => $trimestreActifId,
-                        'bareme'      => $baremeNoteMax,
-                        'moyenne'     => $moyennePassage,
-                        'pct_interro' => $pourcentageInterro,
-                        'pct_devoir'  => $pourcentageDevoir,
-                        'pct_examen'  => $pourcentageExamen,
-                        'format_mat'  => $formatMatricule
-                    ]
-                );
-            }
-
-            // Mettre à jour l'année active dans la table annees_scolaires
-            $this->db->update("UPDATE annees_scolaires SET est_active = 0");
-            $this->db->update("UPDATE annees_scolaires SET est_active = 1 WHERE id = :id", ['id' => $anneeActiveId]);
-
-            // Mettre à jour le trimestre actif
-            $this->db->update(
-                "UPDATE trimestres SET est_actif = 0 WHERE annee_scolaire_id = :annee_id",
-                ['annee_id' => $anneeActiveId]
-            );
-            $this->db->update("UPDATE trimestres SET est_actif = 1 WHERE id = :id", ['id' => $trimestreActifId]);
-
-            $this->db->commit();
             logActivity('Modification', 'parametres_ecole', 1, 'Paramètres de l\'école mis à jour; thème: ' . $themeInterface);
-
             jsonResponse(true, 'Paramètres sauvegardés avec succès.');
-
         } catch (Throwable $e) {
-            $this->db->rollback();
             error_log('Erreur sauvegarde paramètres: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la sauvegarde des paramètres.');
         }
@@ -334,7 +233,7 @@ class ParametreController
             jsonResponse(false, 'Le fichier sélectionné n’est pas une image valide.', [], 400);
         }
 
-        $params = $this->db->fetchOne("SELECT logo FROM parametres_ecole WHERE id = 1");
+        $params = $this->settingsService->getLogo();
         if (!$params) {
             jsonResponse(false, 'Enregistrez d’abord les paramètres de l’école avant d’ajouter un logo.', [], 409);
         }
@@ -351,10 +250,7 @@ class ParametreController
         }
 
         try {
-            $this->db->update(
-                "UPDATE parametres_ecole SET logo = :logo WHERE id = 1",
-                ['logo' => $cheminRelatif]
-            );
+            $this->settingsService->updateLogo($cheminRelatif);
         } catch (Throwable $e) {
             if (file_exists($cheminAbsolu)) {
                 unlink($cheminAbsolu);
@@ -381,7 +277,7 @@ class ParametreController
 
     private function getAnnees(): void
     {
-        $annees = $this->db->fetchAll("SELECT * FROM annees_scolaires ORDER BY date_debut DESC");
+        $annees = $this->settingsService->getSchoolYears();
         jsonResponse(true, 'Années récupérées.', ['annees' => $annees]);
     }
 
@@ -393,13 +289,10 @@ class ParametreController
     {
         $anneeId = (int) post('annee_id', 0);
         if ($anneeId <= 0) {
-            $anneeId = (int) $this->db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
+            $anneeId = $this->settingsService->getActiveYearId();
         }
 
-        $trimestres = $this->db->fetchAll(
-            "SELECT * FROM trimestres WHERE annee_scolaire_id = :aid ORDER BY numero",
-            ['aid' => $anneeId]
-        );
+        $trimestres = $this->settingsService->getTerms($anneeId);
 
         jsonResponse(true, 'Trimestres récupérés.', ['trimestres' => $trimestres]);
     }

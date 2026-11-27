@@ -13,6 +13,59 @@ class ClasseService
         $this->repository = $repository ?? new ClasseRepository();
     }
 
+    public function countNameInYear(string $name, int $yearId, ?int $excludeId = null): int
+    {
+        return $this->repository->countNameInYear($name, $yearId, $excludeId);
+    }
+
+    public function countRoomInYear(string $room, int $yearId, ?int $excludeId = null): int
+    {
+        return $this->repository->countRoomInYear($room, $yearId, $excludeId);
+    }
+
+    public function findBasic(int $classId): ?array
+    {
+        return $this->repository->findBasic($classId);
+    }
+
+    public function countActiveStudents(int $classId): int
+    {
+        return $this->repository->countActiveStudents($classId);
+    }
+
+    public function countStudents(int $classId): int
+    {
+        return $this->repository->countStudents($classId);
+    }
+
+    public function countEvaluations(int $classId): int
+    {
+        return $this->repository->countEvaluations($classId);
+    }
+
+    public function findTeacherClass(int $teacherId): ?int
+    {
+        return $this->repository->findTeacherClass($teacherId);
+    }
+
+    public function getPaginatedList(
+        string $search,
+        int $schoolYearId,
+        string $orderBy,
+        string $direction,
+        int $limit,
+        int $offset
+    ): array {
+        return $this->repository->findPaginatedList(
+            $search,
+            $schoolYearId,
+            $orderBy,
+            $direction,
+            $limit,
+            $offset
+        );
+    }
+
     public function getForAjax(int $id): ?array
     {
         $class = $this->repository->findForAjax($id);

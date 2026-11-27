@@ -11,7 +11,8 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('matieres.consulter');
 
-global $db;
+require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'MatiereService.php';
+$matiereService = new MatiereService();
 
 // Charger le contrôleur
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'MatiereController.php';
@@ -23,48 +24,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
 }
 
 // Récupérer tous les groupes avec leurs sous-matières (données initiales)
-$groupes = $db->fetchAll(
-    "SELECT m.*,
-            (SELECT COUNT(*) FROM matieres sm WHERE sm.parent_id = m.id AND sm.est_actif = 1) AS nb_sous_matieres
-     FROM matieres m
-     WHERE m.est_groupe = 1 AND m.est_actif = 1
-     ORDER BY m.id"
-);
+$groupes = $matiereService->getAllGroupHierarchyForView();
+$statistiquesMatieres = $matiereService->getSubjectSummaryCounts();
+$totalGroupes = $statistiquesMatieres['groupes'];
+$totalSousMatieres = $statistiquesMatieres['sous_matieres'];
+$totalAssociations = $statistiquesMatieres['associations'];
 
-foreach ($groupes as &$groupe) {
-    $groupe['sous_matieres'] = $db->fetchAll(
-        "SELECT m.*,
-                (SELECT COUNT(*) FROM classe_matieres cm WHERE cm.matiere_id = m.id AND cm.est_active = 1) AS nb_classes
-         FROM matieres m
-         WHERE m.parent_id = :pid AND m.est_groupe = 0 AND m.est_actif = 1
-         ORDER BY m.id",
-        ['pid' => $groupe['id']]
-    );
-
-    foreach ($groupe['sous_matieres'] as &$sm) {
-        $sm['classes'] = $db->fetchAll(
-            "SELECT c.nom, c.niveau, COALESCE(cm.maxima_override, m2.maxima) AS maxima_final
-             FROM classe_matieres cm
-             INNER JOIN classes c ON cm.classe_id = c.id
-             INNER JOIN matieres m2 ON cm.matiere_id = m2.id
-             WHERE cm.matiere_id = :mid AND cm.est_active = 1
-             AND c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY c.niveau",
-            ['mid' => $sm['id']]
-        );
-    }
-    unset($sm);
-}
-unset($groupe);
-
-// Statistiques
-$totalGroupes = (int) $db->fetchColumn("SELECT COUNT(*) FROM matieres WHERE est_groupe = 1 AND est_actif = 1");
-$totalSousMatieres = (int) $db->fetchColumn("SELECT COUNT(*) FROM matieres WHERE est_groupe = 0 AND parent_id IS NOT NULL AND est_actif = 1");
-$totalAssociations = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM classe_matieres cm 
-     INNER JOIN matieres m ON cm.matiere_id = m.id 
-     WHERE m.est_groupe = 0 AND cm.est_active = 1"
-);
 
 // Métadonnées
 $pageTitle = 'Gestion des matières';

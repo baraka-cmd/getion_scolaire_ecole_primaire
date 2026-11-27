@@ -84,68 +84,14 @@ class MatiereController
         $recherche  = post('recherche', '');
         $parPage    = ITEMS_PER_PAGE;
 
-        $where = [];
-        $params = [];
-
-        if (!empty($recherche)) {
-            $where[] = "(m.libelle LIKE :r1 OR m.code LIKE :r2 OR m.description LIKE :r3)";
-            $params['r1'] = "%{$recherche}%";
-            $params['r2'] = "%{$recherche}%";
-            $params['r3'] = "%{$recherche}%";
-        }
-
-        $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
-
-        // Compter uniquement les groupes (est_groupe = 1)
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM matieres m WHERE m.est_groupe = 1 AND m.est_actif = 1 {$whereClause}",
-            $params
-        );
-
         $offset = ($page - 1) * $parPage;
-
-        // Récupérer les groupes
-        $groupes = $this->db->fetchAll(
-            "SELECT m.*,
-                    (SELECT COUNT(*) FROM matieres sm WHERE sm.parent_id = m.id AND sm.est_actif = 1) AS nb_sous_matieres,
-                    (SELECT COUNT(*) FROM classe_matieres cm 
-                     INNER JOIN matieres sm ON cm.matiere_id = sm.id 
-                     WHERE sm.parent_id = m.id AND cm.est_active = 1) AS nb_associations
-             FROM matieres m
-             WHERE m.est_groupe = 1 AND m.est_actif = 1
-             {$whereClause}
-             ORDER BY m.id
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, ['limit' => $parPage, 'offset' => $offset])
+        $liste = $this->matiereService->getPaginatedGroupHierarchy(
+            (string) $recherche,
+            (int) $parPage,
+            (int) $offset
         );
-
-        // Pour chaque groupe, récupérer ses sous-matières
-        foreach ($groupes as &$groupe) {
-            $groupe['sous_matieres'] = $this->db->fetchAll(
-                "SELECT m.*,
-                        (SELECT COUNT(*) FROM classe_matieres cm WHERE cm.matiere_id = m.id AND cm.est_active = 1) AS nb_classes
-                 FROM matieres m
-                 WHERE m.parent_id = :pid AND m.est_groupe = 0 AND m.est_actif = 1
-                 ORDER BY m.id",
-                ['pid' => $groupe['id']]
-            );
-
-            // Pour chaque sous-matière, récupérer les classes associées
-            foreach ($groupe['sous_matieres'] as &$sm) {
-                $sm['classes'] = $this->db->fetchAll(
-                    "SELECT c.nom, c.niveau, COALESCE(cm.maxima_override, m.maxima) AS maxima_final
-                     FROM classe_matieres cm
-                     INNER JOIN classes c ON cm.classe_id = c.id
-                     INNER JOIN matieres m ON cm.matiere_id = m.id
-                     WHERE cm.matiere_id = :mid AND cm.est_active = 1
-                     AND c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-                     ORDER BY c.niveau",
-                    ['mid' => $sm['id']]
-                );
-            }
-            unset($sm);
-        }
-        unset($groupe);
+        $total = $liste['total'];
+        $groupes = $liste['groupes'];
 
         jsonResponse(true, 'Liste récupérée.', [
             'groupes' => $groupes,
@@ -216,10 +162,7 @@ class MatiereController
     } elseif (mb_strlen($libelle) > 150) {
         $errors['libelle'] = 'Maximum 150 caractères.';
     } else {
-        $existe = $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM matieres WHERE libelle = :libelle AND est_actif = 1",
-            ['libelle' => trim($libelle)]
-        );
+        $existe = $this->matiereService->countActiveLabel(trim($libelle));
         if ($existe > 0) $errors['libelle'] = 'Cette matière existe déjà.';
     }
 
@@ -227,10 +170,7 @@ class MatiereController
         if (mb_strlen($code) > 20) {
             $errors['code'] = 'Maximum 20 caractères.';
         } else {
-            $codeExiste = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM matieres WHERE code = :code",
-                ['code' => mb_strtoupper(trim($code))]
-            );
+            $codeExiste = $this->matiereService->countCode(mb_strtoupper(trim($code)));
             if ($codeExiste > 0) $errors['code'] = 'Ce code est déjà utilisé.';
         }
     }
@@ -246,11 +186,8 @@ class MatiereController
     if (!$estGroupe && $parentId <= 0) {
         $errors['parent_id'] = 'Veuillez sélectionner le groupe parent.';
     } elseif (!$estGroupe && $parentId > 0) {
-        $parentExiste = $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM matieres WHERE id = :id AND est_groupe = 1 AND est_actif = 1",
-            ['id' => $parentId]
-        );
-        if ($parentExiste == 0) $errors['parent_id'] = 'Groupe parent invalide.';
+        $parentExiste = $this->matiereService->isActiveGroup($parentId);
+        if (!$parentExiste) $errors['parent_id'] = 'Groupe parent invalide.';
     }
 
     if (!empty($errors)) {
@@ -281,17 +218,7 @@ class MatiereController
             foreach ($_POST['classes'] as $classeId) {
                 $classeId = (int) $classeId;
                 if ($classeId > 0) {
-                    $existe = $this->db->fetchColumn(
-                        "SELECT COUNT(*) FROM classe_matieres WHERE matiere_id = :mid AND classe_id = :cid",
-                        ['mid' => $matiereId, 'cid' => $classeId]
-                    );
-                    if ($existe == 0) {
-                        $this->db->query(
-                            "INSERT INTO classe_matieres (matiere_id, classe_id, maxima_override, est_active) 
-                             VALUES (:mid, :cid, NULL, 1)",
-                            ['mid' => $matiereId, 'cid' => $classeId]
-                        );
-                    }
+                    $this->matiereService->createClassAssociationIfMissing($matiereId, $classeId);
                 }
             }
         }
@@ -328,7 +255,7 @@ class MatiereController
 
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $existant = $this->db->fetchOne("SELECT * FROM matieres WHERE id = :id", ['id' => $id]);
+        $existant = $this->matiereService->getDetail($id);
         if (!$existant) jsonResponse(false, 'Matière introuvable.', [], 404);
 
         $errors = [];
@@ -336,18 +263,12 @@ class MatiereController
         if (isBlank($libelle)) $errors['libelle'] = 'Le libellé est obligatoire.';
         elseif (mb_strlen($libelle) < 2) $errors['libelle'] = 'Minimum 2 caractères.';
         else {
-            $existe = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM matieres WHERE libelle = :libelle AND id != :id AND est_actif = 1",
-                ['libelle' => trim($libelle), 'id' => $id]
-            );
+            $existe = $this->matiereService->countActiveLabel(trim($libelle), $id);
             if ($existe > 0) $errors['libelle'] = 'Cette matière existe déjà.';
         }
 
         if (!isBlank($code)) {
-            $codeExiste = $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM matieres WHERE code = :code AND id != :id",
-                ['code' => mb_strtoupper(trim($code)), 'id' => $id]
-            );
+            $codeExiste = $this->matiereService->countCode(mb_strtoupper(trim($code)), $id);
             if ($codeExiste > 0) $errors['code'] = 'Ce code est déjà utilisé.';
         }
 
@@ -380,18 +301,12 @@ class MatiereController
                 'id'         => $id
             ];
 
-            $sql = "UPDATE matieres 
-                    SET code = :code, libelle = :libelle, description = :desc, maxima = :maxima";
-
-            // Ne changer le parent que pour les sous-matières
-            if (!$existant['est_groupe'] && $parentId > 0) {
-                $sql .= ", parent_id = :parent_id";
+            $updateParent = !$existant['est_groupe'] && $parentId > 0;
+            if ($updateParent) {
                 $updateData['parent_id'] = $parentId;
             }
 
-            $sql .= " WHERE id = :id";
-
-            $this->db->update($sql, $updateData);
+            $this->matiereService->updateSubject($updateData, $updateParent);
 
             logActivity('Modification', 'matieres', $id, "Matière modifiée : {$libelle}");
 
@@ -414,34 +329,25 @@ class MatiereController
         $id = (int) post('id', 0);
         if ($id <= 0) jsonResponse(false, 'ID invalide.', [], 400);
 
-        $matiere = $this->db->fetchOne("SELECT * FROM matieres WHERE id = :id", ['id' => $id]);
+        $matiere = $this->matiereService->getDetail($id);
         if (!$matiere) jsonResponse(false, 'Matière introuvable.', [], 404);
 
         // Si c'est un groupe, vérifier qu'il n'a pas de sous-matières
         if ($matiere['est_groupe']) {
-            $nbSousMatieres = (int) $this->db->fetchColumn(
-                "SELECT COUNT(*) FROM matieres WHERE parent_id = :pid AND est_actif = 1",
-                ['pid' => $id]
-            );
+            $nbSousMatieres = $this->matiereService->countActiveChildren($id);
             if ($nbSousMatieres > 0) {
                 jsonResponse(false, "Impossible de supprimer ce groupe : {$nbSousMatieres} sous-matière(s) active(s).", [], 409);
             }
         }
 
         // Vérifier les évaluations
-        $nbEvaluations = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM evaluations WHERE matiere_id = :mid",
-            ['mid' => $id]
-        );
+        $nbEvaluations = $this->matiereService->countEvaluationsForSubject($id);
         if ($nbEvaluations > 0) {
             jsonResponse(false, "Impossible de supprimer : {$nbEvaluations} évaluation(s) liée(s).", [], 409);
         }
 
         // Vérifier l'emploi du temps
-        $nbEDT = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM emploi_du_temps WHERE matiere_id = :mid",
-            ['mid' => $id]
-        );
+        $nbEDT = $this->matiereService->countTimetableEntriesForSubject($id);
         if ($nbEDT > 0) {
             jsonResponse(false, "Impossible de supprimer : utilisée dans l'emploi du temps.", [], 409);
         }

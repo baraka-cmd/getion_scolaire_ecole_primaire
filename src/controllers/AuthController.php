@@ -11,14 +11,12 @@ require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AuthAccountService.p
 
 class AuthController
 {
-    private Database $db;
     private AuthRateLimitService $rateLimiter;
     private AuthAccountService $accountService;
 
     public function __construct()
     {
-        $this->db = Database::getInstance();
-        $this->rateLimiter = new AuthRateLimitService($this->db);
+        $this->rateLimiter = new AuthRateLimitService();
         $this->accountService = new AuthAccountService();
     }
 
@@ -175,10 +173,7 @@ class AuthController
             $errors['email'] = 'Maximum 150 caractères.';
         } else {
             // Vérifier l'unicité de l'email
-            $emailExists = $this->db->exists(
-                "SELECT id FROM utilisateurs WHERE email = :email",
-                ['email' => $email]
-            );
+            $emailExists = $this->accountService->emailExists(mb_strtolower(trim((string) $email)));
             if ($emailExists) {
                 $errors['email'] = 'Cette adresse email est déjà utilisée.';
             }
@@ -231,30 +226,19 @@ class AuthController
 
         // Créer l'utilisateur
         try {
-            $this->db->beginTransaction();
-
-            // Générer le login à partir de l'email
+            // Générer le login et confier la persistance transactionnelle au service.
             $login = $this->generateUniqueLogin($nom, $prenom);
-
-            // Hasher le mot de passe
             $hashedPassword = password_hash($password, PASSWORD_ALGO, ['cost' => PASSWORD_COST]);
 
-            // Insérer l'utilisateur
-            $userId = $this->db->insert(
-                "INSERT INTO utilisateurs (nom, prenom, email, telephone, login, mot_de_passe, role_id, est_actif)
-                 VALUES (:nom, :prenom, :email, :telephone, :login, :password, :role_id, 1)",
-                [
-                    'nom'       => formatNom($nom),
-                    'prenom'    => formatNom($prenom),
-                    'email'     => mb_strtolower(trim($email)),
-                    'telephone' => $telephone ?: null,
-                    'login'     => $login,
-                    'password'  => $hashedPassword,
-                    'role_id'   => $roleId
-                ]
-            );
-
-            $this->db->commit();
+            $userId = $this->accountService->createRegisteredUser([
+                'nom'       => formatNom($nom),
+                'prenom'    => formatNom($prenom),
+                'email'     => mb_strtolower(trim($email)),
+                'telephone' => $telephone ?: null,
+                'login'     => $login,
+                'password'  => $hashedPassword,
+                'role_id'   => $roleId
+            ]);
 
             // Journaliser
             logActivity('Création', 'utilisateurs', $userId, "Inscription de {$nom} {$prenom}");
@@ -266,7 +250,6 @@ class AuthController
             ]);
 
         } catch (Exception $e) {
-            $this->db->rollback();
             error_log('Erreur inscription : ' . $e->getMessage());
 
             // Vérifier si c'est une erreur de doublon (login)
@@ -407,15 +390,11 @@ class AuthController
     private function logFailedAttempt(?int $userId, string $email): void
     {
         try {
-            $this->db->query(
-                "INSERT INTO logs_activites (utilisateur_id, action, description, adresse_ip, navigateur)
-                 VALUES (:uid, 'Tentative échouée', :description, :ip, :navigateur)",
-                [
-                    'uid'         => $userId,
-                    'description' => 'Tentative de connexion avec empreinte email: ' . hash('sha256', mb_strtolower(trim($email))),
-                    'ip'          => $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
-                    'navigateur'  => $_SERVER['HTTP_USER_AGENT'] ?? 'Inconnu'
-                ]
+            $this->accountService->logFailedAttempt(
+                $userId,
+                $email,
+                $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
+                $_SERVER['HTTP_USER_AGENT'] ?? 'Inconnu'
             );
         } catch (Exception $e) {
             error_log('Erreur logFailedAttempt: ' . $e->getMessage());
@@ -470,12 +449,10 @@ class AuthController
                     $this->accountService->linkGoogleId((int) $utilisateur['id'], $googleId);
                 } else {
                     // 3. Aucun compte n'existe : CRÉATION AUTOMATIQUE (Inscription)
-                    $this->db->beginTransaction();
-
                     $login  = $this->generateUniqueLogin($nom, $prenom);
                     $roleId = 6; // ID du rôle par défaut
 
-                    $userId = $this->accountService->createGoogleUser([
+                    $userId = $this->accountService->createGoogleUserTransactional([
                         'nom'       => formatNom($nom),
                         'prenom'    => formatNom($prenom),
                         'email'     => $email,
@@ -485,7 +462,6 @@ class AuthController
                         'role_id'   => $roleId,
                     ]);
 
-                    $this->db->commit();
                     logActivity('Création via Google', 'utilisateurs', $userId, "Nouvelle inscription Google : {$email}");
 
                     // Récupérer les données complètes avec le rôle
@@ -508,9 +484,6 @@ class AuthController
             exit();
 
         } catch (Exception $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollback();
-            }
             error_log('Erreur handleGoogleCallback : ' . $e->getMessage());
             header('Location: ' . $loginUrl . '?error=technical');
             exit();
