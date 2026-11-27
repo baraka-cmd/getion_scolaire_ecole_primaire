@@ -51,6 +51,70 @@ class FinanceService
         return $this->repository->findActiveClasses($yearId);
     }
 
+    public function listFeesForYear(int $yearId): array
+    {
+        return $this->repository->listFeesForYear($yearId);
+    }
+
+    public function createFee(array $data): int
+    {
+        if ($this->repository->feeExists($data['libelle'], $data['annee_id'], $data['classe_id'])) {
+            throw new DomainException('DUPLICATE_FEE');
+        }
+        $this->db->beginTransaction();
+        try {
+            $feeId = $this->repository->createFee($data);
+            $this->repository->createFeeConfig($feeId, $data);
+            $this->db->commit();
+            return $feeId;
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
+
+    public function updateFee(int $feeId, array $data): void
+    {
+        $fee = $this->repository->findFee($feeId);
+        if (!$fee) {
+            throw new DomainException('FEE_NOT_FOUND');
+        }
+        if ($this->repository->feeExists($data['libelle'], (int) $fee['annee_scolaire_id'], $data['classe_id'], $feeId)) {
+            throw new DomainException('DUPLICATE_FEE');
+        }
+        $this->db->beginTransaction();
+        try {
+            $this->repository->updateFee($feeId, $data);
+            $this->db->commit();
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
+
+    public function deleteFeeIfUnused(int $feeId): void
+    {
+        if (!$this->repository->findFee($feeId)) {
+            throw new DomainException('FEE_NOT_FOUND');
+        }
+        if ($this->repository->countLegacyPaymentsForFee($feeId) > 0
+            || $this->repository->countClaimsForFee($feeId) > 0) {
+            throw new DomainException('FEE_HAS_HISTORY');
+        }
+        $this->repository->deleteFee($feeId);
+    }
+
+    public function toggleFeeStatus(int $feeId): int
+    {
+        $fee = $this->repository->findFee($feeId);
+        if (!$fee) {
+            throw new DomainException('FEE_NOT_FOUND');
+        }
+        $status = (int) $fee['est_actif'] === 1 ? 0 : 1;
+        $this->repository->updateFeeStatus($feeId, $status);
+        return $status;
+    }
+
     public static function convertirMontant(float $montant, string $deviseSource, string $deviseCible, float $tauxCdfParUsd): float
     {
         if (!is_finite($montant) || $montant <= 0
