@@ -73,50 +73,21 @@ class ClasseController
         $direction  = post('direction', 'ASC');
         $parPage    = ITEMS_PER_PAGE;
 
-        $where = [];
-        $params = [];
-
-        if (!empty($recherche)) {
-            $where[] = "(c.nom LIKE :recherche1 OR c.salle LIKE :recherche2)";
-            $params['recherche1'] = "%{$recherche}%";
-            $params['recherche2'] = "%{$recherche}%";
-        }
-
-        if ($anneeId > 0) {
-            $where[] = "c.annee_scolaire_id = :annee";
-            $params['annee'] = $anneeId;
-        } else {
-            // Par défaut, année active
-            $where[] = "c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)";
-        }
-
-        $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
-
         $colonnesAutorisees = ['id', 'nom', 'niveau', 'salle', 'capacite_max', 'nb_eleves'];
         if (!in_array($ordre, $colonnesAutorisees)) $ordre = 'niveau';
         if (!in_array(strtoupper($direction), ['ASC', 'DESC'])) $direction = 'ASC';
 
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM classes c {$whereClause}",
-            $params
-        );
-
         $offset = ($page - 1) * $parPage;
-        $classes = $this->db->fetchAll(
-            "SELECT c.*, 
-                    COALESCE(e.nom, '—') AS titulaire_nom,
-                    COALESCE(e.prenom, '') AS titulaire_prenom,
-                    e.id AS titulaire_id,
-                    (SELECT COUNT(*) FROM inscriptions i WHERE i.classe_id = c.id AND i.statut = 'Actif') AS nb_eleves,
-                    a.libelle AS annee_libelle
-             FROM classes c
-             LEFT JOIN enseignants e ON c.id = e.classe_id AND e.est_actif = 1
-             INNER JOIN annees_scolaires a ON c.annee_scolaire_id = a.id
-             {$whereClause}
-             ORDER BY {$ordre} {$direction}
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, ['limit' => $parPage, 'offset' => $offset])
+        $liste = $this->classeService->getPaginatedList(
+            (string) $recherche,
+            $anneeId,
+            (string) $ordre,
+            (string) $direction,
+            (int) $parPage,
+            (int) $offset
         );
+        $total = $liste['total'];
+        $classes = $liste['classes'];
 
         jsonResponse(true, 'Liste récupérée.', [
             'classes' => $classes,
