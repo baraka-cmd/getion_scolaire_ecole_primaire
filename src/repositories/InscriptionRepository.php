@@ -331,4 +331,129 @@ class InscriptionRepository
         }
     }
 
+    
+    public function transitionSourceClass(int $classId, int $yearId): ?array
+    {
+        return $this->db->fetchOne(
+            "SELECT c.id, c.nom, c.niveau, c.annee_scolaire_id, a.date_debut AS source_date_debut
+             FROM classes c INNER JOIN annees_scolaires a ON a.id = c.annee_scolaire_id
+             WHERE c.id = :cid AND c.annee_scolaire_id = :aid",
+            ['cid' => $classId, 'aid' => $yearId]
+        );
+    }
+
+    public function schoolYear(int $yearId): ?array
+    {
+        return $this->db->fetchOne('SELECT id, date_debut FROM annees_scolaires WHERE id = :id', ['id' => $yearId]);
+    }
+
+    public function transitionStudents(int $classId, int $yearId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe, e.date_naissance,
+                    i.id AS inscription_id, i.statut
+             FROM inscriptions i INNER JOIN eleves e ON i.eleve_id = e.id
+             WHERE i.classe_id = :cid AND i.annee_scolaire_id = :aid
+               AND i.statut IN ('Actif', 'Redoublant') AND e.est_actif = 1
+             ORDER BY e.nom, e.prenom",
+            ['cid' => $classId, 'aid' => $yearId]
+        );
+    }
+
+    public function transitionDestinationClasses(int $yearId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT c.id, c.nom, c.niveau, c.capacite_max,
+                    (SELECT COUNT(*) FROM inscriptions i
+                     WHERE i.classe_id = c.id AND i.annee_scolaire_id = c.annee_scolaire_id
+                       AND i.statut IN ('Actif', 'Redoublant')) AS nb_inscrits
+             FROM classes c WHERE c.annee_scolaire_id = :aid AND c.est_actif = 1
+             ORDER BY c.niveau, c.nom",
+            ['aid' => $yearId]
+        );
+    }
+
+    public function validSourceEnrollment(int $enrollmentId, int $studentId, int $classId, int $yearId): ?array
+    {
+        return $this->db->fetchOne(
+            "SELECT i.id, i.eleve_id FROM inscriptions i
+             INNER JOIN eleves e ON e.id = i.eleve_id AND e.est_actif = 1
+             WHERE i.id = :iid AND i.eleve_id = :eid AND i.classe_id = :cid
+               AND i.annee_scolaire_id = :aid AND i.statut IN ('Actif', 'Redoublant')",
+            ['iid' => $enrollmentId, 'eid' => $studentId, 'cid' => $classId, 'aid' => $yearId]
+        );
+    }
+
+    public function validDestinationClass(int $classId, int $yearId): ?array
+    {
+        return $this->db->fetchOne(
+            'SELECT id, niveau FROM classes WHERE id = :cid AND annee_scolaire_id = :aid AND est_actif = 1',
+            ['cid' => $classId, 'aid' => $yearId]
+        );
+    }
+
+    public function enrollmentExistsInYear(int $studentId, int $yearId): bool
+    {
+        return (int) $this->db->fetchColumn(
+            'SELECT COUNT(*) FROM inscriptions WHERE eleve_id = :eid AND annee_scolaire_id = :aid',
+            ['eid' => $studentId, 'aid' => $yearId]
+        ) > 0;
+    }
+
+    public function applyTransitionPlans(array $plans, int $yearId): array
+    {
+        $this->db->beginTransaction();
+        try {
+            $destinationIds = [];
+            foreach ($plans as $plan) {
+                if ($plan['classe_destination_id'] !== null) $destinationIds[(int) $plan['classe_destination_id']] = true;
+            }
+            $capacity = [];
+            foreach (array_keys($destinationIds) as $classId) {
+                $class = $this->db->fetchOne(
+                    "SELECT id, capacite_max FROM classes
+                     WHERE id = :cid AND annee_scolaire_id = :aid AND est_actif = 1 FOR UPDATE",
+                    ['cid' => $classId, 'aid' => $yearId]
+                );
+                if (!$class) throw new DomainException('Une classe de destination n’est plus disponible.');
+                $current = (int) $this->db->fetchColumn(
+                    "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND annee_scolaire_id = :aid
+                     AND statut IN ('Actif', 'Redoublant')",
+                    ['cid' => $classId, 'aid' => $yearId]
+                );
+                $capacity[$classId] = ['max' => (int) $class['capacite_max'], 'count' => $current];
+            }
+            foreach ($plans as $plan) {
+                $classId = $plan['classe_destination_id'];
+                if ($classId !== null && ++$capacity[$classId]['count'] > $capacity[$classId]['max']) {
+                    throw new DomainException("La classe de destination {$classId} n’a plus assez de places.");
+                }
+            }
+
+            $totals = ['inscrits' => 0, 'redoublants' => 0, 'diplomes' => 0];
+            foreach ($plans as $plan) {
+                if ($plan['est_diplome']) {
+                    $updated = $this->db->update(
+                        "UPDATE inscriptions SET statut = 'Diplômé', motif_statut = 'Réussite en fin de 6e primaire',
+                         date_changement_statut = CURDATE()
+                         WHERE id = :iid AND eleve_id = :eid AND statut IN ('Actif', 'Redoublant')",
+                        ['iid' => $plan['inscription_source_id'], 'eid' => $plan['eleve_id']]
+                    );
+                    if ($updated !== 1) throw new DomainException('Une inscription de fin de cycle a changé pendant le traitement.');
+                    $totals['diplomes']++;
+                    continue;
+                }
+                $status = $plan['est_reussite'] ? 'Actif' : 'Redoublant';
+                $this->insertEnrollment((int) $plan['eleve_id'], (int) $plan['classe_destination_id'], $yearId, $status);
+                $totals['inscrits']++;
+                if (!$plan['est_reussite']) $totals['redoublants']++;
+            }
+            $this->db->commit();
+            return $totals;
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
+
 }
