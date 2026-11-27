@@ -29,7 +29,7 @@ final class Phase11InMemoryLogRepository extends LogRepository
 $repo = new Phase11InMemoryLogRepository();
 $service = new LogService($repo);
 $result = $service->listFiltered('WHERE l.utilisateur_id = :uid', ['uid' => 7], 3, 15);
-if ($result !== ['logs' => [['id' => 1]], 'total' => 41, 'page' => 3, 'pages' => 3]) {
+if ($result !== ['logs' => [['id' => 1]], 'total' => 41, 'page' => 3, 'pages' => 3.0]) {
     throw new RuntimeException('Activity log pagination contract changed.');
 }
 if ($repo->calls !== [
