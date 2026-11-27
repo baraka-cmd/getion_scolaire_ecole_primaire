@@ -323,9 +323,23 @@ class AbsenceController
                 $selectedId = 0;
             }
         } else {
+            if (hasRole('Enseignant')) {
+                $ownedClass = $this->service->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
+                if (!$ownedClass || ($classId > 0 && $classId !== $ownedClass)) {
+                    jsonResponse(false, 'Vous ne pouvez consulter que votre classe.', [], 403);
+                }
+                $classId = $ownedClass;
+            }
             $selectedId = $studentId > 0 && $this->canCurrentUserAccessStudent($studentId) ? $studentId : 0;
         }
-        $classes = $isParent ? [] : $this->getClassesActives();
+        if ($isParent) {
+            $classes = [];
+        } elseif (hasRole('Enseignant')) {
+            $overview = $this->service->getTeacherClassOverview((int) ($_SESSION['utilisateur_id'] ?? 0));
+            $classes = $overview ? [$overview] : [];
+        } else {
+            $classes = $this->getClassesActives();
+        }
         $students = (!$isParent && $classId > 0) ? $this->service->getClassStudents($classId) : [];
         $history = $selectedId > 0 ? $this->service->getStudentAbsencesForJustification($selectedId) : ['non_justifiees'=>[],'justifiees'=>[]];
         return [
