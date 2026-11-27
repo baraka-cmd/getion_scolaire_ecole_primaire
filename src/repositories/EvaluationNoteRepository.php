@@ -276,4 +276,24 @@ class EvaluationNoteRepository
         $this->db->delete("DELETE FROM evaluations WHERE id = :id", ['id' => $evaluationId]);
     }
 
+
+    public function findEvaluationGridContext(int $evaluationId): ?array
+    {
+        return $this->db->fetchOne("SELECT ev.*, t.libelle AS trimestre_libelle, t.numero AS trimestre_numero, c.nom AS classe_nom, c.niveau AS classe_niveau, c.annee_scolaire_id, m.libelle AS groupe_libelle, m.id AS groupe_id FROM evaluations ev INNER JOIN trimestres t ON ev.trimestre_id = t.id INNER JOIN classes c ON ev.classe_id = c.id AND c.annee_scolaire_id = t.annee_scolaire_id INNER JOIN matieres m ON ev.groupe_id = m.id WHERE ev.id = :id", ['id' => $evaluationId]);
+    }
+
+    public function findActiveSubjectsForClassGroup(int $classId, int $groupId): array
+    {
+        return $this->db->fetchAll("SELECT m.id, m.libelle, m.code, COALESCE(cm.maxima_override, m.maxima) AS maxima FROM matieres m INNER JOIN classe_matieres cm ON m.id = cm.matiere_id AND cm.classe_id = :cid AND cm.est_active = 1 WHERE m.parent_id = :gid AND m.est_groupe = 0 AND m.est_actif = 1 ORDER BY m.id", ['gid' => $groupId, 'cid' => $classId]);
+    }
+
+    public function findActiveStudentsForClassYear(int $classId, int $yearId): array
+    {
+        return $this->db->fetchAll("SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe FROM inscriptions i INNER JOIN eleves e ON i.eleve_id = e.id INNER JOIN classes c ON c.id = i.classe_id AND c.annee_scolaire_id = i.annee_scolaire_id WHERE i.classe_id = :cid AND i.annee_scolaire_id = :aid AND i.statut = 'Actif' AND e.est_actif = 1 ORDER BY e.nom, e.prenom", ['cid' => $classId, 'aid' => $yearId]);
+    }
+
+    public function findNotesForEvaluationGrid(int $evaluationId): array
+    {
+        return $this->db->fetchAll("SELECT n.id, n.eleve_id, n.sous_matiere_id, n.valeur, n.absence FROM notes n WHERE n.evaluation_id = :eid", ['eid' => $evaluationId]);
+    }
 }
