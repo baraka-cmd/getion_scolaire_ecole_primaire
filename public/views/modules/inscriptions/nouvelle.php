@@ -10,7 +10,6 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('inscriptions.creer');
 
-global $db;
 
 // Charger le service de lecture des données du formulaire
 require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'InscriptionService.php';
@@ -31,16 +30,16 @@ $errors         = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $result = $inscriptionService->createEnrollment(
-        (int) post('eleve_id', 0),
-        (int) post('classe_id', 0),
-        (string) post('statut', 'Actif')
-    );
+            (int) post('eleve_id', 0),
+            (int) post('classe_id', 0),
+            (string) post('statut', 'Actif')
+        );
 
-    if ($result['ok']) {
-        logActivity('Création', 'inscriptions', $result['id'], 'Inscription élève ' . (int) post('eleve_id', 0));
+        if ($result['ok']) {
+            logActivity('Création', 'inscriptions', $result['id'], 'Inscription élève ' . (int) post('eleve_id', 0));
         setFlash('success', 'Élève inscrit avec succès.');
-        redirect('/gestion_scolaire/inscriptions');
-    }
+            redirect('/gestion_scolaire/inscriptions');
+        }
 
         $errors = $result['errors'] ?? [];
         $errorMessage = $result['message'] ?? '';
