@@ -665,4 +665,10 @@ class EleveController
         return $this->studentRecordService->enrollmentHistory($eleveId);
     }
 
+    /** Statistiques de la liste, fournies par la couche métier. */
+    public function getSummaryStats(): array
+    {
+        return $this->studentRecordService->summaryStats();
+    }
+
 }
