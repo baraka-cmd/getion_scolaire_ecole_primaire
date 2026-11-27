@@ -12,7 +12,6 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('absences.marquer');
 
-global $db;
 
 // Charger le contrôleur
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AbsenceController.php';
@@ -24,86 +23,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
 }
 
 // Récupérer la classe de l'enseignant connecté
-$enseignantId = $_SESSION['utilisateur_id'] ?? 0;
-$classeId = (int) $db->fetchColumn(
-    "SELECT e.classe_id FROM enseignants e WHERE e.utilisateur_id = :uid AND e.est_actif = 1 LIMIT 1",
-    ['uid' => $enseignantId]
-);
-
-if ($classeId <= 0) {
+$enseignantId = (int) ($_SESSION['utilisateur_id'] ?? 0);
+$dateAbsence = $_GET['date'] ?? date('Y-m-d');
+$teacherData = $absenceController->getTeacherDashboardData($enseignantId, $dateAbsence);
+$maClasse = $teacherData['classe'];
+if (!$maClasse) {
     setFlash('warning', 'Aucune classe ne vous est assignée. Contactez l\'administration.');
     redirect('/gestion_scolaire/dashboard');
 }
-
-// Récupérer les infos de la classe
-$maClasse = $db->fetchOne(
-    "SELECT c.id, c.nom, c.niveau, c.salle, c.capacite_max,
-            a.libelle AS annee_libelle
-     FROM classes c
-     INNER JOIN annees_scolaires a ON c.annee_scolaire_id = a.id
-     WHERE c.id = :id",
-    ['id' => $classeId]
-);
-
-if (!$maClasse) {
-    setFlash('error', 'Classe introuvable.');
-    redirect('/gestion_scolaire/dashboard');
-}
-
-// Paramètres
-$dateAbsence = $_GET['date'] ?? date('Y-m-d');
-
-// Récupérer les élèves
-$eleves = $db->fetchAll(
-    "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe, e.photo,
-            DATE_FORMAT(e.date_naissance, '%d/%m/%Y') AS date_naissance_format
-     FROM inscriptions i
-     INNER JOIN eleves e ON i.eleve_id = e.id
-     WHERE i.classe_id = :cid AND i.statut = 'Actif' AND e.est_actif = 1
-     ORDER BY e.nom, e.prenom",
-    ['cid' => $classeId]
-);
-
-// Récupérer les absences déjà marquées pour cette date
-$absencesExistantes = $db->fetchAll(
-    "SELECT a.eleve_id, a.type_absence, a.est_justifiee, a.motif
-     FROM absences a
-     WHERE a.eleve_id IN (SELECT eleve_id FROM inscriptions WHERE classe_id = :cid AND statut = 'Actif')
-     AND a.date_absence = :date",
-    ['cid' => $classeId, 'date' => $dateAbsence]
-);
-
-// Organiser par eleve_id
+$classeId = (int) $maClasse['id'];
+$eleves = $teacherData['eleves'];
+$absencesExistantes = $teacherData['absences'];
 $absencesMap = [];
-foreach ($absencesExistantes as $abs) {
-    $absencesMap[$abs['eleve_id']] = $abs;
-}
-
-// Statistiques du jour
+foreach ($absencesExistantes as $abs) $absencesMap[$abs['eleve_id']] = $abs;
 $totalEleves = count($eleves);
 $dejaMarques = count($absencesExistantes);
 $presences = count(array_filter($absencesExistantes, fn($a) => $a['type_absence'] === 'Présent'));
 $absences = count(array_filter($absencesExistantes, fn($a) => $a['type_absence'] === 'Absence'));
-
-// Récupérer les classes pour le sélecteur (une seule : la sienne, verrouillée)
 $classes = $absenceController->getClassesActives();
-
-// Statistiques d'absences du mois pour cette classe
-$absencesMois = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM absences a
-     INNER JOIN inscriptions i ON a.eleve_id = i.eleve_id
-     WHERE i.classe_id = :cid AND a.type_absence = 'Absence'
-     AND MONTH(a.date_absence) = MONTH(CURDATE()) AND YEAR(a.date_absence) = YEAR(CURDATE())",
-    ['cid' => $classeId]
-);
-
-$absencesNonJustifiees = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM absences a
-     INNER JOIN inscriptions i ON a.eleve_id = i.eleve_id
-     WHERE i.classe_id = :cid AND a.type_absence = 'Absence' AND a.est_justifiee = 0
-     AND MONTH(a.date_absence) = MONTH(CURDATE()) AND YEAR(a.date_absence) = YEAR(CURDATE())",
-    ['cid' => $classeId]
-);
+$absencesMois = $teacherData['absences_mois'];
+$absencesNonJustifiees = $teacherData['absences_non_justifiees_mois'];
 
 $pageTitle = 'Marquer les présences — ' . e($maClasse['nom']);
 $pageIcon  = 'fa-calendar-check';
