@@ -296,4 +296,14 @@ class EvaluationNoteRepository
     {
         return $this->db->fetchAll("SELECT n.id, n.eleve_id, n.sous_matiere_id, n.valeur, n.absence FROM notes n WHERE n.evaluation_id = :eid", ['eid' => $evaluationId]);
     }
+
+    public function findTermForGeneration(int $classId, int $termId): ?array
+    {
+        return $this->db->fetchOne("SELECT t.* FROM trimestres t INNER JOIN classes c ON c.annee_scolaire_id = t.annee_scolaire_id WHERE t.id = :tid AND c.id = :cid", ['tid' => $termId, 'cid' => $classId]);
+    }
+
+    public function findActiveGroupsForEvaluationGeneration(): array
+    {
+        return $this->db->fetchAll("SELECT m.id, m.libelle FROM matieres m WHERE m.est_groupe = 1 AND m.est_actif = 1 ORDER BY m.id");
+    }
 }
