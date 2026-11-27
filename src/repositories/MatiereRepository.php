@@ -145,6 +145,61 @@ class MatiereRepository
         $this->db->update($sql, $data);
     }
 
+    public function findAllGroupHierarchyForView(): array
+    {
+        $groups = $this->db->fetchAll(
+            "SELECT m.*,
+                    (SELECT COUNT(*) FROM matieres sm WHERE sm.parent_id = m.id AND sm.est_actif = 1) AS nb_sous_matieres
+             FROM matieres m
+             WHERE m.est_groupe = 1 AND m.est_actif = 1
+             ORDER BY m.id"
+        );
+        foreach ($groups as &$group) {
+            $subjects = $this->db->fetchAll(
+                "SELECT m.*,
+                        (SELECT COUNT(*) FROM classe_matieres cm
+                         WHERE cm.matiere_id = m.id AND cm.est_active = 1) AS nb_classes
+                 FROM matieres m
+                 WHERE m.parent_id = :parent_id AND m.est_groupe = 0 AND m.est_actif = 1
+                 ORDER BY m.id",
+                ['parent_id' => $group['id']]
+            );
+            foreach ($subjects as &$subject) {
+                $subject['classes'] = $this->db->fetchAll(
+                    "SELECT c.nom, c.niveau, COALESCE(cm.maxima_override, m2.maxima) AS maxima_final
+                     FROM classe_matieres cm
+                     INNER JOIN classes c ON cm.classe_id = c.id
+                     INNER JOIN matieres m2 ON cm.matiere_id = m2.id
+                     WHERE cm.matiere_id = :subject_id AND cm.est_active = 1
+                       AND c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
+                     ORDER BY c.niveau",
+                    ['subject_id' => $subject['id']]
+                );
+            }
+            unset($subject);
+            $group['sous_matieres'] = $subjects;
+        }
+        unset($group);
+        return $groups;
+    }
+
+    public function findSubjectSummaryCounts(): array
+    {
+        return [
+            'groupes' => (int) $this->db->fetchColumn(
+                'SELECT COUNT(*) FROM matieres WHERE est_groupe = 1 AND est_actif = 1'
+            ),
+            'sous_matieres' => (int) $this->db->fetchColumn(
+                'SELECT COUNT(*) FROM matieres WHERE est_groupe = 0 AND parent_id IS NOT NULL AND est_actif = 1'
+            ),
+            'associations' => (int) $this->db->fetchColumn(
+                'SELECT COUNT(*) FROM classe_matieres cm
+                 INNER JOIN matieres m ON cm.matiere_id = m.id
+                 WHERE m.est_groupe = 0 AND cm.est_active = 1'
+            ),
+        ];
+    }
+
     public function findGroups(): array
     {
         return $this->db->fetchAll(
