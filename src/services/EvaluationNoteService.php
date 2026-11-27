@@ -13,6 +13,16 @@ class EvaluationNoteService
         $this->repository = $repository ?? new EvaluationNoteRepository();
     }
 
+    public function getEvaluationList(array $filters): array
+    {
+        return $this->repository->findEvaluationList($filters);
+    }
+
+    public function getEvaluationDetails(int $evaluationId): ?array
+    {
+        return $evaluationId > 0 ? $this->repository->findEvaluationDetails($evaluationId) : null;
+    }
+
     public function getEntryContext(int $evaluationId): ?array
     {
         return $evaluationId > 0 ? $this->repository->findEvaluationEntryContext($evaluationId) : null;
