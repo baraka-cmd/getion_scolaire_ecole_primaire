@@ -173,6 +173,15 @@ class Database
     }
 
     /**
+     * Indique si une transaction PDO est actuellement ouverte.
+     * Utilisé par les repositories pour garantir un rollback sûr en cas d'erreur.
+     */
+    public function inTransaction(): bool
+    {
+        return $this->pdo->inTransaction();
+    }
+
+    /**
      * Démarre une transaction
      */
     public function beginTransaction(): void
