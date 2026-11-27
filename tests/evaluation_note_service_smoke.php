@@ -13,6 +13,18 @@ final class InMemoryEvaluationNoteRepository extends EvaluationNoteRepository
     public array $studentIds = [10, 11];
     public array $maxima = [4 => 40.0];
     public array $studentNotes = [['valeur' => 17.0]];
+    public function findEvaluationList(array $filters): array
+    {
+        $this->calls[] = ['evaluation-list', $filters];
+        return [['id' => 5]];
+    }
+
+    public function findEvaluationDetails(int $evaluationId): ?array
+    {
+        $this->calls[] = ['evaluation-details', $evaluationId];
+        return ['id' => $evaluationId, 'classe_id' => 2];
+    }
+
     public function findEvaluationEntryContext(int $evaluationId): ?array
     {
         $this->calls[] = ['context', $evaluationId];
@@ -71,7 +83,9 @@ final class InMemoryEvaluationNoteRepository extends EvaluationNoteRepository
 $repository = new InMemoryEvaluationNoteRepository();
 $service = new EvaluationNoteService($repository);
 
-if ($service->getEntryContext(5) !== $repository->entryContext
+if ($service->getEvaluationList(['classe_id' => 2]) !== [['id' => 5]]
+    || $service->getEvaluationDetails(5) !== ['id' => 5, 'classe_id' => 2]
+    || $service->getEntryContext(5) !== $repository->entryContext
     || $service->getActiveStudentIds(2, 3) !== [10, 11]
     || $service->getSubjectMaxima(2, 8, 'Examen') !== [4 => 40.0]
     || $service->getStudentNotes(10, 2) !== [['valeur' => 17.0]]) {
