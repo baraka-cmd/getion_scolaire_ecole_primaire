@@ -21,6 +21,15 @@ on:
       - 'src/services/ParentDashboardService.php'
       - 'src/repositories/ParentDashboardRepository.php'
       - 'tests/parent_dashboard_mvc_smoke.php'
+      - 'public/views/dashboard/secretaire.php'
+      - 'src/controllers/SecretaryDashboardController.php'
+      - 'src/services/SecretaryDashboardService.php'
+      - 'src/repositories/SecretaryDashboardRepository.php'
+      - 'public/views/dashboard/comptable.php'
+      - 'src/controllers/AccountantDashboardController.php'
+      - 'src/services/AccountantDashboardService.php'
+      - 'src/repositories/AccountantDashboardRepository.php'
+      - 'tests/phase12_secretary_accountant_mvc_smoke.php'
       - '.github/workflows/phase-12-dashboards.yml'
 
 jobs:
@@ -35,7 +44,7 @@ jobs:
       - name: PHP syntax validation
         run: |
           set -e
-          for file in src/controllers/DashboardController.php src/services/DashboardService.php src/repositories/DashboardRepository.php public/views/dashboard/admin.php tests/phase12_dashboard_mvc_smoke.php src/controllers/TeacherDashboardController.php src/services/TeacherDashboardService.php src/repositories/TeacherDashboardRepository.php public/views/dashboard/enseignant.php tests/teacher_dashboard_mvc_smoke.php src/controllers/ParentDashboardController.php src/services/ParentDashboardService.php src/repositories/ParentDashboardRepository.php public/views/dashboard/parent.php tests/parent_dashboard_mvc_smoke.php; do
+          for file in src/controllers/DashboardController.php src/services/DashboardService.php src/repositories/DashboardRepository.php public/views/dashboard/admin.php tests/phase12_dashboard_mvc_smoke.php src/controllers/TeacherDashboardController.php src/services/TeacherDashboardService.php src/repositories/TeacherDashboardRepository.php public/views/dashboard/enseignant.php tests/teacher_dashboard_mvc_smoke.php src/controllers/ParentDashboardController.php src/services/ParentDashboardService.php src/repositories/ParentDashboardRepository.php public/views/dashboard/parent.php tests/parent_dashboard_mvc_smoke.php src/controllers/SecretaryDashboardController.php src/services/SecretaryDashboardService.php src/repositories/SecretaryDashboardRepository.php public/views/dashboard/secretaire.php src/controllers/AccountantDashboardController.php src/services/AccountantDashboardService.php src/repositories/AccountantDashboardRepository.php public/views/dashboard/comptable.php tests/phase12_secretary_accountant_mvc_smoke.php; do
             php -l "$file"
           done
       - name: Dashboard MVC and authorization smoke
@@ -43,3 +52,4 @@ jobs:
           php tests/phase12_dashboard_mvc_smoke.php
           php tests/teacher_dashboard_mvc_smoke.php
           php tests/parent_dashboard_mvc_smoke.php
+          php tests/phase12_secretary_accountant_mvc_smoke.php
