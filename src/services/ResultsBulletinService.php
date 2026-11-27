@@ -49,4 +49,11 @@ class ResultsBulletinService
     {
         return $this->repository->findSchoolParameters();
     }
+
+    public function fetchAll(string $sql,array $params=[]): array { return $this->repository->fetchAll($sql,$params); }
+    public function fetchOne(string $sql,array $params=[]): ?array { return $this->repository->fetchOne($sql,$params); }
+    public function fetchColumn(string $sql,array $params=[]): mixed { return $this->repository->fetchColumn($sql,$params); }
+    public function insert(string $sql,array $params=[]): int { return $this->repository->insert($sql,$params); }
+    public function update(string $sql,array $params=[]): int { return $this->repository->update($sql,$params); }
+    public function delete(string $sql,array $params=[]): int { return $this->repository->delete($sql,$params); }
 }
