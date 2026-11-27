@@ -300,7 +300,7 @@ class InscriptionRepository
     {
         $this->db->beginTransaction();
         try {
-            $student = $this->activeStudent($studentId);
+            $student = $this->db->fetchOne('SELECT id, nom, prenom FROM eleves WHERE id = :id AND est_actif = 1 FOR UPDATE', ['id' => $studentId]);
             $class = $this->db->fetchOne(
                 "SELECT id, capacite_max, annee_scolaire_id, est_actif FROM classes WHERE id = :id FOR UPDATE",
                 ['id' => $classId]
@@ -404,6 +404,17 @@ class InscriptionRepository
     {
         $this->db->beginTransaction();
         try {
+            $studentIds = array_values(array_unique(array_map(static fn(array $p): int => (int) $p['eleve_id'], $plans)));
+            sort($studentIds, SORT_NUMERIC);
+            if ($studentIds) {
+                $placeholders = implode(',', array_fill(0, count($studentIds), '?'));
+                $this->db->fetchAll('SELECT id FROM eleves WHERE id IN (' . $placeholders . ') ORDER BY id FOR UPDATE', $studentIds);
+            }
+            foreach ($plans as $plan) {
+                if ($this->enrollmentExistsInYear((int) $plan['eleve_id'], $yearId)) {
+                    throw new DomainException('Un élève est déjà inscrit pour l’année de destination.');
+                }
+            }
             $destinationIds = [];
             foreach ($plans as $plan) {
                 if ($plan['classe_destination_id'] !== null) $destinationIds[(int) $plan['classe_destination_id']] = true;
@@ -436,8 +447,8 @@ class InscriptionRepository
                     $updated = $this->db->update(
                         "UPDATE inscriptions SET statut = 'Diplômé', motif_statut = 'Réussite en fin de 6e primaire',
                          date_changement_statut = CURDATE()
-                         WHERE id = :iid AND eleve_id = :eid AND statut IN ('Actif', 'Redoublant')",
-                        ['iid' => $plan['inscription_source_id'], 'eid' => $plan['eleve_id']]
+                         WHERE id = :iid AND eleve_id = :eid AND classe_id = :cid AND annee_scolaire_id = :aid AND statut IN ('Actif', 'Redoublant')",
+                        ['iid' => $plan['inscription_source_id'], 'eid' => $plan['eleve_id'], 'cid' => $plan['classe_source_id'], 'aid' => $plan['annee_source_id']]
                     );
                     if ($updated !== 1) throw new DomainException('Une inscription de fin de cycle a changé pendant le traitement.');
                     $totals['diplomes']++;
