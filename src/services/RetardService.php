@@ -129,4 +129,10 @@ class RetardService
         return $this->repository->getMarkingData($classId, $date);
     }
 
+
+    public function getParentHistory(int $studentId): array
+    {
+        return $this->repository->findParentRetards($studentId);
+    }
+
 }
