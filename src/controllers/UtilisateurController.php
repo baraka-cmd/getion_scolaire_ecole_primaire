@@ -10,13 +10,11 @@ require_once __DIR__ . '/../services/UserAccountService.php';
 
 class UtilisateurController
 {
-    private Database $db;
     private Security $security;
     private UserAccountService $accountService;
 
     public function __construct(?UserAccountService $accountService = null)
     {
-        $this->db = Database::getInstance();
         $this->security = Security::getInstance();
         $this->accountService = $accountService ?? new UserAccountService();
     }
@@ -188,11 +186,9 @@ class UtilisateurController
         }
 
         try {
-            $this->db->beginTransaction();
-
             $hashedPassword = password_hash($password, PASSWORD_ALGO, ['cost' => PASSWORD_COST]);
 
-            $userId = $this->accountService->create([
+            $userId = $this->accountService->createTransactional([
                 'nom'       => formatNom($nom),
                 'prenom'    => formatNom($prenom),
                 'email'     => mb_strtolower(trim($email)),
@@ -202,14 +198,11 @@ class UtilisateurController
                 'role_id'   => $roleId,
             ]);
 
-            $this->db->commit();
-
             logActivity('Création', 'utilisateurs', $userId, "Création de l'utilisateur {$nom} {$prenom}");
 
             jsonResponse(true, 'Utilisateur créé avec succès.', ['id' => $userId]);
 
         } catch (Exception $e) {
-            $this->db->rollback();
             error_log('Erreur création utilisateur: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de la création de l\'utilisateur.');
         }
@@ -434,9 +427,7 @@ class UtilisateurController
      */
     public function getRoles(): array
     {
-        return $this->db->fetchAll(
-            "SELECT id, nom, description FROM roles WHERE est_actif = 1 ORDER BY niveau_acces DESC"
-        );
+        return $this->accountService->getActiveRoles();
     }
 
     public function getAssignableRoles(?int $targetUserId = null): array
