@@ -118,34 +118,13 @@ class UtilisateurController
             jsonResponse(false, 'ID invalide.', [], 400);
         }
 
-        $utilisateur = $this->db->fetchOne(
-            "SELECT u.id, u.nom, u.prenom, u.email, u.telephone, u.login, u.photo,
-                    u.est_actif, u.derniere_connexion, u.created_at,
-                    u.role_id, r.nom AS role_nom
-             FROM utilisateurs u
-             INNER JOIN roles r ON u.role_id = r.id
-             WHERE u.id = :id",
-            ['id' => $id]
-        );
+        $utilisateur = $this->accountService->getAdminDetails($id);
 
         if (!$utilisateur) {
             jsonResponse(false, 'Utilisateur introuvable.', [], 404);
         }
 
-        $utilisateur['derniere_connexion'] = $utilisateur['derniere_connexion'] 
-            ? formatDateTime($utilisateur['derniere_connexion']) 
-            : 'Jamais';
-        $utilisateur['date_creation'] = formatDate($utilisateur['created_at']);
-
-        // Historique des connexions
-        $historique = $this->db->fetchAll(
-            "SELECT action, description, date_action
-             FROM logs_activites
-             WHERE utilisateur_id = :uid AND action IN ('Connexion', 'Tentative échouée', 'Déconnexion')
-             ORDER BY date_action DESC
-             LIMIT 20",
-            ['uid' => $id]
-        );
+        $historique = $this->accountService->getAuthenticationHistory($id);
 
         jsonResponse(true, 'Utilisateur récupéré.', [
             'utilisateur' => $utilisateur,
