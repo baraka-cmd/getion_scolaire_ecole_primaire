@@ -42,3 +42,14 @@ Les transactions qui garantissent plusieurs operations atomiques restent dans le
 Les anciens cheminements ne sont pas tous supprimables en une seule passe. Les vues historiques contiennent encore de nombreuses requetes SQL directes. Elles sont identifieses comme migration progressive; aucun ancien contrat n'est retire tant qu'il reste reference dans une vue, une route ou un test.
 
 Les appels directs entre controleurs ont ete elimines pour l'acces aux eleves. Le module d'inscription utilise maintenant `AcademicResultsService` pour les resultats annuels.
+
+
+## Contrat de non-régression obligatoire
+
+Avant chaque phase de refonte, lire `docs/MVC_REFACTORING_CONTRACT.md`. La refonte vise uniquement l'organisation du code. Les fonctionnalités, règles métier et calculs, validations, permissions, routes, contrats HTML/AJAX/JSON, comportements JavaScript et design doivent rester inchangés. La sécurité est prioritaire et les modifications doivent être minimales, vérifiables et effectuées sur une branche dédiée.
+
+## Phases 0 et 1 — reprise de mise en œuvre
+
+- Phase 0 : audit en lecture seule déjà effectué dans le travail précédent ; conserver sa cartographie comme référence et ne pas recommencer inutilement.
+- Phase 1 : infrastructure en migration progressive. La page 404 auparavant intégrée au routeur a été extraite dans `public/views/errors/404.php`; le routeur conserve la définition du statut HTTP 404 et délègue le rendu à cette vue. Le HTML/CSS et les liens de présentation ont été conservés tels quels.
+- Les autres parties du bootstrap, routage, réponses et helpers doivent être migrées par petits changements après traçage de leurs usages.
