@@ -21,8 +21,8 @@ foreach (['is_uploaded_file($tmpName)', 'filesize($tmpName)', 'random_bytes(16)'
 if (str_contains($documentController, '$this->db = Database::getInstance()')) {
     throw new RuntimeException('DocumentController must delegate persistence.');
 }
-if (!str_contains($documentController, "preg_match('~^documents/([A-Za-z0-9._-]+)$~D")) {
-    throw new RuntimeException('Document path resolver must reject traversal.');
+if (!str_contains($documentController, 'function resolveDocumentPath') || !str_contains($documentController, 'DOCUMENTS_STORAGE_PATH . $matches[1]')) {
+    throw new RuntimeException('Document path resolver must constrain files to private storage.');
 }
 if (!is_string($documentRepository) || !str_contains($documentRepository, 'd.est_public = 1')) {
     throw new RuntimeException('Non-admin document listing must exclude private files.');
