@@ -5,8 +5,9 @@ declare(strict_types=1);
 define('ACCESS', true);
 require_once __DIR__ . '/../src/services/InscriptionService.php';
 
-final class InscriptionRepositoryFake
+final class InscriptionRepositoryFake extends InscriptionRepository
 {
+    public function __construct() {}
     public array $calls = [];
     public function paginate(array $filters, int $page, int $perPage): array
     {
@@ -37,8 +38,7 @@ if ($service->getStudentHistory(0) !== ['eleve' => null, 'historique' => []]) {
     throw new RuntimeException('Invalid student IDs must return a safe empty history.');
 }
 $service->getAvailableClasses(-5);
-$service->findEnrollment(0);
-if ($repository->calls[1] !== ['availableClasses', 0] || $repository->calls[2] !== ['findEnrollment', 0]) {
+if ($repository->calls[1] !== ['availableClasses', 0] || $service->findEnrollment(0) !== null) {
     throw new RuntimeException('Inscription service ID normalization failed.');
 }
 if (!str_contains(file_get_contents(__DIR__ . '/../src/controllers/InscriptionController.php'), '$this->inscriptionService->paginate')) {
