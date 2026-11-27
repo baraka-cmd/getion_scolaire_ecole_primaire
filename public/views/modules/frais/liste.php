@@ -22,43 +22,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
 }
 
 // Frais et créances restent rattachés à une année scolaire déterminée.
-$anneeActiveId = (int) $db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-$annees = $db->fetchAll("SELECT id, libelle, est_cloturee FROM annees_scolaires ORDER BY date_debut DESC");
-$anneeId = (int) ($_GET['annee_id'] ?? $anneeActiveId);
-$anneeExiste = (int) $db->fetchColumn("SELECT COUNT(*) FROM annees_scolaires WHERE id = :id", ['id' => $anneeId]);
-if (!$anneeExiste) {
-    $anneeId = $anneeActiveId;
-}
-$frais = $db->fetchAll(
-    "SELECT f.*, cfg.categorie, cfg.devise, cfg.periodicite, cfg.jour_echeance,
-            (SELECT COUNT(*) FROM finance_creances cr WHERE cr.frais_scolaire_id = f.id) AS nb_creances,
-            (SELECT COUNT(DISTINCT cr.eleve_id) FROM finance_creances cr WHERE cr.frais_scolaire_id = f.id) AS nb_eleves,
-            (SELECT COALESCE(SUM(CASE WHEN cr.devise = 'USD' THEN a.montant_affecte ELSE 0 END), 0)
-             FROM finance_affectations a
-             INNER JOIN finance_creances cr ON cr.id = a.creance_id
-             INNER JOIN finance_versements v ON v.id = a.versement_id
-             LEFT JOIN finance_annulations an ON an.versement_id = v.id
-             WHERE cr.frais_scolaire_id = f.id AND an.id IS NULL) AS encaisse_usd,
-            (SELECT COALESCE(SUM(CASE WHEN cr.devise = 'CDF' THEN a.montant_affecte ELSE 0 END), 0)
-             FROM finance_affectations a
-             INNER JOIN finance_creances cr ON cr.id = a.creance_id
-             INNER JOIN finance_versements v ON v.id = a.versement_id
-             LEFT JOIN finance_annulations an ON an.versement_id = v.id
-             WHERE cr.frais_scolaire_id = f.id AND an.id IS NULL) AS encaisse_cdf
-     FROM frais_scolaires f
-     INNER JOIN finance_frais_config cfg ON cfg.frais_scolaire_id = f.id
-     WHERE f.annee_scolaire_id = :aid
-     ORDER BY f.est_obligatoire DESC, f.libelle",
-    ['aid' => $anneeId]
-);
-
-$classes = $db->fetchAll(
-    "SELECT id, nom FROM classes WHERE annee_scolaire_id = :annee ORDER BY niveau",
-    ['annee' => $anneeId]
-);
-$totalFrais = count($frais);
-$totalEncaisseUsd = array_sum(array_column($frais, 'encaisse_usd'));
-$totalEncaisseCdf = array_sum(array_column($frais, 'encaisse_cdf'));
+require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'PaymentReadController.php';
+$paymentReadController = new PaymentReadController();
+extract($paymentReadController->getViewData('frais', $_GET), EXTR_OVERWRITE);
 
 $pageTitle = 'Configuration des frais scolaires';
 $pageIcon  = 'fa-tags';
