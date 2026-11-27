@@ -173,4 +173,126 @@ class InscriptionRepository
             ['eid' => $studentId]
         );
     }
+    
+    public function enrollmentStatistics(): array
+    {
+        $year = '(SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)';
+        return [
+            'actifs' => (int) $this->db->fetchColumn("SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = {$year} AND statut = 'Actif'"),
+            'redoublants' => (int) $this->db->fetchColumn("SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = {$year} AND statut = 'Redoublant'"),
+            'transferes' => (int) $this->db->fetchColumn("SELECT COUNT(*) FROM inscriptions WHERE annee_scolaire_id = {$year} AND statut = 'Transféré'"),
+        ];
+    }
+
+    public function classesForTransition(): array
+    {
+        return $this->db->fetchAll(
+            "SELECT c.id, c.nom, c.niveau, a.libelle AS annee_libelle, a.id AS annee_id,
+                    a.date_debut AS annee_date_debut, a.est_active
+             FROM classes c INNER JOIN annees_scolaires a ON c.annee_scolaire_id = a.id
+             ORDER BY a.date_debut DESC, c.niveau"
+        );
+    }
+
+    public function destinationSchoolYears(): array
+    {
+        return $this->db->fetchAll(
+            "SELECT a.id, a.libelle, a.date_debut, a.est_active FROM annees_scolaires a
+             WHERE EXISTS (SELECT 1 FROM classes c WHERE c.annee_scolaire_id = a.id AND c.est_actif = 1)
+             ORDER BY a.date_debut"
+        );
+    }
+
+    public function activeYearId(): ?int
+    {
+        $value = $this->db->fetchColumn('SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1');
+        return $value === null ? null : (int) $value;
+    }
+
+    public function getClassCapacity(int $classId): ?array
+    {
+        return $this->db->fetchOne(
+            'SELECT id, capacite_max, annee_scolaire_id, est_actif FROM classes WHERE id = :id',
+            ['id' => $classId]
+        );
+    }
+
+    public function activeEnrollmentForStudent(int $studentId, int $yearId): ?array
+    {
+        return $this->db->fetchOne(
+            "SELECT i.id, c.nom FROM inscriptions i INNER JOIN classes c ON c.id = i.classe_id
+             WHERE i.eleve_id = :eid AND i.annee_scolaire_id = :aid AND i.statut = 'Actif' LIMIT 1",
+            ['eid' => $studentId, 'aid' => $yearId]
+        );
+    }
+
+    public function activeStudent(int $studentId): ?array
+    {
+        return $this->db->fetchOne(
+            'SELECT id, nom, prenom FROM eleves WHERE id = :id AND est_actif = 1',
+            ['id' => $studentId]
+        );
+    }
+
+    public function insertEnrollment(int $studentId, int $classId, int $yearId, string $status): int
+    {
+        return $this->db->insert(
+            "INSERT INTO inscriptions (eleve_id, classe_id, annee_scolaire_id, date_inscription, statut)
+             VALUES (:eid, :cid, :aid, CURDATE(), :statut)",
+            ['eid' => $studentId, 'cid' => $classId, 'aid' => $yearId, 'statut' => $status]
+        );
+    }
+
+    public function transferEnrollment(int $studentId, int $oldClassId, int $newClassId, int $yearId, string $reason): array
+    {
+        $this->db->beginTransaction();
+        try {
+            $destination = $this->db->fetchOne(
+                "SELECT id, capacite_max, annee_scolaire_id, est_actif FROM classes WHERE id = :id FOR UPDATE",
+                ['id' => $newClassId]
+            );
+            $source = $this->db->fetchOne(
+                "SELECT id FROM inscriptions WHERE eleve_id = :eid AND classe_id = :cid
+                 AND annee_scolaire_id = :aid AND statut = 'Actif' FOR UPDATE",
+                ['eid' => $studentId, 'cid' => $oldClassId, 'aid' => $yearId]
+            );
+            if (!$source || !$destination || (int) $destination['annee_scolaire_id'] !== $yearId || (int) $destination['est_actif'] !== 1 || $newClassId === $oldClassId) {
+                $this->db->rollback();
+                return ['ok' => false, 'status' => 409, 'message' => 'L’inscription source ou la classe de destination n’est plus valide.'];
+            }
+            $count = (int) $this->db->fetchColumn(
+                "SELECT COUNT(*) FROM inscriptions WHERE classe_id = :cid AND annee_scolaire_id = :aid AND statut = 'Actif'",
+                ['cid' => $newClassId, 'aid' => $yearId]
+            );
+            if ($count >= (int) $destination['capacite_max']) {
+                $this->db->rollback();
+                return ['ok' => false, 'status' => 409, 'message' => 'Classe complète (' . (int) $destination['capacite_max'] . ' élèves max).'];
+            }
+            $changed = $this->db->update(
+                "UPDATE inscriptions SET statut = 'Transféré', motif_statut = :motif, date_changement_statut = CURDATE()
+                 WHERE id = :id AND statut = 'Actif'",
+                ['motif' => $reason, 'id' => (int) $source['id']]
+            );
+            if ($changed !== 1) {
+                $this->db->rollback();
+                return ['ok' => false, 'status' => 409, 'message' => 'L’inscription a été modifiée entre-temps.'];
+            }
+            $this->insertEnrollment($studentId, $newClassId, $yearId, 'Actif');
+            $this->db->commit();
+            return ['ok' => true];
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
+
+    public function updateEnrollmentStatus(int $enrollmentId, string $status, string $reason): int
+    {
+        return $this->db->update(
+            "UPDATE inscriptions SET statut = :statut, motif_statut = :motif, date_changement_statut = CURDATE()
+             WHERE id = :id AND statut = 'Actif'",
+            ['statut' => $status, 'motif' => $reason, 'id' => $enrollmentId]
+        );
+    }
+
 }
