@@ -36,6 +36,10 @@ class StudentRecordRepositoryFake extends StudentRecordRepository
         return $studentId === 17 ? ['id' => 17] : null;
     }
 
+    public function findDetailForForm(int $studentId): ?array { return $studentId === 17 ? ['id' => 17, 'detail' => true] : null; }
+    public function getActiveClassesForForms(): array { return [['id' => 3]]; }
+    public function enrollmentHistory(int $studentId): array { return [['classe_nom' => 'A']]; }
+
     public function recentGrades(int $studentId): array { return [['valeur' => 15]]; }
     public function recentAbsences(int $studentId): array { return []; }
     public function payments(int $studentId): array { return []; }
@@ -73,6 +77,9 @@ studentAssert($repository->received['userId'] === 9, 'identité serveur transmis
 studentAssert($page['rows'][0]['id'] === 17 && $page['total'] === 1, 'résultat de liste inchangé');
 studentAssert($service->findRecord(17)['id'] === 17, 'fiche récupérée');
 studentAssert($service->findRecord(0) === null, 'ID invalide rejeté');
+studentAssert($service->findDetailForForm(17)['detail'] === true, 'lecture formulaire déléguée');
+studentAssert($service->getActiveClassesForForms()[0]['id'] === 3, 'classes formulaire déléguées');
+studentAssert($service->enrollmentHistory(17)[0]['classe_nom'] === 'A', 'historique inscriptions délégué');
 $history = $service->getAcademicAndAttendanceHistory(17);
 studentAssert(isset($history['notes'], $history['absences'], $history['paiements']), 'structure historique stable');
 
