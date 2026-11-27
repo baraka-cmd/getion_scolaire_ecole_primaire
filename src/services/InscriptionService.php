@@ -64,10 +64,10 @@ class InscriptionService
         $errors = [];
         if ($studentId <= 0) $errors['eleve_id'] = 'Veuillez sélectionner un élève.';
         if ($classId <= 0) $errors['classe_id'] = 'Veuillez sélectionner une classe.';
-        $yearId = $this->repository->activeYearId();
-        if (!$yearId) return ['ok' => false, 'errors' => $errors, 'message' => 'Aucune année scolaire active.'];
-        if ($status !== 'Actif') $status = 'Actif';
+        if (!in_array($status, ['Actif', 'Redoublant'], true)) $errors['statut'] = 'Statut d’inscription invalide.';
         if ($errors) return ['ok' => false, 'errors' => $errors];
+        $yearId = $this->repository->activeYearId();
+        if (!$yearId) return ['ok' => false, 'errors' => [], 'message' => 'Aucune année scolaire active.'];
         return $this->repository->createEnrollmentSafely($studentId, $classId, $yearId, $status);
     }
 
