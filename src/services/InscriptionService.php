@@ -149,7 +149,7 @@ class InscriptionService
         if (strtotime($destinationYear['date_debut']) <= strtotime($source['source_date_debut'])) {
             return ['ok' => false, 'status' => 422, 'message' => 'L’année de destination doit être postérieure à l’année source.'];
         }
-        $annual = $this->academicResults->getAnnualResultsForClass($sourceClassId, $sourceYearId);
+        $annual = ($this->academicResults ?? new AcademicResultsService())->getAnnualResultsForClass($sourceClassId, $sourceYearId);
         $byStudent = [];
         foreach (($annual['resultats'] ?? []) as $result) $byStudent[(int) $result['eleve_id']] = $result;
 
