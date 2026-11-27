@@ -184,7 +184,7 @@ class InscriptionService
             if ($this->repository->enrollmentExistsInYear($studentId, $destinationYearId)) {
                 return ['ok' => false, 'status' => 422, 'message' => "L’élève {$studentId} est déjà inscrit pour l’année de destination."];
             }
-            $plans[] = ['eleve_id' => $studentId, 'inscription_source_id' => $sourceEnrollmentId, 'classe_destination_id' => $graduated ? null : $targetClassId, 'est_reussite' => $passed, 'est_diplome' => $graduated];
+            $plans[] = ['eleve_id' => $studentId, 'inscription_source_id' => $sourceEnrollmentId, 'classe_source_id' => $sourceClassId, 'annee_source_id' => $sourceYearId, 'classe_destination_id' => $graduated ? null : $targetClassId, 'est_reussite' => $passed, 'est_diplome' => $graduated];
         }
 
         try {
