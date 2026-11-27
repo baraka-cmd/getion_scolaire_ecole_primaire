@@ -11,62 +11,33 @@ defined('ACCESS') or define('ACCESS', true);
 require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('absences.consulter');
+require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AbsenceController.php';
+$absenceController = new AbsenceController();
 
-global $db;
 
-// Récupérer le parent connecté
-$userId = $_SESSION['utilisateur_id'] ?? 0;
-$parentId = (int) $db->fetchColumn(
-    "SELECT pt.id FROM parents_tuteurs pt WHERE pt.utilisateur_id = :uid LIMIT 1",
-    ['uid' => $userId]
-);
-
+// Les données du parent et de ses enfants sont filtrées côté serveur.
+$userId = (int) ($_SESSION['utilisateur_id'] ?? 0);
+$parentData = $absenceController->getParentChildrenData($userId);
+$parentId = (int) $parentData['parent_id'];
 if ($parentId <= 0) {
     setFlash('warning', 'Aucun profil parent trouvé. Contactez l\'administration.');
     redirect('/gestion_scolaire/dashboard');
 }
-
-// Récupérer les enfants du parent
-$enfants = $db->fetchAll(
-    "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe,
-            c.nom AS classe_nom, c.niveau AS classe_niveau
-     FROM eleve_parent ep
-     INNER JOIN eleves e ON ep.eleve_id = e.id AND e.est_actif = 1
-     LEFT JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-     LEFT JOIN classes c ON i.classe_id = c.id
-     WHERE ep.parent_id = :pid
-     ORDER BY ep.est_tuteur_principal DESC, e.nom",
-    ['pid' => $parentId]
-);
-
+$enfants = $parentData['enfants'];
 if (empty($enfants)) {
     setFlash('info', 'Aucun enfant n\'est actuellement lié à votre compte.');
     redirect('/gestion_scolaire/parent/enfants');
 }
-
-// Sélectionner l'enfant
 $eleveId = (int) ($_GET['enfant_id'] ?? $enfants[0]['id']);
-$enfantAutorise = false;
 $selectedEnfant = null;
 foreach ($enfants as $enf) {
-    if ($enf['id'] === $eleveId) {
-        $enfantAutorise = true;
+    if ((int) $enf['id'] === $eleveId) {
         $selectedEnfant = $enf;
         break;
     }
 }
-if (!$enfantAutorise) $selectedEnfant = $enfants[0];
-
-// Récupérer TOUTES les absences (sans limite)
-$absences = $db->fetchAll(
-    "SELECT a.id, a.date_absence, a.type_absence, a.est_justifiee, a.motif,
-            DATE_FORMAT(a.date_absence, '%d/%m/%Y') AS date_format,
-            DAYNAME(a.date_absence) AS jour_semaine
-     FROM absences a
-     WHERE a.eleve_id = :eid AND a.type_absence = 'Absence'
-     ORDER BY a.date_absence DESC",
-    ['eid' => $selectedEnfant['id']]
-);
+if (!$selectedEnfant) $selectedEnfant = $enfants[0];
+$absences = $absenceController->getParentAbsenceHistory((int) $selectedEnfant['id']);
 
 // Statistiques globales
 $totalAbsences = count($absences);

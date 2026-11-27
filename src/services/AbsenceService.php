@@ -140,4 +140,20 @@ class AbsenceService
                 : 0,
         ];
     }
+
+    public function getMarkingData(int $classId, string $date): array
+    {
+        return $this->repository->getMarkingData($classId, $date);
+    }
+
+
+    public function getActiveTrimesters(): array { return $this->repository->getActiveTrimesters(); }
+    public function getTeacherClassOverview(int $userId): ?array { return $this->repository->getTeacherClassOverview($userId); }
+    public function getClassMonthStatistics(int $classId): array { return $this->repository->getClassMonthStatistics($classId); }
+    public function getParentProfileId(int $userId): int { return $this->repository->findParentProfileId($userId); }
+    public function getParentChildren(int $parentId): array { return $this->repository->findParentChildren($parentId); }
+    public function getParentAbsences(int $studentId): array { return $this->repository->findParentAbsences($studentId); }
+    public function getClassStudents(int $classId): array { return $this->repository->findClassStudents($classId); }
+    public function getStudentAbsencesForJustification(int $studentId): array { return $this->repository->findStudentAbsencesForJustification($studentId); }
+
 }

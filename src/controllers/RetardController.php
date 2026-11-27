@@ -9,16 +9,17 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/../services/RetardService.php';
+require_once __DIR__ . '/../policies/StudentAccessPolicy.php';
 
 class RetardController
 {
-    private Database $db;
     private RetardService $retardService;
+    private StudentAccessPolicy $studentAccessPolicy;
 
-    public function __construct(?RetardService $retardService = null)
+    public function __construct(?RetardService $retardService = null, ?StudentAccessPolicy $studentAccessPolicy = null)
     {
-        $this->db = Database::getInstance();
         $this->retardService = $retardService ?? new RetardService();
+        $this->studentAccessPolicy = $studentAccessPolicy ?? new StudentAccessPolicy();
     }
 
     /**
@@ -38,6 +39,7 @@ class RetardController
 
         switch ($action) {
             case 'enregistrerRetard':
+                Security::getInstance()->validateCsrf();
                 $this->enregistrerRetard();
                 break;
             case 'getListeRetards':
@@ -47,12 +49,14 @@ class RetardController
                 $this->getStatsRetards();
                 break;
             case 'justifierRetard':
+                Security::getInstance()->validateCsrf();
                 $this->justifierRetard();
                 break;
             case 'getRetardsEleve':
                 $this->getRetardsEleve();
                 break;
             case 'supprimerRetard':
+                Security::getInstance()->validateCsrf();
                 $this->supprimerRetard();
                 break;
             default:
@@ -70,69 +74,30 @@ class RetardController
     public function enregistrerRetard(): void
     {
         requirePermission('retards.enregistrer');
-
-        $eleveId      = (int) post('eleve_id', 0);
-        $dateRetard   = post('date_retard', date('Y-m-d'));
-        $heureArrivee = post('heure_arrivee', '');
-        $heurePrevue  = post('heure_prevue', '07:30');
-        $motif        = post('motif', '');
-        $estJustifie  = (int) post('est_justifie', 0);
-
+        $eleveId = (int) post('eleve_id', 0);
         if ($eleveId <= 0) jsonResponse(false, 'ID élève invalide.', [], 400);
+        if (!$this->studentAccessPolicy->canCurrentUserAccessStudent($eleveId)) jsonResponse(false, 'Élève introuvable ou non autorisé.', [], 404);
+        $dateRetard = post('date_retard', date('Y-m-d'));
+        $heureArrivee = post('heure_arrivee', '');
+        $heurePrevue = post('heure_prevue', '07:30');
+        $motif = post('motif', '');
+        $estJustifie = (int) post('est_justifie', 0);
         if (empty($heureArrivee)) jsonResponse(false, 'L\'heure d\'arrivée est obligatoire.', [], 400);
-
-        // Calculer la durée du retard en minutes
         $dureeRetard = $this->retardService->calculateDuration($heurePrevue, $heureArrivee);
-
-        if ($dureeRetard <= 0) {
-            jsonResponse(false, 'L\'heure d\'arrivée doit être après l\'heure prévue.', [], 400);
-        }
-
-        // Vérifier que l'élève existe et est inscrit
+        if ($dureeRetard <= 0) jsonResponse(false, 'L\'heure d\'arrivée doit être après l\'heure prévue.', [], 400);
         $eleve = $this->retardService->findActiveStudent($eleveId);
-
         if (!$eleve) jsonResponse(false, 'Élève introuvable ou non inscrit.', [], 404);
-
-        // Vérifier si un retard existe déjà pour cette date
-        if ($this->retardService->existsForDate($eleveId, $dateRetard)) {
-            jsonResponse(false, 'Un retard a déjà été enregistré pour cet élève à cette date.', [], 409);
-        }
-
+        if ($this->retardService->existsForDate($eleveId, $dateRetard)) jsonResponse(false, 'Un retard a déjà été enregistré pour cet élève à cette date.', [], 409);
         try {
-            $retardId = $this->retardService->createRetard(
-                $eleveId,
-                $dateRetard,
-                $heureArrivee,
-                $heurePrevue,
-                $dureeRetard,
-                $motif,
-                $estJustifie,
-                (int) $_SESSION['utilisateur_id']
-            );
-
-            // Vérifier le nombre de retards et alerter si nécessaire
+            $retardId = $this->retardService->createRetard($eleveId, $dateRetard, $heureArrivee, $heurePrevue, $dureeRetard, $motif, $estJustifie, (int) $_SESSION['utilisateur_id']);
             $nbRetards = $this->retardService->countForStudent($eleveId);
-
-            $message = 'Retard enregistré avec succès.';
-            $alerte = null;
-
-            if ($nbRetards >= 10) {
-                $alerte = '⚠️ Cet élève totalise ' . $nbRetards . ' retards. Une convocation des parents est recommandée.';
-            } elseif ($nbRetards >= 5) {
-                $alerte = '⚠️ Cet élève totalise ' . $nbRetards . ' retards. Une alerte aux parents est recommandée.';
-            } elseif ($nbRetards >= 3) {
-                $alerte = 'Cet élève totalise ' . $nbRetards . ' retards.';
-            }
-
+            $alerte = $nbRetards >= 10 ? '⚠️ Cet élève totalise ' . $nbRetards . ' retards. Une convocation des parents est recommandée.'
+                : ($nbRetards >= 5 ? '⚠️ Cet élève totalise ' . $nbRetards . ' retards. Une alerte aux parents est recommandée.'
+                : ($nbRetards >= 3 ? 'Cet élève totalise ' . $nbRetards . ' retards.' : null));
             logActivity('Création', 'retards', $retardId, "Retard de {$eleve['nom']} {$eleve['prenom']} — {$dureeRetard} min");
-
-            jsonResponse(true, $message, [
-                'retard_id'    => $retardId,
-                'duree_retard' => $dureeRetard,
-                'nb_retards'   => $nbRetards,
-                'alerte'       => $alerte
-            ]);
-
+            jsonResponse(true, 'Retard enregistré avec succès.', ['retard_id'=>$retardId,'duree_retard'=>$dureeRetard,'nb_retards'=>$nbRetards,'alerte'=>$alerte]);
+        } catch (DomainException $e) {
+            jsonResponse(false, $e->getMessage(), [], 409);
         } catch (Exception $e) {
             error_log('Erreur enregistrement retard: ' . $e->getMessage());
             jsonResponse(false, 'Erreur lors de l\'enregistrement du retard.');
@@ -148,79 +113,29 @@ class RetardController
      */
     public function getListeRetards(): void
     {
-        $page       = max(1, (int) post('page', 1));
-        $classeId   = (int) post('classe_id', 0);
-        $dateDebut  = post('date_debut', '');
-        $dateFin    = post('date_fin', '');
-        $justifie   = post('justifie', '');
-        $recherche  = post('recherche', '');
-        $parPage    = ITEMS_PER_PAGE;
-
-        $where = [];
-        $params = [];
-
-        if ($classeId > 0) {
-            $where[] = "i.classe_id = :classe";
-            $params['classe'] = $classeId;
+        $page = max(1, (int) post('page', 1));
+        $classeId = (int) post('classe_id', 0);
+        if (hasRole('Enseignant')) {
+            $ownedClass = $this->retardService->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
+            if (!$ownedClass) jsonResponse(false, 'Aucune classe active n’est affectée à votre compte.', [], 403);
+            if ($classeId > 0 && $classeId !== $ownedClass) jsonResponse(false, 'Vous ne pouvez consulter que votre classe.', [], 403);
+            $classeId = $ownedClass;
         }
-
-        if (!empty($dateDebut)) {
-            $where[] = "r.date_retard >= :debut";
-            $params['debut'] = $dateDebut;
-        }
-
-        if (!empty($dateFin)) {
-            $where[] = "r.date_retard <= :fin";
-            $params['fin'] = $dateFin;
-        }
-
-        if ($justifie !== '') {
-            $where[] = "r.est_justifie = :justifie";
-            $params['justifie'] = (int) $justifie;
-        }
-
-        if (!empty($recherche)) {
-            $where[] = "(e.nom LIKE :r1 OR e.prenom LIKE :r2 OR e.matricule LIKE :r3)";
-            $params['r1'] = "%{$recherche}%";
-            $params['r2'] = "%{$recherche}%";
-            $params['r3'] = "%{$recherche}%";
-        }
-
-        $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
-
-        $total = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM retards r
-             INNER JOIN eleves e ON r.eleve_id = e.id
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             {$whereClause}",
-            $params
-        );
-
-        $offset = ($page - 1) * $parPage;
-
-        $retards = $this->db->fetchAll(
-            "SELECT r.*, e.matricule, e.nom, e.prenom, e.sexe,
-                    c.nom AS classe_nom,
-                    DATE_FORMAT(r.date_retard, '%d/%m/%Y') AS date_format,
-                    TIME_FORMAT(r.heure_arrivee, '%H:%i') AS heure_arrivee_format,
-                    TIME_FORMAT(r.heure_prevue, '%H:%i') AS heure_prevue_format,
-                    CONCAT(u.prenom, ' ', u.nom) AS saisie_par_nom
-             FROM retards r
-             INNER JOIN eleves e ON r.eleve_id = e.id
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             INNER JOIN classes c ON i.classe_id = c.id
-             LEFT JOIN utilisateurs u ON r.saisie_par = u.id
-             {$whereClause}
-             ORDER BY r.date_retard DESC, e.nom
-             LIMIT :limit OFFSET :offset",
-            array_merge($params, ['limit' => $parPage, 'offset' => $offset])
-        );
-
+        $filters = [
+            'classe_id' => $classeId,
+            'date_debut' => post('date_debut', ''),
+            'date_fin' => post('date_fin', ''),
+            'justifie' => post('justifie', ''),
+            'recherche' => post('recherche', ''),
+        ];
+        $perPage = ITEMS_PER_PAGE;
+        $result = $this->retardService->getList($filters, $page, $perPage);
+        $total = (int) $result['total'];
         jsonResponse(true, 'Liste récupérée.', [
-            'retards' => $retards,
-            'total'   => $total,
-            'page'    => $page,
-            'pages'   => ceil($total / $parPage)
+            'retards' => $result['retards'],
+            'total' => $total,
+            'page' => $page,
+            'pages' => ceil($total / $perPage)
         ]);
     }
 
@@ -233,81 +148,15 @@ class RetardController
      */
     public function getStatsRetards(): void
     {
-        $classeId    = (int) post('classe_id', 0);
-        $trimestreId = (int) post('trimestre_id', 0);
-
-        $where = [];
-        $params = [];
-
-        if ($classeId > 0) {
-            $where[] = "i.classe_id = :classe";
-            $params['classe'] = $classeId;
+        $classeId = (int) post('classe_id', 0);
+        if (hasRole('Enseignant')) {
+            $ownedClass = $this->retardService->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
+            if (!$ownedClass) jsonResponse(false, 'Aucune classe active n’est affectée à votre compte.', [], 403);
+            if ($classeId > 0 && $classeId !== $ownedClass) jsonResponse(false, 'Vous ne pouvez consulter que votre classe.', [], 403);
+            $classeId = $ownedClass;
         }
-
-        if ($trimestreId > 0) {
-            $trimestre = $this->db->fetchOne("SELECT date_debut, date_fin FROM trimestres WHERE id = :id", ['id' => $trimestreId]);
-            if ($trimestre) {
-                $where[] = "r.date_retard BETWEEN :debut AND :fin";
-                $params['debut'] = $trimestre['date_debut'];
-                $params['fin']   = $trimestre['date_fin'];
-            }
-        }
-
-        $whereClause = !empty($where) ? 'AND ' . implode(' AND ', $where) : '';
-
-        // Total retards
-        $totalRetards = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM retards r
-             INNER JOIN eleves e ON r.eleve_id = e.id
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             WHERE 1=1 {$whereClause}",
-            $params
-        );
-
-        // Retards justifiés
-        $retardsJustifies = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM retards r
-             INNER JOIN eleves e ON r.eleve_id = e.id
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             WHERE r.est_justifie = 1 {$whereClause}",
-            $params
-        );
-
-        // Durée moyenne des retards
-        $dureeMoyenne = (float) $this->db->fetchColumn(
-            "SELECT COALESCE(AVG(r.duree_retard), 0) FROM retards r
-             INNER JOIN eleves e ON r.eleve_id = e.id
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             WHERE 1=1 {$whereClause}",
-            $params
-        );
-
-        // Top 10 des élèves les plus en retard
-        $topRetards = $this->db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe,
-                    c.nom AS classe_nom,
-                    COUNT(r.id) AS nb_retards,
-                    SUM(r.duree_retard) AS total_duree,
-                    ROUND(AVG(r.duree_retard), 1) AS moyenne_duree,
-                    SUM(CASE WHEN r.est_justifie = 1 THEN 1 ELSE 0 END) AS nb_justifies
-             FROM retards r
-             INNER JOIN eleves e ON r.eleve_id = e.id
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             INNER JOIN classes c ON i.classe_id = c.id
-             WHERE 1=1 {$whereClause}
-             GROUP BY e.id, e.matricule, e.nom, e.prenom, e.sexe, c.nom
-             ORDER BY nb_retards DESC
-             LIMIT 10",
-            $params
-        );
-
-        jsonResponse(true, 'Statistiques récupérées.', [
-            'total_retards'       => $totalRetards,
-            'retards_justifies'   => $retardsJustifies,
-            'retards_non_justifies' => $totalRetards - $retardsJustifies,
-            'duree_moyenne'       => round($dureeMoyenne, 1),
-            'top_retards'         => $topRetards
-        ]);
+        $result = $this->retardService->getStatistics($classeId, (int) post('trimestre_id', 0));
+        jsonResponse(true, 'Statistiques récupérées.', $result);
     }
 
     // ============================================================
@@ -319,16 +168,14 @@ class RetardController
      */
     public function justifierRetard(): void
     {
+        requirePermission('retards.justifier');
         $retardId = (int) post('retard_id', 0);
-        $motif    = post('motif', '');
-
+        $motif = post('motif', '');
         if ($retardId <= 0) jsonResponse(false, 'ID retard invalide.', [], 400);
         if (empty($motif)) jsonResponse(false, 'Le motif est obligatoire.', [], 422);
-
-        if (!$this->retardService->justify($retardId, $motif)) {
-            jsonResponse(false, 'Retard introuvable.', [], 404);
-        }
-
+        $studentId = $this->retardService->findStudentIdForRetard($retardId);
+        if ($studentId === null || !$this->studentAccessPolicy->canCurrentUserAccessStudent($studentId)) jsonResponse(false, 'Retard introuvable.', [], 404);
+        if (!$this->retardService->justify($retardId, $motif)) jsonResponse(false, 'Retard introuvable.', [], 404);
         logActivity('Justification', 'retards', $retardId, 'Retard justifié');
         jsonResponse(true, 'Retard justifié avec succès.');
     }
@@ -344,30 +191,12 @@ class RetardController
     {
         $eleveId = (int) post('eleve_id', 0);
         if ($eleveId <= 0) jsonResponse(false, 'ID élève invalide.', [], 400);
-
-        $retards = $this->db->fetchAll(
-            "SELECT r.*, 
-                    DATE_FORMAT(r.date_retard, '%d/%m/%Y') AS date_format,
-                    TIME_FORMAT(r.heure_arrivee, '%H:%i') AS heure_arrivee_format,
-                    TIME_FORMAT(r.heure_prevue, '%H:%i') AS heure_prevue_format,
-                    CONCAT(u.prenom, ' ', u.nom) AS saisie_par_nom
-             FROM retards r
-             LEFT JOIN utilisateurs u ON r.saisie_par = u.id
-             WHERE r.eleve_id = :eid
-             ORDER BY r.date_retard DESC",
-            ['eid' => $eleveId]
-        );
-
+        if (!$this->studentAccessPolicy->canCurrentUserAccessStudent($eleveId)) jsonResponse(false, 'Élève introuvable.', [], 404);
+        $retards = $this->retardService->getStudentHistory($eleveId);
         $nbRetards = count($retards);
         $totalDuree = array_sum(array_column($retards, 'duree_retard'));
         $moyenneDuree = $nbRetards > 0 ? round($totalDuree / $nbRetards, 1) : 0;
-
-        jsonResponse(true, 'Retards récupérés.', [
-            'retards'       => $retards,
-            'nb_retards'    => $nbRetards,
-            'total_duree'   => $totalDuree,
-            'moyenne_duree' => $moyenneDuree
-        ]);
+        jsonResponse(true, 'Retards récupérés.', ['retards'=>$retards,'nb_retards'=>$nbRetards,'total_duree'=>$totalDuree,'moyenne_duree'=>$moyenneDuree]);
     }
 
     // ============================================================
@@ -380,12 +209,40 @@ class RetardController
     public function supprimerRetard(): void
     {
         requirePermission('retards.supprimer');
-
         $retardId = (int) post('retard_id', 0);
         if ($retardId <= 0) jsonResponse(false, 'ID retard invalide.', [], 400);
-
+        $studentId = $this->retardService->findStudentIdForRetard($retardId);
+        if ($studentId === null || !$this->studentAccessPolicy->canCurrentUserAccessStudent($studentId)) jsonResponse(false, 'Retard introuvable.', [], 404);
         $this->retardService->delete($retardId);
         jsonResponse(true, 'Retard supprimé avec succès.');
+    }
+
+    public function getParentHistory(int $studentId): array
+    {
+        if (!$this->studentAccessPolicy->canCurrentUserAccessStudent($studentId)) {
+            return [];
+        }
+        return $this->retardService->getParentHistory($studentId);
+    }
+
+    public function getMarkingData(int $classId, string $date): array
+    {
+        if (hasRole('Enseignant')) {
+            $ownedClass = $this->retardService->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
+            if (!$ownedClass || $classId !== $ownedClass) jsonResponse(false, 'Vous ne pouvez consulter que votre classe.', [], 403);
+        }
+        return $this->retardService->getMarkingData($classId, $date);
+    }
+
+    public function getStatsGlobales(): array
+    {
+        $stats = $this->retardService->getGlobalStatistics();
+        return [
+            'total' => $stats['total'],
+            'justifies' => $stats['justified'],
+            'duree_moyenne' => round($stats['average'], 1),
+            'ce_mois' => $stats['month'],
+        ];
     }
 
     // ============================================================
@@ -404,11 +261,7 @@ class RetardController
      */
     public function getClassesActives(): array
     {
-        return $this->db->fetchAll(
-            "SELECT c.* FROM classes c
-             WHERE c.annee_scolaire_id = (SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1)
-             ORDER BY c.niveau"
-        );
+        return $this->retardService->getActiveClasses();
     }
 
     /**
@@ -416,11 +269,7 @@ class RetardController
      */
     public function getClasseEnseignant(): int
     {
-        $userId = $_SESSION['utilisateur_id'] ?? 0;
-        return (int) $this->db->fetchColumn(
-            "SELECT e.classe_id FROM enseignants e WHERE e.utilisateur_id = :uid AND e.est_actif = 1 LIMIT 1",
-            ['uid' => $userId]
-        );
+        return $this->retardService->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
     }
 
     /**
@@ -428,19 +277,7 @@ class RetardController
      */
     public function getStatsDashboard(): array
     {
-        $today = date('Y-m-d');
-        $totalRetardsJour = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM retards WHERE date_retard = :date",
-            ['date' => $today]
-        );
-
-        $totalRetardsMois = (int) $this->db->fetchColumn(
-            "SELECT COUNT(*) FROM retards WHERE MONTH(date_retard) = MONTH(CURDATE()) AND YEAR(date_retard) = YEAR(CURDATE())"
-        );
-
-        return [
-            'retards_jour'  => $totalRetardsJour,
-            'retards_mois'  => $totalRetardsMois
-        ];
+        $counts = $this->retardService->getDashboardStatistics(date('Y-m-d'));
+        return ['retards_jour' => $counts['today'], 'retards_mois' => $counts['month']];
     }
 }

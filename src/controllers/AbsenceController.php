@@ -268,6 +268,88 @@ class AbsenceController
         return $this->studentAccessPolicy->canCurrentUserAccessStudent($studentId);
     }
 
+    public function getMarkingData(int $classId, string $date): array
+    {
+        requirePermission('absences.marquer');
+        if (hasRole('Enseignant')) {
+            $ownedClass = $this->service->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
+            if (!$ownedClass || $classId !== $ownedClass) {
+                jsonResponse(false, 'Vous ne pouvez consulter que votre classe.', [], 403);
+            }
+        }
+        return $this->service->getMarkingData($classId, $date);
+    }
+
+
+    public function getActiveTrimesters(): array
+    {
+        return $this->service->getActiveTrimesters();
+    }
+
+    public function getTeacherDashboardData(int $userId, string $date): array
+    {
+        $class = $this->service->getTeacherClassOverview($userId);
+        if (!$class) return ['classe'=>null,'eleves'=>[],'absences'=>[],'absences_mois'=>0,'absences_non_justifiees_mois'=>0];
+        $marking = $this->getMarkingData((int) $class['id'], $date);
+        $monthly = $this->service->getClassMonthStatistics((int) $class['id']);
+        return array_merge($marking, ['classe'=>$class], $monthly);
+    }
+
+    public function getParentChildrenData(int $userId): array
+    {
+        $parentId = $this->service->getParentProfileId($userId);
+        return ['parent_id'=>$parentId,'enfants'=>$parentId > 0 ? $this->service->getParentChildren($parentId) : []];
+    }
+
+    public function getParentAbsenceHistory(int $studentId): array
+    {
+        if (!$this->canCurrentUserAccessStudent($studentId)) {
+            return [];
+        }
+        return $this->service->getParentAbsences($studentId);
+    }
+
+    public function getJustificationPageData(int $studentId, int $classId, bool $isParent, int $userId): array
+    {
+        $childrenData = $isParent ? $this->getParentChildrenData($userId) : ['parent_id'=>0,'enfants'=>[]];
+        $children = $childrenData['enfants'];
+        if ($isParent) {
+            $allowedIds = array_map('intval', array_column($children, 'id'));
+            if ($studentId > 0 && in_array($studentId, $allowedIds, true)) {
+                $selectedId = $studentId;
+            } elseif (count($children) === 1) {
+                $selectedId = (int) $children[0]['id'];
+            } else {
+                $selectedId = 0;
+            }
+        } else {
+            if (hasRole('Enseignant')) {
+                $ownedClass = $this->service->getTeacherClass((int) ($_SESSION['utilisateur_id'] ?? 0));
+                if (!$ownedClass || ($classId > 0 && $classId !== $ownedClass)) {
+                    jsonResponse(false, 'Vous ne pouvez consulter que votre classe.', [], 403);
+                }
+                $classId = $ownedClass;
+            }
+            $selectedId = $studentId > 0 && $this->canCurrentUserAccessStudent($studentId) ? $studentId : 0;
+        }
+        if ($isParent) {
+            $classes = [];
+        } elseif (hasRole('Enseignant')) {
+            $overview = $this->service->getTeacherClassOverview((int) ($_SESSION['utilisateur_id'] ?? 0));
+            $classes = $overview ? [$overview] : [];
+        } else {
+            $classes = $this->getClassesActives();
+        }
+        $students = (!$isParent && $classId > 0) ? $this->service->getClassStudents($classId) : [];
+        $history = $selectedId > 0 ? $this->service->getStudentAbsencesForJustification($selectedId) : ['non_justifiees'=>[],'justifiees'=>[]];
+        return [
+            'parent_id'=>$childrenData['parent_id'],'enfants'=>$children,'eleve_id'=>$selectedId,
+            'classes'=>$classes,'eleves'=>$students,
+            'absences_non_justifiees'=>$history['non_justifiees'],
+            'absences_justifiees'=>$history['justifiees']
+        ];
+    }
+
     public function getStatsDashboard(): array
     {
         return $this->service->getDashboardStatistics(date('Y-m-d'));

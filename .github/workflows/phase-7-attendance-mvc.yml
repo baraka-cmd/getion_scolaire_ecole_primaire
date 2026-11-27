@@ -1,0 +1,69 @@
+name: Phase 7 - Attendance MVC and security smoke
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/controllers/AbsenceController.php'
+      - 'src/controllers/RetardController.php'
+      - 'src/controllers/AttendanceRegisterController.php'
+      - 'src/services/AbsenceService.php'
+      - 'src/services/RetardService.php'
+      - 'src/services/AttendanceRegisterService.php'
+      - 'src/repositories/AbsenceRepository.php'
+      - 'src/repositories/RetardRepository.php'
+      - 'src/repositories/AttendanceRegisterRepository.php'
+      - 'src/policies/StudentAccessPolicy.php'
+      - 'public/assets/js/modules/retards.js'
+      - 'tests/phase7_attendance_mvc_smoke.php'
+      - 'tests/absence_service_smoke.php'
+      - 'tests/retard_service_smoke.php'
+      - 'tests/attendance_register_service_smoke.php'
+      - 'public/views/enseignant/modules/absences.php'
+      - 'public/views/parent/modules/absences.php'
+      - 'public/views/parent/modules/retards.php'
+      - 'public/views/modules/absences/justifier.php'
+      - 'public/views/modules/absences/liste.php'
+      - 'public/views/modules/absences/marquer.php'
+      - 'public/views/modules/retards/enregistrer.php'
+      - 'public/views/modules/retards/liste.php'
+      - '.github/workflows/phase-7-attendance-mvc.yml'
+  push:
+    branches: [refactor/phase-7-attendance]
+jobs:
+  php-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: PHP syntax
+        run: |
+          php -l src/controllers/AbsenceController.php
+          php -l src/controllers/RetardController.php
+          php -l src/controllers/AttendanceRegisterController.php
+          php -l src/services/AbsenceService.php
+          php -l src/services/RetardService.php
+          php -l src/services/AttendanceRegisterService.php
+          php -l src/repositories/AbsenceRepository.php
+          php -l src/repositories/RetardRepository.php
+          php -l src/repositories/AttendanceRegisterRepository.php
+          php -l tests/phase7_attendance_mvc_smoke.php
+          php -l tests/absence_service_smoke.php
+          php -l tests/retard_service_smoke.php
+          php -l tests/attendance_register_service_smoke.php
+          php -l public/views/enseignant/modules/absences.php
+          php -l public/views/parent/modules/absences.php
+          php -l public/views/parent/modules/retards.php
+          php -l public/views/modules/absences/justifier.php
+          php -l public/views/modules/absences/liste.php
+          php -l public/views/modules/absences/marquer.php
+          php -l public/views/modules/retards/enregistrer.php
+          php -l public/views/modules/retards/liste.php
+      - name: Existing service regression contracts
+        run: |
+          php tests/absence_service_smoke.php
+          php tests/retard_service_smoke.php
+          php tests/attendance_register_service_smoke.php
+      - name: MVC and security boundary smoke
+        run: php tests/phase7_attendance_mvc_smoke.php

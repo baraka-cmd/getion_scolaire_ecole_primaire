@@ -77,4 +77,62 @@ class RetardService
     {
         $this->repository->delete($retardId);
     }
+
+    public function getList(array $filters, int $page, int $perPage): array
+    {
+        return $this->repository->listRetards($filters, $page, $perPage);
+    }
+
+    public function getStatistics(int $classId, int $trimesterId): array
+    {
+        return $this->repository->getRetardStatistics($classId, $trimesterId);
+    }
+
+    public function getStudentHistory(int $studentId): array
+    {
+        return $this->repository->findStudentRetards($studentId);
+    }
+
+    public function findStudentIdForRetard(int $retardId): ?int
+    {
+        return $this->repository->findStudentIdForRetard($retardId);
+    }
+
+    public function getActiveClasses(): array
+    {
+        return $this->repository->getActiveClasses();
+    }
+
+    public function getTeacherClass(int $userId): int
+    {
+        return $this->repository->findTeacherClass($userId);
+    }
+
+    public function getDashboardStatistics(string $today): array
+    {
+        return $this->repository->getDashboardCounts($today);
+    }
+
+    public function getGlobalStatistics(): array
+    {
+        return $this->repository->getGlobalStatistics();
+    }
+
+
+    public function studentBelongsToClass(int $studentId, int $classId): bool
+    {
+        return $this->repository->studentBelongsToClass($studentId, $classId);
+    }
+
+    public function getMarkingData(int $classId, string $date): array
+    {
+        return $this->repository->getMarkingData($classId, $date);
+    }
+
+
+    public function getParentHistory(int $studentId): array
+    {
+        return $this->repository->findParentRetards($studentId);
+    }
+
 }

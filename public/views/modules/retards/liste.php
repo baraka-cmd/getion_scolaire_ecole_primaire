@@ -12,7 +12,6 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('retards.consulter');
 
-global $db;
 
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'RetardController.php';
 $retardController = new RetardController();
@@ -30,10 +29,11 @@ if (hasRole('Enseignant') && $classeId <= 0) {
 
 // Stats globales
 $statsGlobales = $retardController->getStatsDashboard();
-$totalRetards = (int) $db->fetchColumn("SELECT COUNT(*) FROM retards");
-$totalJustifies = (int) $db->fetchColumn("SELECT COUNT(*) FROM retards WHERE est_justifie = 1");
-$dureeMoyenne = round((float) $db->fetchColumn("SELECT AVG(duree_retard) FROM retards"), 1);
-$retardsCeMois = (int) $db->fetchColumn("SELECT COUNT(*) FROM retards WHERE MONTH(date_retard) = MONTH(CURDATE()) AND YEAR(date_retard) = YEAR(CURDATE())");
+$statsGlobalesDetaillees = $retardController->getStatsGlobales();
+$totalRetards = $statsGlobalesDetaillees['total'];
+$totalJustifies = $statsGlobalesDetaillees['justifies'];
+$dureeMoyenne = $statsGlobalesDetaillees['duree_moyenne'];
+$retardsCeMois = $statsGlobalesDetaillees['ce_mois'];
 
 $pageTitle = 'Gestion des retards';
 $pageIcon  = 'fa-clock';

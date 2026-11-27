@@ -12,7 +12,6 @@ require_once __DIR__ . '/../../../../src/config/app.php';
 requireLogin();
 requirePermission('absences.justifier');
 
-global $db;
 
 require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AbsenceController.php';
 $absenceController = new AbsenceController();
@@ -21,92 +20,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
     $absenceController->handleAjax();
 }
 
-// Paramètres
+// Les données et les autorisations sont résolues par le contrôleur.
 $eleveId = (int) ($_GET['eleve_id'] ?? 0);
 $dateAbsence = $_GET['date'] ?? '';
 $classeId = (int) ($_GET['classe_id'] ?? 0);
-
-// Si parent connecté, récupérer ses enfants
-$enfants = [];
 $isParent = hasRole('Parent');
-if ($isParent) {
-    $parentId = (int) $db->fetchColumn(
-        "SELECT id FROM parents_tuteurs WHERE utilisateur_id = :uid LIMIT 1",
-        ['uid' => $_SESSION['utilisateur_id']]
-    );
-    if ($parentId > 0) {
-        $enfants = $db->fetchAll(
-            "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe,
-                    c.nom AS classe_nom, c.id AS classe_id
-             FROM eleves e
-             INNER JOIN eleve_parent ep ON e.id = ep.eleve_id
-             INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-             INNER JOIN classes c ON i.classe_id = c.id
-             WHERE ep.parent_id = :pid AND e.est_actif = 1
-             ORDER BY e.nom",
-            ['pid' => $parentId]
-        );
-    }
+$pageData = $absenceController->getJustificationPageData(
+    $eleveId,
+    $classeId,
+    $isParent,
+    (int) ($_SESSION['utilisateur_id'] ?? 0)
+);
+$parentId = (int) $pageData['parent_id'];
+$enfants = $pageData['enfants'];
+if ($isParent && $parentId <= 0) {
+    setFlash('warning', 'Aucun profil parent trouvé. Contactez l\'administration.');
+    redirect('/gestion_scolaire/dashboard');
 }
-
-// Récupérer les classes pour le filtre (admin/secrétaire)
-$classes = [];
-if (!$isParent) {
-    $classes = $absenceController->getClassesActives();
+if ($isParent && empty($enfants)) {
+    setFlash('info', 'Aucun enfant n\'est actuellement lié à votre compte.');
+    redirect('/gestion_scolaire/parent/enfants');
 }
-
-// Récupérer les élèves d'une classe
-$eleves = [];
-if ($classeId > 0 && !$isParent) {
-    $eleves = $db->fetchAll(
-        "SELECT e.id, e.matricule, e.nom, e.prenom, e.sexe
-         FROM inscriptions i
-         INNER JOIN eleves e ON i.eleve_id = e.id
-         WHERE i.classe_id = :cid AND i.statut = 'Actif' AND e.est_actif = 1
-         ORDER BY e.nom",
-        ['cid' => $classeId]
-    );
-}
-
-// Récupérer les absences non justifiées
-$absencesNonJustifiees = [];
-if ($eleveId > 0) {
-    $absencesNonJustifiees = $db->fetchAll(
-        "SELECT a.*, DATE_FORMAT(a.date_absence, '%d/%m/%Y') AS date_format,
-                e.matricule, e.nom, e.prenom,
-                c.nom AS classe_nom
-         FROM absences a
-         INNER JOIN eleves e ON a.eleve_id = e.id
-         INNER JOIN inscriptions i ON e.id = i.eleve_id AND i.statut = 'Actif'
-         INNER JOIN classes c ON i.classe_id = c.id
-         WHERE a.eleve_id = :eid AND a.type_absence = 'Absence'
-         ORDER BY a.date_absence DESC",
-        ['eid' => $eleveId]
-    );
-} elseif (count($enfants) === 1 && $isParent) {
-    // Auto-sélectionner l'unique enfant
-    $eleveId = $enfants[0]['id'];
-    $absencesNonJustifiees = $db->fetchAll(
-        "SELECT a.*, DATE_FORMAT(a.date_absence, '%d/%m/%Y') AS date_format
-         FROM absences a
-         WHERE a.eleve_id = :eid AND a.type_absence = 'Absence'
-         ORDER BY a.date_absence DESC",
-        ['eid' => $eleveId]
-    );
-}
-
-// Récupérer toutes les absences justifiées (historique)
-$absencesJustifiees = [];
-if ($eleveId > 0) {
-    $absencesJustifiees = $db->fetchAll(
-        "SELECT a.*, DATE_FORMAT(a.date_absence, '%d/%m/%Y') AS date_format,
-                DATE_FORMAT(a.date_justification, '%d/%m/%Y') AS date_justification_format
-         FROM absences a
-         WHERE a.eleve_id = :eid AND a.type_absence = 'Absence' AND a.est_justifiee = 1
-         ORDER BY a.date_absence DESC",
-        ['eid' => $eleveId]
-    );
-}
+$eleveId = (int) $pageData['eleve_id'];
+$classes = $pageData['classes'];
+$eleves = $pageData['eleves'];
+$absencesNonJustifiees = $pageData['absences_non_justifiees'];
+$absencesJustifiees = $pageData['absences_justifiees'];
 
 $pageTitle = 'Justifier les absences';
 $pageIcon  = 'fa-file-medical';
