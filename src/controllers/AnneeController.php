@@ -155,15 +155,9 @@ class AnneeController
             $this->db->beginTransaction();
 
             // Créer l'année (désactivée par défaut)
-            $anneeId = $this->db->insert(
-                "INSERT INTO annees_scolaires (libelle, date_debut, date_fin, est_active, est_cloturee)
-                 VALUES (:libelle, :debut, :fin, 0, 0)",
-                [
-                    'libelle' => $libelle,
-                    'debut'   => $dateDebut,
-                    'fin'     => $dateFin
-                ]
-            );
+            $anneeId = $this->anneeService->createYear([
+                'libelle' => $libelle, 'debut' => $dateDebut, 'fin' => $dateFin
+            ]);
 
             // Créer les 3 trimestres automatiquement
             if ($creerTrimestres) {
@@ -242,10 +236,9 @@ class AnneeController
 
         try {
             $this->db->beginTransaction();
-            $this->db->update(
-                "UPDATE annees_scolaires SET libelle = :libelle, date_debut = :debut, date_fin = :fin WHERE id = :id",
-                ['libelle' => $libelle, 'debut' => $dateDebut, 'fin' => $dateFin, 'id' => $id]
-            );
+            $this->anneeService->updateYear([
+                'libelle' => $libelle, 'debut' => $dateDebut, 'fin' => $dateFin, 'id' => $id
+            ]);
             if ($trimestresInput !== null) {
                 $this->enregistrerTrimestres($id, $trimestresValides);
             }
@@ -292,16 +285,13 @@ class AnneeController
             }
 
             // Désactiver toutes les années
-            $this->db->update("UPDATE annees_scolaires SET est_active = 0");
+            $this->anneeService->deactivateAllYears();
 
             // Activer celle-ci
-            $this->db->update("UPDATE annees_scolaires SET est_active = 1 WHERE id = :id", ['id' => $id]);
+            $this->anneeService->activateYear($id);
 
             // Mettre à jour parametres_ecole
-            $this->db->update(
-                "UPDATE parametres_ecole SET annee_scolaire_active_id = :id WHERE id = 1",
-                ['id' => $id]
-            );
+            $this->anneeService->setActiveYearInSchoolSettings($id);
 
             $this->db->commit();
 
@@ -357,12 +347,7 @@ class AnneeController
             }
 
             $anneeActive = $anneeActiveId > 0
-                ? $this->db->fetchOne(
-                    "SELECT id FROM annees_scolaires
-                     WHERE id = :id AND est_active = 1 AND est_cloturee = 0
-                     FOR UPDATE",
-                    ['id' => $anneeActiveId]
-                )
+                ? $this->anneeService->findValidActiveYearForUpdate($anneeActiveId)
                 : null;
             if (!$anneeActive) {
                 $this->db->rollback();
@@ -374,12 +359,7 @@ class AnneeController
                 );
             }
 
-            $this->db->update(
-                "UPDATE annees_scolaires
-                 SET est_cloturee = 1, est_active = 0
-                 WHERE id = :id AND est_active = 0 AND est_cloturee = 0",
-                ['id' => $id]
-            );
+            $this->anneeService->closeYear($id);
             $this->db->commit();
 
             logActivity('Clôture', 'annees_scolaires', $id, "Année clôturée : {$annee['libelle']}");
