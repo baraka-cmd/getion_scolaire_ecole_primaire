@@ -751,6 +751,16 @@ final class AssistantController
                 'conversation_title' => $this->repository->getConversationTitle($conversationId, $userId),
                 ]
             ));
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(false, $e->getMessage(), AssistantExecutionContract::response(
+                AssistantExecutionContract::UNSUPPORTED,
+                'Les paramètres de la demande sont invalides.'
+            ), 422);
+        } catch (DomainException $e) {
+            jsonResponse(false, 'Vous n’avez pas la permission d’utiliser cette capacité.', AssistantExecutionContract::response(
+                AssistantExecutionContract::UNSUPPORTED,
+                'Permission refusée.'
+            ), 403);
         } catch (RuntimeException $e) {
             error_log('Assistant classification: ' . $e->getMessage());
             $message = 'Le service de l’assistant est momentanément indisponible.';
