@@ -26,7 +26,7 @@ final class AssistantSecurityAuditService
         }
         $encoded = json_encode($this->sanitize($details), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
-        $ipHash = $ip !== '' ? hash_hmac('sha256', $ip, (string) APP_KEY) : null;
+        $ipHash = $ip !== '' ? hash('sha256', $ip . '|' . session_id()) : null;
 
         $this->db->insert(
             'INSERT INTO assistant_security_audit
