@@ -3,7 +3,7 @@
 defined('ACCESS') or die('Accès interdit');
 
 /** Vérification en lecture seule du contrat permission/capacité de l'assistant. */
-final class AssistantSecurityAuditService
+final class AssistantCapabilitySecurityAudit
 {
     private Database $db;
 
