@@ -22,6 +22,7 @@ Indexation initiale : TXT, Markdown et CSV textuels. PDF, DOC/DOCX, XLS/XLSX et 
 Migration additive `20261128_001_assistant_knowledge_index` crée `assistant_knowledge_chunks`, hash de contenu, identifiant source, index FULLTEXT. Les originaux restent dans le stockage privé du module Documents.
 
 ## F.4–F.5 — Recherche et passages
+Endpoints ajoutés : `POST /api/assistant/knowledge/index` (indexation réservée à Admin/Directeur avec permission de gestion des documents) et `POST /api/assistant/knowledge/search` (recherche après authentification, permission dédiée et CSRF). La réponse expose les extraits et leur identifiant source pour audit/citation.
 `AssistantDocumentKnowledgeService` valide extension, taille, encodage et chemin canonique privé avant indexation. La recherche lexicale classe les extraits et retourne titre, catégorie, source, identifiant et position pour citation. Les utilisateurs non administrateurs ne voient que les documents publics.
 
 ## F.6–F.7 — Gemini et citations
@@ -31,10 +32,11 @@ Cette tranche crée l'indexeur et le contrat de passages référencés. Le racco
 Tester visibilité publique/privée, chemin traversal, source supprimée/modifiée, texte vide/binaire, injection dans les extraits, pertinence et réponse sans source. Le modèle doit reconnaître l'absence de source au lieu d'inventer une règle.
 
 ## Sécurité et limites
-- Backend responsable de la visibilité et des permissions.
+- Backend responsable de la visibilité et des permissions ; recherche publique uniquement pour les documents marqués publics, sauf rôle Admin/Directeur.
+- Indexation atomique : une erreur ne doit pas laisser un index partiellement remplacé.
 - Aucun SQL ni accès direct à la base métier par Gemini.
 - Chemin résolu sous `DOCUMENTS_STORAGE_PATH`, taille et extensions bornées.
 - PDF/Office, embeddings/vector store et tests intégrés restent des évolutions.
 - La recherche actuelle est lexicale et limitée à 400 chunks récents : ce n'est pas encore une recherche sémantique complète.
 
-**Statut :** première fondation Phase F (migration + indexeur/recherche lexicale) enregistrée sur la branche. RAG conversationnel Gemini complet, tests et fusion ne sont pas déclarés terminés.
+**Statut :** première tranche Phase F écrite sur la branche : migration, indexeur privé, recherche lexicale et endpoints protégés. Elle fournit des extraits citables, mais n'injecte pas encore ces extraits dans une réponse Gemini conversationnelle. Tests syntaxiques, intégration locale/CI et fusion restent à effectuer. RAG conversationnel Gemini complet, tests et fusion ne sont pas déclarés terminés.
