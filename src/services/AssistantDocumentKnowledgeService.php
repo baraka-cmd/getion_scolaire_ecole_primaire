@@ -40,9 +40,14 @@ final class AssistantDocumentKnowledgeService
             throw new DomainException('Format non indexable dans cette livraison. Les PDF et fichiers Office nécessitent un extracteur dédié.');
         }
 
-        $relative = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string) $document['chemin_fichier']);
+        // DocumentController stocke les chemins relatifs sous la forme documents/<nom opaque>.
+        // Ne jamais concaténer un chemin DB arbitraire au chemin racine.
+        $storedPath = str_replace('\\\\', '/', (string) $document['chemin_fichier']);
+        if (!str_starts_with($storedPath, 'documents/') || basename($storedPath) !== substr($storedPath, strlen('documents/'))) {
+            throw new RuntimeException('Chemin documentaire non conforme au stockage privé attendu.');
+        }
         $base = realpath(DOCUMENTS_STORAGE_PATH);
-        $path = realpath(ROOT_PATH . $relative);
+        $path = $base === false ? false : realpath($base . DIRECTORY_SEPARATOR . basename($storedPath));
         if ($base === false || $path === false || !str_starts_with($path, $base . DIRECTORY_SEPARATOR) || !is_file($path)) {
             throw new RuntimeException('Le chemin du document est absent ou hors du stockage documentaire privé.');
         }
