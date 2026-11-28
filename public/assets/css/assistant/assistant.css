@@ -244,3 +244,32 @@
     .assistant-upload-panel { padding: 10px 12px 0; }
     .assistant-upload-actions { flex-wrap: wrap; }
 }
+
+
+/* Phase E — réponse structurée, suivi et visualisations accessibles */
+.assistant-response-text p { margin: 0 0 .65rem; line-height: 1.65; }
+.assistant-response-text p:last-child { margin-bottom: 0; }
+.assistant-response-text strong { color: var(--color-dark); font-weight: 800; }
+.assistant-followups { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+.assistant-followup { max-width: 100%; padding: 8px 11px; border: 1px solid #dbe3f0; border-radius: 999px; color: var(--assistant-primary); background: #fff; font: inherit; font-size: .72rem; text-align: left; cursor: pointer; }
+.assistant-followup:hover, .assistant-followup:focus-visible { border-color: var(--assistant-primary); background: #f5f7ff; outline: 2px solid transparent; }
+.assistant-data-table-wrap { padding-bottom: 8px; }
+.assistant-data-table-scroll { max-width: 100%; overflow-x: auto; }
+.assistant-data-table { width: 100%; border-collapse: collapse; font-size: .73rem; }
+.assistant-data-table th, .assistant-data-table td { padding: 9px 10px; border-bottom: 1px solid #e8edf5; text-align: left; vertical-align: top; }
+.assistant-data-table th { color: #475569; background: #f8fafc; font-weight: 800; white-space: nowrap; }
+.assistant-data-table td { color: var(--color-gray-600); }
+.assistant-table-limit, .assistant-chart-note { margin: 8px 10px 0; color: var(--color-gray-500); font-size: .68rem; }
+.assistant-chart { display: grid; gap: 10px; padding: 12px; }
+.assistant-chart-row { display: grid; grid-template-columns: minmax(75px, 1fr) minmax(80px, 2fr) auto; align-items: center; gap: 9px; font-size: .72rem; }
+.assistant-chart-label { overflow-wrap: anywhere; color: var(--color-gray-600); }
+.assistant-chart-track { height: 10px; overflow: hidden; border-radius: 999px; background: #e8edf5; }
+.assistant-chart-bar { display: block; height: 100%; border-radius: inherit; background: var(--assistant-primary); }
+.assistant-chart-row strong { color: var(--color-dark); font-variant-numeric: tabular-nums; }
+.assistant-chart-card .assistant-chart-note { padding-bottom: 6px; }
+.assistant-message-loading .assistant-message-content [role="status"] { display: inline-flex; align-items: center; gap: 8px; }
+.assistant-result-table { max-width: 100%; }
+@media (max-width: 520px) {
+    .assistant-chart-row { grid-template-columns: 1fr auto; }
+    .assistant-chart-track { grid-column: 1 / -1; grid-row: 2; }
+}

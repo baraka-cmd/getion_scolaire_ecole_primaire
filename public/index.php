@@ -79,6 +79,22 @@ $routes = [
         readfile(PUBLIC_PATH . 'service-worker.js');
         exit;
     },
+    '/api/assistant/actions/grade/prepare' => function() {
+        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantSecureActionController.php';
+        (new AssistantSecureActionController())->prepareGrade();
+    },
+    '/api/assistant/actions/grade/confirm' => function() {
+        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantSecureActionController.php';
+        (new AssistantSecureActionController())->confirmGrade();
+    },
+    '/api/assistant/knowledge/index' => function() {
+        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantKnowledgeController.php';
+        (new AssistantKnowledgeController())->index();
+    },
+    '/api/assistant/knowledge/search' => function() {
+        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantKnowledgeController.php';
+        (new AssistantKnowledgeController())->search();
+    },
     '/api/assistant/classify' => function() {
         require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AssistantProviderInterface.php';
         require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AssistantIntentCatalog.php';

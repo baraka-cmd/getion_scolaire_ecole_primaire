@@ -1,0 +1,31 @@
+name: Phase H - Assistant regression suite
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/services/Assistant**.php'
+      - 'src/controllers/Assistant**.php'
+      - 'public/assets/**/assistant*'
+      - 'tests/assistant_phase_h.php'
+      - 'tests/fixtures/assistant_school_questions.json'
+      - 'docs/PHASE_H_TESTS_EVALUATION.md'
+      - '.github/workflows/assistant-phase-h.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  assistant-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: PHP syntax check (assistant components and test)
+        run: |
+          set -e
+          find src/services src/controllers -type f -name 'Assistant*.php' -print0 | xargs -0 -r -n1 php -l
+          php -l tests/assistant_phase_h.php
+      - name: Run corpus and execution-contract regression tests
+        run: php tests/assistant_phase_h.php

@@ -52,11 +52,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return message;
     };
 
-    const formatAssistantText = (value) => escapeHtml(String(value || ''))
-        .replaceAll('**', '')
-        .replaceAll('__', '')
-        .replace(/^#{1,6}\s*/gm, '')
-        .replace(/^\s*[-*]\s+/gm, '• ');
+    // Markdown volontairement limité : tout le texte est échappé avant
+    // d'autoriser uniquement quelques balises de présentation contrôlées.
+    const formatAssistantText = (value) => {
+        const safe = escapeHtml(String(value || ''))
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
+            .replace(/^\s*[-*]\s+(.+)$/gm, '• $1');
+        return safe.split(/\n{2,}/).map(paragraph => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`).join('');
+    };
 
     const renderResultActions = (result, display = null) => result
         ? `<div class="assistant-response-actions">
@@ -109,8 +113,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 resultDetails += `<div class="assistant-response-card assistant-result-table"><div class="assistant-response-card-title"><i class="fa-solid fa-table-list"></i> Détails</div>${items.map((item) => `<div class="assistant-data-row"><span>${escapeHtml(`${item.prenom || ''} ${item.nom || ''}`.trim())}</span><strong>${escapeHtml(String(item.moyenne_generale ?? item.total ?? item.decision ?? ''))}</strong></div>`).join('')}</div>`;
             }
         }
-        return `<div class="assistant-response-text">${formatAssistantText(data.message || 'Réponse reçue.')}</div>${permission}${resultDetails}${renderResultActions(result, display)}${classification.intent ? `<div class="assistant-response-card"><div class="assistant-response-card-title"><i class="fa-solid fa-chart-simple"></i> Analyse de la demande</div><div class="assistant-data-row"><span>Domaine</span><strong>${escapeHtml(classification.intent)}</strong></div>${parameterRows}</div>` : ''}`;
+        if (display?.type === 'table' && Array.isArray(display.columns) && Array.isArray(display.rows)) {
+            const columns = display.columns.filter(column => column && typeof column.key === 'string').slice(0, 12);
+            const rows = display.rows.slice(0, 100);
+            if (columns.length && rows.length) {
+                resultDetails = `<section class="assistant-response-card assistant-data-table-wrap"><div class="assistant-response-card-title">${escapeHtml(display.title || 'Données détaillées')}</div><div class="assistant-data-table-scroll"><table class="assistant-data-table"><thead><tr>${columns.map(column => `<th scope="col">${escapeHtml(column.label || column.key)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(column => `<td>${escapeHtml(String(row[column.key] ?? '—'))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${rows.length >= 100 ? '<p class="assistant-table-limit">Affichage limité aux 100 premières lignes.</p>' : ''}</section>`;
+            }
+        }
+        const chart = result?.chart;
+        if (chart && Array.isArray(chart.labels) && Array.isArray(chart.values) && chart.labels.length === chart.values.length) {
+            const points = chart.labels.slice(0, 12).map((label, index) => ({
+                label: String(label),
+                value: Number(chart.values[index])
+            })).filter(point => Number.isFinite(point.value) && point.value >= 0);
+            const maxValue = Math.max(1, ...points.map(point => point.value));
+            if (points.length) {
+                resultDetails += `<section class="assistant-response-card assistant-chart-card"><div class="assistant-response-card-title">${escapeHtml(chart.title || 'Graphique')}</div><div class="assistant-chart" role="img" aria-label="${escapeHtml(chart.title || 'Graphique de données')}">${points.map(point => `<div class="assistant-chart-row"><span class="assistant-chart-label">${escapeHtml(point.label)}</span><div class="assistant-chart-track"><span class="assistant-chart-bar" style="width:${Math.max(0, Math.min(100, point.value / maxValue * 100))}%"></span></div><strong>${escapeHtml(point.value.toLocaleString('fr-FR'))}${escapeHtml(chart.unit || '')}</strong></div>`).join('')}</div><p class="assistant-chart-note">Visualisation des valeurs fournies par le service métier.</p></section>`;
+            }
+        }
+        const followups = getFollowupSuggestions(data);
+        const followupHtml = followups.length ? `<div class="assistant-followups" aria-label="Questions de suivi">${followups.map(item => `<button type="button" class="assistant-followup" data-prompt="${escapeHtml(item.prompt)}">${escapeHtml(item.label)}</button>`).join('')}</div>` : '';
+        return `<div class="assistant-response-text">${formatAssistantText(data.message || 'Réponse reçue.')}</div>${permission}${resultDetails}${followupHtml}${renderResultActions(result, display)}${classification.intent ? `<div class="assistant-response-card"><div class="assistant-response-card-title"><i class="fa-solid fa-chart-simple"></i> Filtres de la demande</div><div class="assistant-data-row"><span>Domaine</span><strong>${escapeHtml(classification.intent)}</strong></div>${parameterRows}</div>` : ''}`;
     };
+
+    const getFollowupSuggestions = (data) => Array.isArray(data.suggestions)
+        ? data.suggestions.filter(item => item && typeof item.label === 'string' && typeof item.prompt === 'string').slice(0, 3)
+        : [];
 
     const resultText = (result) => {
         if (!result) return '';
@@ -156,6 +184,14 @@ document.addEventListener('DOMContentLoaded', () => {
         URL.revokeObjectURL(link.href);
     };
 
+    messages?.addEventListener('click', (event) => {
+        const followup = event.target.closest('.assistant-followup');
+        if (!followup || !input || !composer) return;
+        input.value = followup.dataset.prompt || '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        composer.requestSubmit();
+    });
+
     messages?.addEventListener('click', async (event) => {
         const button = event.target.closest('.assistant-result-action');
         if (!button) return;
@@ -185,6 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     permission: metadata.permission || '',
                     result: metadata.result || null,
                     display: metadata.display || null,
+                    suggestions: metadata.suggestions || [],
                     classification: {
                         intent: message.intention || '',
                         parameters: metadata.parameters || {},
@@ -339,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 messages.style.display = 'block';
                 messages.replaceChildren();
             }
-            appendMessage(`Impossible de charger cette conversation : ${error.message}`, 'assistant');
+            appendMessage(escapeHtml(`Impossible de charger cette conversation : ${error.message}`), 'assistant');
         }).finally(() => {
             if (requestId === historyRequestId) historyController = null;
         });
@@ -394,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 bindConversation(button);
             });
             if (!data.conversations?.has_more && historyMore) historyMore.hidden = true;
-        }).catch((error) => appendMessage(error.message, 'assistant')).finally(() => {
+        }).catch((error) => appendMessage(escapeHtml(error.message || 'Une erreur est survenue.'), 'assistant')).finally(() => {
             historyMore.disabled = false;
         });
     });
@@ -504,7 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
             appendMessage(`Import terminé : ${Number(data.imported || 0)} élève(s) ajouté(s).`, 'assistant');
             resetUploadPanel();
         }).catch((error) => {
-            appendMessage(error.message, 'assistant');
+            appendMessage(escapeHtml(error.message || 'Une erreur est survenue.'), 'assistant');
             uploadConfirm.disabled = false;
         });
     });
@@ -528,7 +565,7 @@ document.addEventListener('DOMContentLoaded', () => {
         input.value = '';
         input.style.height = 'auto';
         sendButton.disabled = true;
-        const loadingMessage = appendMessage('<i class="fa-solid fa-circle-notch"></i> Analyse de votre demande...', 'assistant', true);
+        const loadingMessage = appendMessage('<span role="status" aria-live="polite"><i class="fa-solid fa-circle-notch"></i> Je comprends votre demande et prépare la réponse…</span>', 'assistant', true);
         const formData = new FormData();
         formData.append('message', message);
         formData.append('conversation_id', String(conversationId));
@@ -548,7 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
             appendMessage(reply, 'assistant');
         }).catch((error) => {
             if (loadingMessage) loadingMessage.remove();
-            appendMessage(error.message, 'assistant');
+            appendMessage(escapeHtml(error.message || 'Une erreur est survenue.'), 'assistant');
         }).finally(() => {
             sendButton.disabled = false;
             input?.focus();

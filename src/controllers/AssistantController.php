@@ -15,14 +15,19 @@ final class AssistantController
     private AssistantRepository $repository;
     private AssistantImportService $importService;
     private AssistantBusinessExecutor $businessExecutor;
+    private AssistantDataAnalysisService $dataAnalysisService;
 
     public function __construct()
     {
         $this->security = Security::getInstance();
         $this->provider = AssistantProviderFactory::create();
+        require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AssistantOrchestrationContract.php';
+        require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AssistantOrchestrator.php';
         $this->repository = new AssistantRepository();
         $this->importService = new AssistantImportService();
         $this->businessExecutor = new AssistantBusinessExecutor($this->repository);
+        require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AssistantDataAnalysisService.php';
+        $this->dataAnalysisService = new AssistantDataAnalysisService($this->security, $this->businessExecutor);
     }
 
     public function upload(): void
@@ -112,11 +117,27 @@ final class AssistantController
             jsonResponse(false, 'Conversation introuvable ou expirée.', [], 404);
         }
 
+        $messages = $conversationId > 0
+            ? $this->repository->listMessages($userId, $conversationId)
+            : [];
+        foreach ($messages as &$storedMessage) {
+            if (($storedMessage['role'] ?? '') !== 'assistant' || !is_string($storedMessage['metadata_json'] ?? null)) {
+                continue;
+            }
+            $metadata = json_decode($storedMessage['metadata_json'], true);
+            if (is_array($metadata) && is_array($metadata['result'] ?? null)) {
+                if (!isset($metadata['display'])) {
+                    $metadata['display'] = AssistantDisplayContract::fromResult($metadata['result']);
+                }
+                $metadata['suggestions'] = $this->assistantFollowupSuggestions($metadata['result']);
+                $storedMessage['metadata_json'] = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+        }
+        unset($storedMessage);
+
         jsonResponse(true, 'Historique chargé.', [
             'conversations' => $this->repository->listConversations($userId, $page),
-            'messages' => $conversationId > 0
-                ? $this->repository->listMessages($userId, $conversationId)
-                : [],
+            'messages' => $messages,
         ]);
     }
 
@@ -185,6 +206,8 @@ final class AssistantController
             $allowedIntents = AssistantIntentCatalog::allowedFor($this->security);
             $classification = $this->provider->classify($message, $allowedIntents, $conversationContext);
             $classification = AssistantExecutionContract::normalizeClassification($classification, $allowedIntents);
+            $orchestrator = new AssistantOrchestrator();
+            $classification['orchestration'] = $orchestrator->buildPlan($message, $classification, $allowedIntents);
             $intent = $classification['intent'];
             $normalizedMessage = strtr(mb_strtolower($message, 'UTF-8'), [
                 'à' => 'a', 'â' => 'a', 'ä' => 'a',
@@ -447,7 +470,8 @@ final class AssistantController
                 if (!$this->security->can($domainPermission)) {
                     jsonResponse(false, 'Vous n’avez pas la permission de consulter ces informations.', [], 403);
                 }
-                $businessExecution = $this->businessExecutor->execute(
+                $businessExecution = $this->dataAnalysisService->execute(
+                    $intent,
                     (string) ($classification['capability'] ?? ''),
                     $classification['parameters']
                 );
@@ -743,6 +767,16 @@ final class AssistantController
                 'conversation_title' => $this->repository->getConversationTitle($conversationId, $userId),
                 ]
             ));
+        } catch (InvalidArgumentException $e) {
+            jsonResponse(false, $e->getMessage(), AssistantExecutionContract::response(
+                AssistantExecutionContract::UNSUPPORTED,
+                'Les paramètres de la demande sont invalides.'
+            ), 422);
+        } catch (DomainException $e) {
+            jsonResponse(false, 'Vous n’avez pas la permission d’utiliser cette capacité.', AssistantExecutionContract::response(
+                AssistantExecutionContract::UNSUPPORTED,
+                'Permission refusée.'
+            ), 403);
         } catch (RuntimeException $e) {
             error_log('Assistant classification: ' . $e->getMessage());
             $message = 'Le service de l’assistant est momentanément indisponible.';
@@ -786,6 +820,12 @@ final class AssistantController
             $capability = array_key_first(AssistantCapabilityRegistry::forIntent($intent)) ?? '';
         }
         $parameters = is_array($classification['parameters'] ?? null) ? $classification['parameters'] : [];
+        if ($result !== [] && !isset($legacyPayload['display'])) {
+            $legacyPayload['display'] = AssistantDisplayContract::fromResult($result);
+        }
+        if ($result !== [] && !isset($legacyPayload['suggestions'])) {
+            $legacyPayload['suggestions'] = $this->assistantFollowupSuggestions($result);
+        }
 
         return array_merge(
             AssistantExecutionContract::response(
@@ -801,5 +841,45 @@ final class AssistantController
                 'quota' => $this->repository->rateLimitStatus((int) $_SESSION['utilisateur_id']),
             ]
         );
+    }
+
+    /**
+     * Suggestions limitées aux capacités métier connues et autorisées.
+     * Elles restent des questions de suivi : le backend revalide chaque nouvelle demande.
+     *
+     * @param array<string,mixed> $result
+     * @return array<int,array{label:string,prompt:string}>
+     */
+    private function assistantFollowupSuggestions(array $result): array
+    {
+        $type = (string) ($result['type'] ?? '');
+        $options = match ($type) {
+            'payment_summary' => [
+                ['permission' => 'paiements.consulter', 'label' => 'Voir les élèves avec un solde', 'prompt' => 'Liste les élèves qui ont encore un solde impayé pour ces filtres.'],
+            ],
+            'absence_summary' => [
+                ['permission' => 'absences.consulter', 'label' => 'Détailler les absences', 'prompt' => 'Affiche la liste des absences pour ces mêmes filtres.'],
+            ],
+            'result_summary' => [
+                ['permission' => 'resultats.consulter', 'label' => 'Voir les meilleurs élèves', 'prompt' => 'Affiche les meilleurs élèves pour cette même période et cette même classe.'],
+                ['permission' => 'resultats.consulter', 'label' => 'Voir les élèves en difficulté', 'prompt' => 'Liste les élèves en échec pour cette même période et cette même classe.'],
+            ],
+            'student_count' => [
+                ['permission' => 'eleves.consulter', 'label' => 'Répartition par genre', 'prompt' => 'Donne la répartition des élèves par genre pour les mêmes filtres.'],
+                ['permission' => 'eleves.consulter', 'label' => 'Consulter la liste', 'prompt' => 'Affiche la liste des élèves correspondant aux mêmes filtres.'],
+            ],
+            'class_count' => [
+                ['permission' => 'classes.consulter', 'label' => 'Voir les classes', 'prompt' => 'Liste les classes de la même année scolaire.'],
+            ],
+            default => [],
+        };
+
+        $allowed = [];
+        foreach ($options as $option) {
+            if ($this->security->can($option['permission'])) {
+                $allowed[] = ['label' => $option['label'], 'prompt' => $option['prompt']];
+            }
+        }
+        return array_slice($allowed, 0, 3);
     }
 }
