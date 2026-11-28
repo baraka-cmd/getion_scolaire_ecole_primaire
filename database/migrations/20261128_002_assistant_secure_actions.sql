@@ -50,7 +50,7 @@ SELECT rp.role_id, p_action.id
 FROM role_permission rp
 INNER JOIN permissions p_evaluation ON p_evaluation.id = rp.permission_id
 INNER JOIN permissions p_action ON p_action.code = 'assistant.actions.confirmer'
-WHERE p_evaluation.code = 'evaluations.modifier';
+WHERE p_evaluation.code = 'notes.saisir';
 
 INSERT IGNORE INTO app_migrations (version)
 VALUES ('20261128_002_assistant_secure_actions');
