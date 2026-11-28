@@ -79,14 +79,6 @@ $routes = [
         readfile(PUBLIC_PATH . 'service-worker.js');
         exit;
     },
-    '/api/assistant/actions/prepare' => function() {
-        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantActionController.php';
-        (new AssistantActionController())->prepare();
-    },
-    '/api/assistant/actions/confirm' => function() {
-        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantActionController.php';
-        (new AssistantActionController())->confirm();
-    },
     '/api/assistant/actions/grade/prepare' => function() {
         require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantSecureActionController.php';
         (new AssistantSecureActionController())->prepareGrade();
