@@ -52,11 +52,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return message;
     };
 
-    const formatAssistantText = (value) => escapeHtml(String(value || ''))
-        .replaceAll('**', '')
-        .replaceAll('__', '')
-        .replace(/^#{1,6}\s*/gm, '')
-        .replace(/^\s*[-*]\s+/gm, '• ');
+    // Markdown volontairement limité : tout le texte est échappé avant
+    // d'autoriser uniquement quelques balises de présentation contrôlées.
+    const formatAssistantText = (value) => {
+        const safe = escapeHtml(String(value || ''))
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
+            .replace(/^\s*[-*]\s+(.+)$/gm, '• $1');
+        return safe.split(/\n{2,}/).map(paragraph => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`).join('');
+    };
 
     const renderResultActions = (result, display = null) => result
         ? `<div class="assistant-response-actions">
@@ -109,7 +113,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 resultDetails += `<div class="assistant-response-card assistant-result-table"><div class="assistant-response-card-title"><i class="fa-solid fa-table-list"></i> Détails</div>${items.map((item) => `<div class="assistant-data-row"><span>${escapeHtml(`${item.prenom || ''} ${item.nom || ''}`.trim())}</span><strong>${escapeHtml(String(item.moyenne_generale ?? item.total ?? item.decision ?? ''))}</strong></div>`).join('')}</div>`;
             }
         }
-        return `<div class="assistant-response-text">${formatAssistantText(data.message || 'Réponse reçue.')}</div>${permission}${resultDetails}${renderResultActions(result, display)}${classification.intent ? `<div class="assistant-response-card"><div class="assistant-response-card-title"><i class="fa-solid fa-chart-simple"></i> Analyse de la demande</div><div class="assistant-data-row"><span>Domaine</span><strong>${escapeHtml(classification.intent)}</strong></div>${parameterRows}</div>` : ''}`;
+        if (display?.type === 'table' && Array.isArray(display.columns) && Array.isArray(display.rows)) {
+            const columns = display.columns.filter(column => column && typeof column.key === 'string').slice(0, 12);
+            const rows = display.rows.slice(0, 100);
+            if (columns.length) {
+                resultDetails += `<section class="assistant-response-card assistant-data-table-wrap"><div class="assistant-response-card-title">${escapeHtml(display.title || 'Données détaillées')}</div><div class="assistant-data-table-scroll"><table class="assistant-data-table"><thead><tr>${columns.map(column => `<th scope="col">${escapeHtml(column.label || column.key)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(column => `<td>${escapeHtml(String(row[column.key] ?? '—'))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${rows.length >= 100 ? '<p class="assistant-table-limit">Affichage limité aux 100 premières lignes.</p>' : ''}</section>`;
+            }
+        }
+        const followups = this.getFollowupSuggestions(result);
+        const followupHtml = followups.length ? `<div class="assistant-followups" aria-label="Questions de suivi">${followups.map(prompt => `<button type="button" class="assistant-followup" data-prompt="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>`).join('')}</div>` : '';
+        return `<div class="assistant-response-text">${formatAssistantText(data.message || 'Réponse reçue.')}</div>${permission}${resultDetails}${followupHtml}${renderResultActions(result, display)}${classification.intent ? `<div class="assistant-response-card"><div class="assistant-response-card-title"><i class="fa-solid fa-chart-simple"></i> Filtres de la demande</div><div class="assistant-data-row"><span>Domaine</span><strong>${escapeHtml(classification.intent)}</strong></div>${parameterRows}</div>` : ''}`;
+    };
+
+    const getFollowupSuggestions = (result) => {
+        if (!result || typeof result !== 'object') return [];
+        const suggestions = {
+            payment_summary: ['Compare avec la période précédente', 'Quels élèves ont encore un solde ?', 'Détaille les paiements par classe'],
+            absence_summary: ['Compare avec le mois précédent', 'Détaille les absences non justifiées', 'Quelle classe est la plus concernée ?'],
+            result_summary: ['Compare avec le trimestre précédent', 'Détaille les résultats par classe', 'Quels élèves sont en difficulté ?'],
+            result_ranking: ['Explique le classement', 'Compare avec la période précédente'],
+            student_count: ['Répartis les élèves par classe', 'Compare avec l’année précédente'],
+            class_count: ['Affiche les effectifs par classe']
+        };
+        return (suggestions[result.type] || []).slice(0, 3);
     };
 
     const resultText = (result) => {
@@ -155,6 +181,14 @@ document.addEventListener('DOMContentLoaded', () => {
         link.click();
         URL.revokeObjectURL(link.href);
     };
+
+    messages?.addEventListener('click', (event) => {
+        const followup = event.target.closest('.assistant-followup');
+        if (!followup || !input || !composer) return;
+        input.value = followup.dataset.prompt || '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        composer.requestSubmit();
+    });
 
     messages?.addEventListener('click', async (event) => {
         const button = event.target.closest('.assistant-result-action');
@@ -339,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 messages.style.display = 'block';
                 messages.replaceChildren();
             }
-            appendMessage(`Impossible de charger cette conversation : ${error.message}`, 'assistant');
+            appendMessage(escapeHtml(`Impossible de charger cette conversation : ${error.message}`), 'assistant');
         }).finally(() => {
             if (requestId === historyRequestId) historyController = null;
         });
@@ -504,7 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
             appendMessage(`Import terminé : ${Number(data.imported || 0)} élève(s) ajouté(s).`, 'assistant');
             resetUploadPanel();
         }).catch((error) => {
-            appendMessage(error.message, 'assistant');
+            appendMessage(escapeHtml(error.message || 'Une erreur est survenue.'), 'assistant');
             uploadConfirm.disabled = false;
         });
     });
@@ -528,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
         input.value = '';
         input.style.height = 'auto';
         sendButton.disabled = true;
-        const loadingMessage = appendMessage('<i class="fa-solid fa-circle-notch"></i> Analyse de votre demande...', 'assistant', true);
+        const loadingMessage = appendMessage('<span role="status" aria-live="polite"><i class="fa-solid fa-circle-notch"></i> Je comprends votre demande et prépare la réponse…</span>', 'assistant', true);
         const formData = new FormData();
         formData.append('message', message);
         formData.append('conversation_id', String(conversationId));
