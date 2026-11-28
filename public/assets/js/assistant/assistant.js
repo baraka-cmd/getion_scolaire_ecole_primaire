@@ -131,23 +131,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 resultDetails += `<section class="assistant-response-card assistant-chart-card"><div class="assistant-response-card-title">${escapeHtml(chart.title || 'Graphique')}</div><div class="assistant-chart" role="img" aria-label="${escapeHtml(chart.title || 'Graphique de données')}">${points.map(point => `<div class="assistant-chart-row"><span class="assistant-chart-label">${escapeHtml(point.label)}</span><div class="assistant-chart-track"><span class="assistant-chart-bar" style="width:${Math.max(0, Math.min(100, point.value / maxValue * 100))}%"></span></div><strong>${escapeHtml(point.value.toLocaleString('fr-FR'))}${escapeHtml(chart.unit || '')}</strong></div>`).join('')}</div><p class="assistant-chart-note">Visualisation des valeurs fournies par le service métier.</p></section>`;
             }
         }
-        const followups = getFollowupSuggestions(result);
-        const followupHtml = followups.length ? `<div class="assistant-followups" aria-label="Questions de suivi">${followups.map(prompt => `<button type="button" class="assistant-followup" data-prompt="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>`).join('')}</div>` : '';
+        const followups = getFollowupSuggestions(data);
+        const followupHtml = followups.length ? `<div class="assistant-followups" aria-label="Questions de suivi">${followups.map(item => `<button type="button" class="assistant-followup" data-prompt="${escapeHtml(item.prompt)}">${escapeHtml(item.label)}</button>`).join('')}</div>` : '';
         return `<div class="assistant-response-text">${formatAssistantText(data.message || 'Réponse reçue.')}</div>${permission}${resultDetails}${followupHtml}${renderResultActions(result, display)}${classification.intent ? `<div class="assistant-response-card"><div class="assistant-response-card-title"><i class="fa-solid fa-chart-simple"></i> Filtres de la demande</div><div class="assistant-data-row"><span>Domaine</span><strong>${escapeHtml(classification.intent)}</strong></div>${parameterRows}</div>` : ''}`;
     };
 
-    const getFollowupSuggestions = (result) => {
-        if (!result || typeof result !== 'object') return [];
-        const suggestions = {
-            payment_summary: ['Compare avec la période précédente', 'Quels élèves ont encore un solde ?', 'Détaille les paiements par classe'],
-            absence_summary: ['Compare avec le mois précédent', 'Détaille les absences non justifiées', 'Quelle classe est la plus concernée ?'],
-            result_summary: ['Compare avec le trimestre précédent', 'Détaille les résultats par classe', 'Quels élèves sont en difficulté ?'],
-            result_ranking: ['Explique le classement', 'Compare avec la période précédente'],
-            student_count: ['Répartis les élèves par classe', 'Compare avec l’année précédente'],
-            class_count: ['Affiche les effectifs par classe']
-        };
-        return (suggestions[result.type] || []).slice(0, 3);
-    };
+    const getFollowupSuggestions = (data) => Array.isArray(data.suggestions)
+        ? data.suggestions.filter(item => item && typeof item.label === 'string' && typeof item.prompt === 'string').slice(0, 3)
+        : [];
 
     const resultText = (result) => {
         if (!result) return '';
