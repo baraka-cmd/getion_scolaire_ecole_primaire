@@ -30,3 +30,31 @@ Les quatre vues suivantes ont encore des appels directs `$db->fetchOne/fetchAll/
 
 ## État
 **Phase 12 non clôturée.** Les tests smoke/CI du lot précédent ne prouvent pas la conformité des quatre vues restantes. Aucun test XAMPP/navigateur n'est déclaré exécuté à distance.
+
+
+## Journal de migration MVC — lot en cours (27 novembre 2026)
+
+Sur la branche `refactor/mvc-phase12-13-completion`, les données de présentation des dashboards **Enseignant** et **Parent** ont été déplacées des vues vers leurs chaînes dédiées Controller → Service → Repository :
+
+- `TeacherDashboardController/Service/Repository` : classe assignée, effectifs, présences, notes, répartition, absences, examens, élèves en difficulté et anniversaires.
+- `ParentDashboardController/Service/Repository` : parent authentifié, enfants liés, moyenne, absences/retards, solde, événements, messages et notifications.
+- Les requêtes existantes ont été reprises avec leurs paramètres ; le périmètre parent-enfant reste filtré par `eleve_parent.parent_id` côté repository.
+- Les deux vues consomment maintenant les données préparées et ne contiennent plus de requêtes directes dans leur bloc de préparation.
+- Des smoke tests statiques et le workflow de phase 12 ont été étendus pour les deux parcours.
+
+**Lot non clôturé :** Comptable et Secrétaire restent à migrer. Les tests PHP/CI n'ont pas encore été observés comme réussis sur le commit courant; la comparaison avec une base et une session XAMPP demeure obligatoire. Cette progression ne clôt pas la Phase 12.
+
+
+## Mise en œuvre — extraction des requêtes des vues (étape 2 du plan MVC, 27 novembre 2026)
+
+Le lot a maintenant migré les quatre dashboards métier vers une préparation Controller → Service → Repository :
+
+- Enseignant et Parent : déjà déplacés dans le lot précédent de la branche.
+- Secrétaire : SQL des indicateurs, graphiques, inscriptions, événements, absences et messages déplacé dans `SecretaryDashboardRepository`; préparation regroupée dans `SecretaryDashboardService`.
+- Comptable : SQL des soldes, reçus actifs du mois, créances échues, suivis, séries mensuelles, soldes par classe, état des créances et derniers reçus déplacé dans `AccountantDashboardRepository`; transformations des séries et catégories déplacées dans `AccountantDashboardService`.
+
+Les deux vues Secrétaire et Comptable gardent leurs markup et scripts graphiques et consomment les données préparées. Les requêtes financières gardent les filtres d'annulation, l'affectation des versements, les devises USD/CDF, le taux historique des reçus et les formules de reste dues.
+
+Contrôles structurels ajoutés : `tests/phase12_secretary_accountant_mvc_smoke.php`, workflow Phase 12 étendu aux quatre rôles. Au moment de cette note, aucune exécution CI du commit final ni aucun test de base réelle/XAMPP n'est confirmé.
+
+**État :** le sous-périmètre « quatre dashboards Phase 12 » a été extrait du SQL des vues ; l'étape 2 globale reste ouverte, car les autres vues de modules contenant du SQL doivent encore être inventoriées et migrées. Pas de certification 100 % ni de merge à ce stade.

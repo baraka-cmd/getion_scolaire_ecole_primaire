@@ -21,61 +21,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAjax()) {
     $paiementController->handleAjax();
 }
 
-$anneeActiveId = (int) $db->fetchColumn("SELECT annee_scolaire_active_id FROM parametres_ecole LIMIT 1");
-$annees = $db->fetchAll("SELECT id, libelle FROM annees_scolaires ORDER BY date_debut DESC");
-$anneeId = (int) ($_GET['annee_id'] ?? $anneeActiveId);
-if (!(int) $db->fetchColumn("SELECT COUNT(*) FROM annees_scolaires WHERE id = :id", ['id' => $anneeId])) {
-    $anneeId = $anneeActiveId;
-}
-$classes = $paiementController->getClassesActives($anneeId);
-$soldesOuverts = $db->fetchOne(
-    "SELECT
-        COALESCE(SUM(CASE WHEN cr.devise = 'USD' THEN GREATEST(cr.montant_du - COALESCE(p.montant_paye, 0), 0) ELSE 0 END), 0) AS solde_usd,
-        COALESCE(SUM(CASE WHEN cr.devise = 'CDF' THEN GREATEST(cr.montant_du - COALESCE(p.montant_paye, 0), 0) ELSE 0 END), 0) AS solde_cdf
-     FROM finance_creances cr
-     LEFT JOIN (
-         SELECT a.creance_id, SUM(a.montant_affecte) AS montant_paye
-         FROM finance_affectations a
-         INNER JOIN finance_versements v ON v.id = a.versement_id
-         LEFT JOIN finance_annulations an ON an.versement_id = v.id
-         WHERE an.id IS NULL GROUP BY a.creance_id
-     ) p ON p.creance_id = cr.id
-     WHERE cr.annee_scolaire_id = :annee",
-    ['annee' => $anneeId]
-);
-$nbElevesImpayes = (int) $db->fetchColumn(
-    "SELECT COUNT(DISTINCT cr.eleve_id)
-     FROM finance_creances cr
-     LEFT JOIN (
-         SELECT a.creance_id, SUM(a.montant_affecte) AS montant_paye
-         FROM finance_affectations a
-         INNER JOIN finance_versements v ON v.id = a.versement_id
-         LEFT JOIN finance_annulations an ON an.versement_id = v.id
-         WHERE an.id IS NULL GROUP BY a.creance_id
-     ) p ON p.creance_id = cr.id
-     WHERE cr.annee_scolaire_id = :annee
-       AND GREATEST(cr.montant_du - COALESCE(p.montant_paye, 0), 0) > 0",
-    ['annee' => $anneeId]
-);
-$nbElevesTotal = (int) $db->fetchColumn(
-    "SELECT COUNT(*) FROM inscriptions
-     WHERE annee_scolaire_id = :annee AND statut IN ('Actif', 'Redoublant')",
-    ['annee' => $anneeId]
-);
-$nbCreancesEnRetard = (int) $db->fetchColumn(
-    "SELECT COUNT(*)
-     FROM finance_creances cr
-     LEFT JOIN (
-         SELECT a.creance_id, SUM(a.montant_affecte) AS montant_paye
-         FROM finance_affectations a
-         INNER JOIN finance_versements v ON v.id = a.versement_id
-         LEFT JOIN finance_annulations an ON an.versement_id = v.id
-         WHERE an.id IS NULL GROUP BY a.creance_id
-     ) p ON p.creance_id = cr.id
-     WHERE cr.annee_scolaire_id = :annee AND cr.date_echeance < CURDATE()
-       AND GREATEST(cr.montant_du - COALESCE(p.montant_paye, 0), 0) > 0",
-    ['annee' => $anneeId]
-);
+require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'PaymentReadController.php';
+$paymentReadController = new PaymentReadController();
+extract($paymentReadController->getViewData('impayes', $_GET), EXTR_OVERWRITE);
 
 $pageTitle = 'Suivi des impayés';
 $pageIcon  = 'fa-exclamation-circle';
