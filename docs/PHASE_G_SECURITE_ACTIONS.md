@@ -22,13 +22,12 @@ Le garde-fou de proposition :
 
 ## G.4–G.6 — Propositions, confirmation, validation
 Nouveau flux borné :
-1. `POST /api/assistant/actions/prepare` prépare un brouillon de note normalisé.
-2. La proposition expire après 5 minutes et son payload est protégé par SHA-256.
-3. `POST /api/assistant/actions/confirm` exige une confirmation explicite exacte (`CONFIRMER`), vérifie propriétaire, état draft, expiration, permission, intégrité, évaluation, élève, sous-matière et barème à nouveau.
-4. Transition atomique conditionnelle draft → confirmed, pour éviter la double confirmation.
-5. Le backend retourne `confirmed_pending_adapter`, `executed=false`.
+1. `POST /api/assistant/actions/grade/prepare` prépare une proposition de note normalisée avec token aléatoire remis une seule fois.
+2. La proposition expire après 10 minutes ; le payload est protégé par SHA-256 et le token de confirmation est stocké uniquement sous forme de hash.
+3. `POST /api/assistant/actions/grade/confirm` exige le token aléatoire de confirmation et vérifie propriétaire, état draft, expiration, permission, intégrité, évaluation, élève, sous-matière et barème à nouveau.
+4. La confirmation verrouille la demande avec `SELECT ... FOR UPDATE`, puis exécute la sauvegarde et marque la demande `executed` dans la même transaction, empêchant le rejeu.
 
-**Important :** cette livraison ne réalise pas encore INSERT/UPDATE dans `notes`. Le moteur de modification reste fermé jusqu'à l'intégration d'un adapter métier transactionnel qui réutilise intégralement les validations et règles de `NoteController::sauvegarderNotes()`, puis jusqu'aux tests et à une activation explicite. La confirmation seule n'écrit jamais une note.
+**Important :** l'adapter sécurisé dédié `AssistantSecureActionService` est désormais raccordé à `EvaluationNoteService::saveCell()` dans une transaction. Il revalide l'affectation enseignant, l'accès élève, l'inscription active, la sous-matière et le maximum officiel. Il ne fait pas confiance à une permission ou à un barème fournis par Gemini. Cette première action réelle reste à valider par tests automatisés et XAMPP avant usage/merge.
 
 ## G.7 — Audit
 Migration additive :
@@ -50,9 +49,9 @@ Les détails excluent notamment valeurs de note, secrets, jetons et données per
 ## Fichiers
 - `database/migrations/20261128_002_assistant_secure_actions.sql`
 - `src/services/AssistantSecurityAuditService.php`
-- `src/services/AssistantActionGuardService.php`
-- `src/controllers/AssistantActionController.php`
+- `src/services/AssistantSecureActionService.php`
+- `src/controllers/AssistantSecureActionController.php`
 - `public/index.php`
 
 ## Statut
-Première tranche de garde-fous enregistrée sur la branche Phase G. Le mécanisme prépare et confirme une action mais n'exécute pas la modification métier. Tests PHP/SQL/CSRF/IDOR, validation locale et CI sont requis avant toute activation ou fusion.
+Première tranche de sécurité et une action métier réelle enregistrées sur la branche Phase G. Le code est écrit et relu sur GitHub ; les tests PHP/SQL/CSRF/IDOR, validation locale et CI restent requis avant de déclarer la phase terminée ou de fusionner.
