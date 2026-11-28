@@ -117,11 +117,24 @@ final class AssistantController
             jsonResponse(false, 'Conversation introuvable ou expirée.', [], 404);
         }
 
+        $messages = $conversationId > 0
+            ? $this->repository->listMessages($userId, $conversationId)
+            : [];
+        foreach ($messages as &$storedMessage) {
+            if (($storedMessage['role'] ?? '') !== 'assistant' || !is_string($storedMessage['metadata_json'] ?? null)) {
+                continue;
+            }
+            $metadata = json_decode($storedMessage['metadata_json'], true);
+            if (is_array($metadata) && is_array($metadata['result'] ?? null)) {
+                $metadata['suggestions'] = $this->assistantFollowupSuggestions($metadata['result']);
+                $storedMessage['metadata_json'] = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+        }
+        unset($storedMessage);
+
         jsonResponse(true, 'Historique chargé.', [
             'conversations' => $this->repository->listConversations($userId, $page),
-            'messages' => $conversationId > 0
-                ? $this->repository->listMessages($userId, $conversationId)
-                : [],
+            'messages' => $messages,
         ]);
     }
 
