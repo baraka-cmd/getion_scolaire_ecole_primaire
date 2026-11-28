@@ -1,5 +1,5 @@
 -- Phase G : demandes d'actions assistant et journal d'audit append-only.
--- Aucune écriture scolaire n'est activée par cette migration.
+-- L'action de saisie est activée par le service métier après confirmation; la migration ne modifie aucune donnée scolaire.
 CREATE TABLE IF NOT EXISTS assistant_action_requests (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     utilisateur_id INT NOT NULL,
