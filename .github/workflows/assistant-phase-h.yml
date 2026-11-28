@@ -25,6 +25,6 @@ jobs:
       - name: PHP syntax check (assistant components and test)
         run: |
           set -e
-          find src/services src/controllers tests -type f -name 'Assistant*.php' -o -path 'tests/assistant_phase_h.php' | while read f; do php -l "$f"; done
+          find src/services src/controllers tests \\\n            \\( -type f -name 'Assistant*.php' -o -type f -name 'assistant_phase_h.php' \\) -print0 | xargs -0 -r -n1 php -l
       - name: Run corpus and execution-contract regression tests
         run: php tests/assistant_phase_h.php
