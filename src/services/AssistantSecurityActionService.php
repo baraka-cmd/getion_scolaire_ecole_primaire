@@ -76,7 +76,10 @@ final class AssistantSecurityActionService
         $this->security->requirePermission('notes.saisir');
         $this->validateNoteTarget($evaluationId, $studentId, $subjectId, $rawValue);
 
-        $value = $rawValue === null || $rawValue === '' ? null : (float) $rawValue;
+        if ($rawValue === null || $rawValue === '') {
+            throw new InvalidArgumentException('Une note numérique est obligatoire pour cette action. Les suppressions de notes ne sont pas exposées à l’assistant.');
+        }
+        $value = (float) $rawValue;
         $payload = [
             'evaluation_id' => $evaluationId,
             'eleve_id' => $studentId,
@@ -228,11 +231,10 @@ final class AssistantSecurityActionService
         if (!array_key_exists($subjectId, $maxima)) {
             throw new DomainException('La sous-matière ne fait pas partie de cette évaluation.');
         }
-        if ($rawValue !== null && $rawValue !== '') {
-            if (!is_numeric($rawValue) || !is_finite((float) $rawValue)
-                || (float) $rawValue < 0 || (float) $rawValue > (float) $maxima[$subjectId]) {
-                throw new DomainException('La note est hors des limites autorisées.');
-            }
+        if ($rawValue === null || $rawValue === '' || !is_numeric($rawValue)
+            || !is_finite((float) $rawValue)
+            || (float) $rawValue < 0 || (float) $rawValue > (float) $maxima[$subjectId]) {
+            throw new DomainException('Une note numérique comprise dans le barème est obligatoire.');
         }
     }
 }
