@@ -3,7 +3,7 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'EvaluationNoteService.php';
-require_once SRC_PATH . 'policies' . DIRECTORY_SEPARATOR . 'StudentAccessPolicy.php;
+require_once SRC_PATH . 'policies' . DIRECTORY_SEPARATOR . 'StudentAccessPolicy.php';
 
 /**
  * Contrôles de sécurité et cycle de confirmation des actions assistant.
