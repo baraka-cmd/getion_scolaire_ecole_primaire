@@ -87,6 +87,14 @@ $routes = [
         require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantActionController.php';
         (new AssistantActionController())->confirm();
     },
+    '/api/assistant/actions/grade/prepare' => function() {
+        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantSecureActionController.php';
+        (new AssistantSecureActionController())->prepareGrade();
+    },
+    '/api/assistant/actions/grade/confirm' => function() {
+        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantSecureActionController.php';
+        (new AssistantSecureActionController())->confirmGrade();
+    },
     '/api/assistant/knowledge/index' => function() {
         require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantKnowledgeController.php';
         (new AssistantKnowledgeController())->index();
