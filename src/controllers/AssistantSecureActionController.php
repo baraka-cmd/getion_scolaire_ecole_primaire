@@ -17,6 +17,7 @@ final class AssistantSecureActionController
     {
         requireLogin();
         requirePermission('notes.saisir');
+        requirePermission('assistant.actions.proposer');
         $this->requirePostCsrf();
         try {
             $evaluationId = filter_var($_POST['evaluation_id'] ?? null, FILTER_VALIDATE_INT);
