@@ -13,11 +13,14 @@ final class AssistantDataAnalysisService
 {
     private Security $security;
     private AssistantBusinessExecutor $executor;
+    private EvaluationNoteService $evaluationAccess;
 
     public function __construct(Security $security, AssistantBusinessExecutor $executor)
     {
         $this->security = $security;
         $this->executor = $executor;
+        require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'EvaluationNoteService.php';
+        $this->evaluationAccess = new EvaluationNoteService();
     }
 
     /**
@@ -37,6 +40,7 @@ final class AssistantDataAnalysisService
         }
 
         $safe = $this->validateParameters($parameters);
+        $this->enforceObjectScope($capability, $safe);
         $execution = $this->executor->execute($capability, $safe);
         if ($execution === null) {
             return null;
@@ -50,6 +54,35 @@ final class AssistantDataAnalysisService
             'permission' => $permission,
             'capability' => $capability,
         ];
+    }
+
+    /**
+     * Restriction fail-closed tant que toutes les requêtes des repositories
+     * n'ont pas un scope parent/enseignant démontré par policy.
+     */
+    private function enforceObjectScope(string $capability, array $parameters): void
+    {
+        if (hasRole('Admin') || hasRole('Directeur')) {
+            return;
+        }
+        if (hasRole('Enseignant')) {
+            $classId = (int) ($parameters['classe_id'] ?? 0);
+            $yearId = (int) ($parameters['annee_scolaire_id'] ?? 0);
+            if ($classId <= 0 || $yearId <= 0
+                || !$this->evaluationAccess->teacherHasClassAssignment(
+                    (int) ($_SESSION['utilisateur_id'] ?? 0),
+                    $classId,
+                    $yearId
+                )) {
+                throw new DomainException('Pour protéger les dossiers scolaires, cette requête doit viser une classe et une année où vous êtes officiellement affecté.');
+            }
+            return;
+        }
+        if (hasRole('Parent')) {
+            throw new DomainException('L’assistant ne peut pas encore appliquer le périmètre individuel parent-enfant à cette capacité. Consultez le dossier de votre enfant depuis son espace sécurisé.');
+        }
+        // Les autres rôles restent soumis à la permission de capacité. Les accès
+        // nominatifs devront être couverts par des policies propres à chaque outil.
     }
 
     /** @param array<string,mixed> $parameters @return array<string,mixed> */
