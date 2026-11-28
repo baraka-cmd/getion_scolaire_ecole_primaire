@@ -37,7 +37,8 @@ $checks = [
     'absence and score mutually validated' => str_contains($source['service'], 'Une absence ne peut pas avoir de note numérique'),
     'domain service used for write' => str_contains($source['service'], 'saveCell('),
     'mutation and action status share transaction' => str_contains($source['service'], 'beginTransaction')
-        && str_contains($source['service'], 'commit()') && str_contains($source['service'], "statut = 'executed'"),
+        && str_contains($source['service'], 'commit()') && str_contains($source['service'], "statut = 'executed'")
+        && str_contains($source['service'], 'new EvaluationNoteRepository($this->db)'),
     'audit records action outcome' => str_contains($source['service'], 'assistant.action.grade.executed'),
     'controller enforces CSRF' => str_contains($source['controller'], 'verifyCsrfToken(csrfTokenFromRequest())'),
     'prepare and confirm routes exist' => str_contains($source['router'], '/api/assistant/actions/grade/prepare')
