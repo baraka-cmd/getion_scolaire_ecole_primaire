@@ -40,33 +40,7 @@ final class AssistantActionGuardService
             throw new RuntimeException('Permission métier refusée.');
         }
         $this->validatePayload($actionCode, $payload);
-        // Reproduit les contrôles d'accès au dossier de l'évaluation et de l'élève.
-        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'NoteController.php';
-        $noteController = new NoteController();
-        $evaluationId = (int) $payload['evaluation_id'];
-        if (!$noteController->canCurrentUserManageEvaluation($evaluationId)) {
-            $this->audit->record($userId, 'assistant.action.scope_denied', 'denied', 'evaluation', (string) $evaluationId);
-            throw new RuntimeException('Accès à cette évaluation refusé.');
-        }
-        $evaluationService = new EvaluationNoteService();
-        $context = $evaluationService->getEntryContext($evaluationId);
-        if (!$context) {
-            throw new InvalidArgumentException('Évaluation introuvable ou incohérente.');
-        }
-        $studentIds = $evaluationService->getActiveStudentIds((int) $context['classe_id'], (int) $context['annee_scolaire_id']);
-        if (!in_array((int) $payload['student_id'], $studentIds, true)) {
-            $this->audit->record($userId, 'assistant.action.student_scope_denied', 'denied', 'student', (string) $payload['student_id']);
-            throw new RuntimeException('Cet élève n’est pas inscrit dans la classe de cette évaluation.');
-        }
-        $maxima = $evaluationService->getSubjectMaxima((int) $context['classe_id'], (int) $context['groupe_id'], (string) $context['type_evaluation']);
-        $subjectId = (int) $payload['subject_id'];
-        if (!array_key_exists($subjectId, $maxima)) {
-            throw new InvalidArgumentException('Cette sous-matière ne fait pas partie de cette évaluation.');
-        }
-        $value = $payload['value'] ?? null;
-        if ($value !== null && (float) $value > (float) $maxima[$subjectId]) {
-            throw new InvalidArgumentException('La note dépasse le maximum officiel de cette sous-matière.');
-        }
+        $this->validateBusinessScope($userId, $payload);
         if (!$this->conversationOwnedBy($conversationId, $userId)) {
             $this->audit->record($userId, 'assistant.action.prepare', 'denied', 'conversation', (string) $conversationId);
             throw new RuntimeException('Conversation non accessible.');
@@ -133,6 +107,9 @@ final class AssistantActionGuardService
             throw new RuntimeException('Permission métier non accordée au moment de la confirmation.');
         }
         $payload = json_decode((string) $row['payload_json'], true);
+        if (is_array($payload)) {
+            $this->validateBusinessScope($userId, $payload);
+        }
         $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if (!is_array($payload) || !is_string($encoded) || !hash_equals((string) $row['payload_sha256'], hash('sha256', $encoded))) {
             $this->audit->record($userId, 'assistant.action.integrity_failure', 'error', 'action_request', (string) $requestId);
@@ -157,6 +134,39 @@ final class AssistantActionGuardService
             'message' => 'Confirmation enregistrée. L’exécution automatique reste désactivée tant que l’adaptateur métier et les contrôles de périmètre ne sont pas validés.',
             'executed' => false,
         ];
+    }
+
+    /** Revalidation des relations métier contre les données actuelles. */
+    private function validateBusinessScope(int $userId, array $payload): void
+    {
+// Reproduit les contrôles d'accès au dossier de l'évaluation et de l'élève.
+require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'NoteController.php';
+$noteController = new NoteController();
+$evaluationId = (int) $payload['evaluation_id'];
+if (!$noteController->canCurrentUserManageEvaluation($evaluationId)) {
+    $this->audit->record($userId, 'assistant.action.scope_denied', 'denied', 'evaluation', (string) $evaluationId);
+    throw new RuntimeException('Accès à cette évaluation refusé.');
+}
+$evaluationService = new EvaluationNoteService();
+$context = $evaluationService->getEntryContext($evaluationId);
+if (!$context) {
+    throw new InvalidArgumentException('Évaluation introuvable ou incohérente.');
+}
+$studentIds = $evaluationService->getActiveStudentIds((int) $context['classe_id'], (int) $context['annee_scolaire_id']);
+if (!in_array((int) $payload['student_id'], $studentIds, true)) {
+    $this->audit->record($userId, 'assistant.action.student_scope_denied', 'denied', 'student', (string) $payload['student_id']);
+    throw new RuntimeException('Cet élève n’est pas inscrit dans la classe de cette évaluation.');
+}
+$maxima = $evaluationService->getSubjectMaxima((int) $context['classe_id'], (int) $context['groupe_id'], (string) $context['type_evaluation']);
+$subjectId = (int) $payload['subject_id'];
+if (!array_key_exists($subjectId, $maxima)) {
+    throw new InvalidArgumentException('Cette sous-matière ne fait pas partie de cette évaluation.');
+}
+$value = $payload['value'] ?? null;
+if ($value !== null && (float) $value > (float) $maxima[$subjectId]) {
+    throw new InvalidArgumentException('La note dépasse le maximum officiel de cette sous-matière.');
+}
+
     }
 
     private function conversationOwnedBy(int $conversationId, int $userId): bool
