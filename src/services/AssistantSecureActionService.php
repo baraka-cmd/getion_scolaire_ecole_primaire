@@ -94,7 +94,6 @@ final class AssistantSecureActionService
                 throw new DomainException('Cette action est absente, déjà utilisée ou non confirmable.');
             }
             if (strtotime((string) $request['expires_at']) <= time()) {
-                $this->db->update("UPDATE assistant_action_requests SET statut = 'expired', confirmation_token_hash = NULL WHERE id = :id", ['id' => $actionId]);
                 throw new DomainException('La confirmation a expiré. Préparez une nouvelle demande.');
             }
             if (!is_string($request['confirmation_token_hash']) || !hash_equals($request['confirmation_token_hash'], hash('sha256', $token))) {
@@ -147,6 +146,15 @@ final class AssistantSecureActionService
             $this->db->commit();
         } catch (Throwable $e) {
             $this->db->rollback();
+            if ($e instanceof DomainException) {
+                try {
+                    $this->audit->record($userId, 'assistant.action.confirmation_denied', 'denied', 'assistant_action', (string) $actionId, [
+                        'reason' => mb_substr($e->getMessage(), 0, 180, 'UTF-8'),
+                    ]);
+                } catch (Throwable $auditError) {
+                    error_log('Assistant action audit failure: ' . $auditError->getMessage());
+                }
+            }
             throw $e;
         }
 
