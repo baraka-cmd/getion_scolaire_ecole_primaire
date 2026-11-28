@@ -221,6 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     permission: metadata.permission || '',
                     result: metadata.result || null,
                     display: metadata.display || null,
+                    suggestions: metadata.suggestions || [],
                     classification: {
                         intent: message.intention || '',
                         parameters: metadata.parameters || {},
