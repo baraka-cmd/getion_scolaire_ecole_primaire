@@ -3,6 +3,7 @@
 defined('ACCESS') or die('Accès interdit');
 
 require_once __DIR__ . '/AssistantSecurityAuditService.php';
+require_once __DIR__ . '/EvaluationNoteService.php';
 
 /**
  * Garde-fou central des actions IA.
@@ -92,9 +93,11 @@ final class AssistantActionGuardService
         if ($userId <= 0 || $requestId <= 0 || !hash_equals('CONFIRMER', trim($confirmPhrase))) {
             throw new InvalidArgumentException('Confirmation explicite invalide.');
         }
+        $this->db->beginTransaction();
+        try {
         $row = $this->db->fetchOne(
             'SELECT * FROM assistant_action_requests
-             WHERE id = :id AND utilisateur_id = :user_id LIMIT 1',
+             WHERE id = :id AND utilisateur_id = :user_id FOR UPDATE',
             ['id' => $requestId, 'user_id' => $userId]
         );
         if (!$row || $row['statut'] !== 'draft' || strtotime((string) $row['expires_at']) <= time()) {
@@ -115,24 +118,49 @@ final class AssistantActionGuardService
             $this->audit->record($userId, 'assistant.action.integrity_failure', 'error', 'action_request', (string) $requestId);
             throw new RuntimeException('Intégrité de la proposition non vérifiée.');
         }
+        // Rejouer le contrôle de droit et de périmètre, puis exécuter via le service métier existant.
+        requirePermission('notes.saisir');
+        $evaluationService = new EvaluationNoteService();
+        $evaluationId = (int) $payload['evaluation_id'];
+        $studentId = (int) $payload['student_id'];
+        $subjectId = (int) $payload['subject_id'];
+        $context = $evaluationService->getEntryContext($evaluationId);
+        if (!$context) {
+            throw new RuntimeException('Évaluation introuvable au moment de la confirmation.');
+        }
+        $maxima = $evaluationService->getSubjectMaxima(
+            (int) $context['classe_id'], (int) $context['groupe_id'], (string) $context['type_evaluation']
+        );
+        if (!isset($maxima[$subjectId]) || ($payload['value'] !== null && (float)$payload['value'] > (float)$maxima[$subjectId])) {
+            throw new RuntimeException('Le barème a changé ou la sous-matière n’est plus valide.');
+        }
+        $evaluationService->saveCell($evaluationId, $studentId, $subjectId,
+            $payload['value'] === null ? null : (float)$payload['value'], (int)$payload['absence'], $userId);
+
         $changed = $this->db->update(
             "UPDATE assistant_action_requests
-             SET statut = 'confirmed', confirmed_at = NOW()
+             SET statut = 'executed', confirmed_at = NOW(), executed_at = NOW()
              WHERE id = :id AND utilisateur_id = :user_id AND statut = 'draft' AND expires_at > NOW()",
             ['id' => $requestId, 'user_id' => $userId]
         );
         if ($changed !== 1) {
             throw new RuntimeException('La proposition a changé ou a déjà été confirmée.');
         }
-        $this->audit->record($userId, 'assistant.action.confirmed_pending_adapter', 'success', 'action_request', (string) $requestId, [
+        $this->audit->record($userId, 'assistant.action.grade.executed', 'success', 'action_request', (string) $requestId, [
             'action_code' => $row['action_code'],
             'payload_hash' => $row['payload_sha256'],
         ]);
+        $this->db->commit();
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+        logActivity('Saisie note par assistant', 'notes', null, 'Action confirmée #' . $requestId);
         return [
             'request_id' => $requestId,
-            'status' => 'confirmed_pending_adapter',
-            'message' => 'Confirmation enregistrée. L’exécution automatique reste désactivée tant que l’adaptateur métier et les contrôles de périmètre ne sont pas validés.',
-            'executed' => false,
+            'status' => 'executed',
+            'message' => 'La note a été enregistrée après confirmation explicite et contrôles backend.',
+            'executed' => true,
         ];
     }
 
