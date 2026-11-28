@@ -16,7 +16,7 @@ final class AssistantActionGuardService
 
     private const SAFE_ACTIONS = [
         'notes.save_cell' => [
-            'permission' => 'evaluations.modifier',
+            'permission' => 'notes.saisir',
             'description' => 'Préparer la saisie ou modification d’une note dans une évaluation existante.',
             'execution_enabled' => false,
         ],
@@ -40,6 +40,33 @@ final class AssistantActionGuardService
             throw new RuntimeException('Permission métier refusée.');
         }
         $this->validatePayload($actionCode, $payload);
+        // Reproduit les contrôles d'accès au dossier de l'évaluation et de l'élève.
+        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'NoteController.php';
+        $noteController = new NoteController();
+        $evaluationId = (int) $payload['evaluation_id'];
+        if (!$noteController->canCurrentUserManageEvaluation($evaluationId)) {
+            $this->audit->record($userId, 'assistant.action.scope_denied', 'denied', 'evaluation', (string) $evaluationId);
+            throw new RuntimeException('Accès à cette évaluation refusé.');
+        }
+        $evaluationService = new EvaluationNoteService();
+        $context = $evaluationService->getEntryContext($evaluationId);
+        if (!$context) {
+            throw new InvalidArgumentException('Évaluation introuvable ou incohérente.');
+        }
+        $studentIds = $evaluationService->getActiveStudentIds((int) $context['classe_id'], (int) $context['annee_scolaire_id']);
+        if (!in_array((int) $payload['student_id'], $studentIds, true)) {
+            $this->audit->record($userId, 'assistant.action.student_scope_denied', 'denied', 'student', (string) $payload['student_id']);
+            throw new RuntimeException('Cet élève n’est pas inscrit dans la classe de cette évaluation.');
+        }
+        $maxima = $evaluationService->getSubjectMaxima((int) $context['classe_id'], (int) $context['groupe_id'], (string) $context['type_evaluation']);
+        $subjectId = (int) $payload['subject_id'];
+        if (!array_key_exists($subjectId, $maxima)) {
+            throw new InvalidArgumentException('Cette sous-matière ne fait pas partie de cette évaluation.');
+        }
+        $value = $payload['value'] ?? null;
+        if ($value !== null && (float) $value > (float) $maxima[$subjectId]) {
+            throw new InvalidArgumentException('La note dépasse le maximum officiel de cette sous-matière.');
+        }
         if (!$this->conversationOwnedBy($conversationId, $userId)) {
             $this->audit->record($userId, 'assistant.action.prepare', 'denied', 'conversation', (string) $conversationId);
             throw new RuntimeException('Conversation non accessible.');
@@ -152,8 +179,8 @@ final class AssistantActionGuardService
             }
         }
         $value = $payload['value'] ?? null;
-        if ($value !== null && (!is_numeric($value) || !is_finite((float) $value) || (float) $value < 0 || (float) $value > 20)) {
-            throw new InvalidArgumentException('La note doit être comprise entre 0 et 20.');
+        if ($value !== null && (!is_numeric($value) || !is_finite((float) $value) || (float) $value < 0)) {
+            throw new InvalidArgumentException('La note doit être un nombre fini positif ou nul; le maximum est vérifié depuis le barème de l’évaluation.');
         }
         if (!in_array((int) ($payload['absence'] ?? 0), [0, 1], true)) {
             throw new InvalidArgumentException('Statut d’absence invalide.');
