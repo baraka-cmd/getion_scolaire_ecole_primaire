@@ -52,6 +52,13 @@ Améliorer le format conversationnel, la rédaction, le suivi de contexte, les c
 - Les libellés, valeurs, paramètres, suggestions et données du tableau sont échappés.
 - Les classes de résultat et les types de visualisation sont explicitement contrôlés.
 
+## Points dépendants des phases précédentes
+
+- **E.2 rédaction conversationnelle finale par Gemini :** l'amélioration de présentation est livrée, mais le second appel Gemini qui rédige une analyse finale à partir des résultats n'est pas activé dans cette tranche. Il dépend d'un orchestrateur Phase B complet et validé.
+- **E.4 clarification naturelle :** le statut et le message de clarification existants sont préservés ; la reprise complète après plusieurs tours doit être testée avec le mécanisme de planification de Phase B.
+- **E.6 graphiques :** le rendu front-end est prêt pour un objet `result.chart` émis par un service métier ; les services actuels ne produisent pas encore tous ce contrat.
+- **E.7 suggestions :** elles sont déterministes, fondées sur les types de résultats et filtrées par permission. Elles ne sont pas encore générées dynamiquement par Gemini.
+
 ## Validation et limites
 
 La livraison a été écrite sur la branche `feature/phase-e-conversation-ux`. Les fichiers modifiés sont :
