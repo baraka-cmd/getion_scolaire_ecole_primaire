@@ -28,8 +28,9 @@ $checks = [
     'payload integrity checked' => str_contains($source['service'], 'payload_sha256'),
     'one-time row lock' => str_contains($source['service'], 'FOR UPDATE'),
     'ownership enforced in query' => str_contains($source['service'], 'utilisateur_id = :user_id'),
-    'permission checked on prepare and confirm' => str_contains($source['service'], "requirePermission('notes.saisir')")
-        && str_contains($source['service'], "requirePermission('assistant.actions.confirmer')"),
+    'separate proposal and confirmation permissions' => str_contains($source['service'], "requirePermission('assistant.actions.proposer')")
+        && str_contains($source['service'], "requirePermission('assistant.actions.confirmer')")
+        && str_contains($source['migration'], 'assistant.actions.proposer'),
     'evaluation/class assignment rechecked' => str_contains($source['service'], 'teacherHasClassAssignment'),
     'student active in evaluation class' => str_contains($source['service'], 'getActiveStudentIds'),
     'subject and official maximum checked' => str_contains($source['service'], 'getSubjectMaxima'),
