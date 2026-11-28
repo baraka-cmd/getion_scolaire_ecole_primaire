@@ -31,6 +31,7 @@ final class AssistantSecureActionService
     public function prepareGrade(int $userId, int $evaluationId, int $studentId, int $subjectId, mixed $rawValue, mixed $rawAbsence): array
     {
         $this->security->requirePermission('notes.saisir');
+        $this->security->requirePermission('assistant.actions.proposer');
         $normalized = $this->validateGrade($userId, $evaluationId, $studentId, $subjectId, $rawValue, $rawAbsence);
         $token = bin2hex(random_bytes(32));
         $expires = (new DateTimeImmutable('+10 minutes'))->format('Y-m-d H:i:s');
