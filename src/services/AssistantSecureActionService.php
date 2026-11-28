@@ -22,7 +22,7 @@ final class AssistantSecureActionService
     {
         $this->db = $db ?? Database::getInstance();
         $this->security = Security::getInstance();
-        $this->notes = new EvaluationNoteService();
+        $this->notes = new EvaluationNoteService(new EvaluationNoteRepository($this->db));
         $this->studentPolicy = new StudentAccessPolicy($this->db);
         $this->audit = new AssistantSecurityAuditService($this->db);
     }
@@ -131,12 +131,15 @@ final class AssistantSecureActionService
                 $validated['absence'],
                 $userId
             );
-            $this->db->update(
+            $updated = $this->db->update(
                 "UPDATE assistant_action_requests
                  SET statut = 'executed', confirmed_at = NOW(), executed_at = NOW(), confirmation_token_hash = NULL
-                 WHERE id = :id AND statut = 'draft'",
-                ['id' => $actionId]
+                 WHERE id = :id AND utilisateur_id = :user_id AND statut = 'draft' AND expires_at > NOW()",
+                ['id' => $actionId, 'user_id' => $userId]
             );
+            if ($updated !== 1) {
+                throw new DomainException('La proposition n’a pas pu être consommée de façon unique.');
+            }
             $this->audit->record($userId, 'assistant.action.grade.executed', 'success', 'evaluation_note', (string) $actionId, [
                 'evaluation_id' => (int) $payload['evaluation_id'],
                 'student_id' => (int) $payload['eleve_id'],
