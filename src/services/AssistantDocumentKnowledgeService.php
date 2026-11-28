@@ -42,7 +42,7 @@ final class AssistantDocumentKnowledgeService
 
         // DocumentController stocke les chemins relatifs sous la forme documents/<nom opaque>.
         // Ne jamais concaténer un chemin DB arbitraire au chemin racine.
-        $storedPath = str_replace('\\\\', '/', (string) $document['chemin_fichier']);
+        $storedPath = str_replace(chr(92), '/', (string) $document['chemin_fichier']);
         if (!str_starts_with($storedPath, 'documents/') || basename($storedPath) !== substr($storedPath, strlen('documents/'))) {
             throw new RuntimeException('Chemin documentaire non conforme au stockage privé attendu.');
         }
@@ -73,20 +73,27 @@ final class AssistantDocumentKnowledgeService
         $chunks = $this->splitText($text);
         $hash = hash('sha256', $text);
 
-        $this->db->delete('DELETE FROM assistant_knowledge_chunks WHERE document_id = :id', ['id' => $documentId]);
-        foreach ($chunks as $index => $chunk) {
-            $this->db->insert(
-                'INSERT INTO assistant_knowledge_chunks
-                    (document_id, chunk_index, contenu, contenu_hash, source_updated_at, indexed_at)
-                 VALUES (:document_id, :chunk_index, :content, :hash, :source_updated, NOW())',
-                [
-                    'document_id' => $documentId,
-                    'chunk_index' => $index,
-                    'content' => $chunk,
-                    'hash' => hash('sha256', $chunk),
-                    'source_updated' => $document['created_at'] ?? null,
-                ]
-            );
+        $this->db->beginTransaction();
+        try {
+            $this->db->delete('DELETE FROM assistant_knowledge_chunks WHERE document_id = :id', ['id' => $documentId]);
+            foreach ($chunks as $index => $chunk) {
+                $this->db->insert(
+                    'INSERT INTO assistant_knowledge_chunks
+                        (document_id, chunk_index, contenu, contenu_hash, source_updated_at, indexed_at)
+                     VALUES (:document_id, :chunk_index, :content, :hash, :source_updated, NOW())',
+                    [
+                        'document_id' => $documentId,
+                        'chunk_index' => $index,
+                        'content' => $chunk,
+                        'hash' => hash('sha256', $chunk),
+                        'source_updated' => $document['created_at'] ?? null,
+                    ]
+                );
+            }
+            $this->db->commit();
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            throw $e;
         }
         return ['document_id' => $documentId, 'chunks' => count($chunks), 'sha256' => $hash];
     }
