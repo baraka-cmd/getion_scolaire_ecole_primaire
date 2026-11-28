@@ -20,6 +20,8 @@ final class AssistantController
     {
         $this->security = Security::getInstance();
         $this->provider = AssistantProviderFactory::create();
+        require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AssistantOrchestrationContract.php';
+        require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AssistantOrchestrator.php';
         $this->repository = new AssistantRepository();
         $this->importService = new AssistantImportService();
         $this->businessExecutor = new AssistantBusinessExecutor($this->repository);
@@ -185,6 +187,8 @@ final class AssistantController
             $allowedIntents = AssistantIntentCatalog::allowedFor($this->security);
             $classification = $this->provider->classify($message, $allowedIntents, $conversationContext);
             $classification = AssistantExecutionContract::normalizeClassification($classification, $allowedIntents);
+            $orchestrator = new AssistantOrchestrator();
+            $classification['orchestration'] = $orchestrator->buildPlan($message, $classification, $allowedIntents);
             $intent = $classification['intent'];
             $normalizedMessage = strtr(mb_strtolower($message, 'UTF-8'), [
                 'à' => 'a', 'â' => 'a', 'ä' => 'a',
