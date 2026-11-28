@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (display?.type === 'table' && Array.isArray(display.columns) && Array.isArray(display.rows)) {
             const columns = display.columns.filter(column => column && typeof column.key === 'string').slice(0, 12);
             const rows = display.rows.slice(0, 100);
-            if (columns.length) {
+            if (columns.length && rows.length) {
                 resultDetails = `<section class="assistant-response-card assistant-data-table-wrap"><div class="assistant-response-card-title">${escapeHtml(display.title || 'Données détaillées')}</div><div class="assistant-data-table-scroll"><table class="assistant-data-table"><thead><tr>${columns.map(column => `<th scope="col">${escapeHtml(column.label || column.key)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(column => `<td>${escapeHtml(String(row[column.key] ?? '—'))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${rows.length >= 100 ? '<p class="assistant-table-limit">Affichage limité aux 100 premières lignes.</p>' : ''}</section>`;
             }
         }
@@ -430,7 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 bindConversation(button);
             });
             if (!data.conversations?.has_more && historyMore) historyMore.hidden = true;
-        }).catch((error) => appendMessage(error.message, 'assistant')).finally(() => {
+        }).catch((error) => appendMessage(escapeHtml(error.message || 'Une erreur est survenue.'), 'assistant')).finally(() => {
             historyMore.disabled = false;
         });
     });
@@ -584,7 +584,7 @@ document.addEventListener('DOMContentLoaded', () => {
             appendMessage(reply, 'assistant');
         }).catch((error) => {
             if (loadingMessage) loadingMessage.remove();
-            appendMessage(error.message, 'assistant');
+            appendMessage(escapeHtml(error.message || 'Une erreur est survenue.'), 'assistant');
         }).finally(() => {
             sendButton.disabled = false;
             input?.focus();
