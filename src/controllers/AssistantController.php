@@ -804,6 +804,12 @@ final class AssistantController
             $capability = array_key_first(AssistantCapabilityRegistry::forIntent($intent)) ?? '';
         }
         $parameters = is_array($classification['parameters'] ?? null) ? $classification['parameters'] : [];
+        if ($result !== [] && !isset($legacyPayload['display'])) {
+            $legacyPayload['display'] = AssistantDisplayContract::fromResult($result);
+        }
+        if ($result !== [] && !isset($legacyPayload['suggestions'])) {
+            $legacyPayload['suggestions'] = $this->assistantFollowupSuggestions($result);
+        }
 
         return array_merge(
             AssistantExecutionContract::response(
@@ -819,5 +825,45 @@ final class AssistantController
                 'quota' => $this->repository->rateLimitStatus((int) $_SESSION['utilisateur_id']),
             ]
         );
+    }
+
+    /**
+     * Suggestions limitées aux capacités métier connues et autorisées.
+     * Elles restent des questions de suivi : le backend revalide chaque nouvelle demande.
+     *
+     * @param array<string,mixed> $result
+     * @return array<int,array{label:string,prompt:string}>
+     */
+    private function assistantFollowupSuggestions(array $result): array
+    {
+        $type = (string) ($result['type'] ?? '');
+        $options = match ($type) {
+            'payment_summary' => [
+                ['permission' => 'paiements.consulter', 'label' => 'Voir les élèves avec un solde', 'prompt' => 'Liste les élèves qui ont encore un solde impayé pour ces filtres.'],
+            ],
+            'absence_summary' => [
+                ['permission' => 'absences.consulter', 'label' => 'Détailler les absences', 'prompt' => 'Affiche la liste des absences pour ces mêmes filtres.'],
+            ],
+            'result_summary' => [
+                ['permission' => 'resultats.consulter', 'label' => 'Voir les meilleurs élèves', 'prompt' => 'Affiche les meilleurs élèves pour cette même période et cette même classe.'],
+                ['permission' => 'resultats.consulter', 'label' => 'Voir les élèves en difficulté', 'prompt' => 'Liste les élèves en échec pour cette même période et cette même classe.'],
+            ],
+            'student_count' => [
+                ['permission' => 'eleves.consulter', 'label' => 'Répartition par genre', 'prompt' => 'Donne la répartition des élèves par genre pour les mêmes filtres.'],
+                ['permission' => 'eleves.consulter', 'label' => 'Consulter la liste', 'prompt' => 'Affiche la liste des élèves correspondant aux mêmes filtres.'],
+            ],
+            'class_count' => [
+                ['permission' => 'classes.consulter', 'label' => 'Voir les classes', 'prompt' => 'Liste les classes de la même année scolaire.'],
+            ],
+            default => [],
+        };
+
+        $allowed = [];
+        foreach ($options as $option) {
+            if ($this->security->can($option['permission'])) {
+                $allowed[] = ['label' => $option['label'], 'prompt' => $option['prompt']];
+            }
+        }
+        return array_slice($allowed, 0, 3);
     }
 }
