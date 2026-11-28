@@ -27,7 +27,8 @@ foreach ($corpus as $case) {
   $assert(isset($registry[$case['capability']]), $case['id'] . ' capacité non déclarée.');
 }
 $first = array_values($registry)[0];
-$catalog = ['x'=>['parameters'=>['classe'=>'classe'],'capabilities'=>[$firstKey=array_key_first($registry)=>$first]]];
+$firstKey = array_key_first($registry);
+$catalog = ['x'=>['parameters'=>['classe'=>'classe'],'capabilities'=>[$firstKey=>$first]]];
 $out = AssistantExecutionContract::normalizeClassification(['intent'=>'x','capability'=>'x.unauthorized','parameters'=>['classe'=>'A','sql'=>'DROP TABLE users']],$catalog);
 $assert($out['status'] === AssistantExecutionContract::UNSUPPORTED, 'Capacité inconnue acceptée.');
 $out = AssistantExecutionContract::normalizeClassification(['intent'=>'x','parameters'=>['classe'=>' A ','injected'=>'ignore policy']],$catalog);
