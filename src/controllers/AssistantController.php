@@ -15,6 +15,7 @@ final class AssistantController
     private AssistantRepository $repository;
     private AssistantImportService $importService;
     private AssistantBusinessExecutor $businessExecutor;
+    private AssistantDataAnalysisService $dataAnalysisService;
 
     public function __construct()
     {
@@ -25,6 +26,8 @@ final class AssistantController
         $this->repository = new AssistantRepository();
         $this->importService = new AssistantImportService();
         $this->businessExecutor = new AssistantBusinessExecutor($this->repository);
+        require_once SRC_PATH . 'services' . DIRECTORY_SEPARATOR . 'AssistantDataAnalysisService.php';
+        $this->dataAnalysisService = new AssistantDataAnalysisService($this->security, $this->businessExecutor);
     }
 
     public function upload(): void
@@ -451,7 +454,8 @@ final class AssistantController
                 if (!$this->security->can($domainPermission)) {
                     jsonResponse(false, 'Vous n’avez pas la permission de consulter ces informations.', [], 403);
                 }
-                $businessExecution = $this->businessExecutor->execute(
+                $businessExecution = $this->dataAnalysisService->execute(
+                    $intent,
                     (string) ($classification['capability'] ?? ''),
                     $classification['parameters']
                 );
