@@ -126,6 +126,9 @@ final class AssistantController
             }
             $metadata = json_decode($storedMessage['metadata_json'], true);
             if (is_array($metadata) && is_array($metadata['result'] ?? null)) {
+                if (!isset($metadata['display'])) {
+                    $metadata['display'] = AssistantDisplayContract::fromResult($metadata['result']);
+                }
                 $metadata['suggestions'] = $this->assistantFollowupSuggestions($metadata['result']);
                 $storedMessage['metadata_json'] = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             }
