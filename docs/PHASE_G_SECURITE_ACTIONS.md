@@ -41,7 +41,8 @@ Tester avant merge/activation : permissions et CSRF ; autre propriétaire/évalu
 
 ## Fichiers
 - `database/migrations/20261128_002_assistant_secure_actions.sql`
-- `src/services/AssistantSecurityAuditService.php`
+- `src/services/AssistantSecurityAuditService.php` (journal des actions et événements)
+- `src/services/AssistantCapabilitySecurityAudit.php` (audit du registre de capacités)
 - `src/services/AssistantCapabilitySecurityAudit.php`
 - `src/services/AssistantSecureActionService.php`
 - `src/controllers/AssistantSecureActionController.php`
