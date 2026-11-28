@@ -42,8 +42,17 @@ CREATE TABLE IF NOT EXISTS assistant_security_audit (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT IGNORE INTO permissions (code, libelle, description, module, action)
-VALUES ('assistant.actions.confirmer', 'Confirmer une action préparée par l’assistant',
+VALUES ('assistant.actions.proposer', 'Préparer une action via l’assistant',
+        'Préparer une proposition métier sans l’exécuter', 'assistant', 'proposer'),
+       ('assistant.actions.confirmer', 'Confirmer une action préparée par l’assistant',
         'Confirmer une proposition d’action métier après vérification serveur', 'assistant', 'confirmer');
+
+INSERT IGNORE INTO role_permission (role_id, permission_id)
+SELECT rp.role_id, p_propose.id
+FROM role_permission rp
+INNER JOIN permissions p_notes ON p_notes.id = rp.permission_id
+INNER JOIN permissions p_propose ON p_propose.code = 'assistant.actions.proposer'
+WHERE p_notes.code = 'notes.saisir';
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT rp.role_id, p_action.id
