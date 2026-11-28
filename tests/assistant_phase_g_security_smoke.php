@@ -5,6 +5,8 @@ declare(strict_types=1);
 $root = dirname(__DIR__);
 $files = [
     'service' => $root . '/src/services/AssistantSecureActionService.php',
+    'audit_service' => $root . '/src/services/AssistantSecurityAuditService.php',
+    'capability_audit' => $root . '/src/services/AssistantCapabilitySecurityAudit.php',
     'controller' => $root . '/src/controllers/AssistantSecureActionController.php',
     'policy' => $root . '/src/policies/StudentAccessPolicy.php',
     'access_repository' => $root . '/src/repositories/StudentAccessRepository.php',
@@ -41,7 +43,10 @@ $checks = [
         && str_contains($source['router'], '/api/assistant/actions/grade/confirm'),
     'parent record scoped by user' => str_contains($source['access_repository'], 'pt.utilisateur_id = :user_id'),
     'teacher access scoped by active enrollment' => str_contains($source['access_repository'], 'i.statut IN'),
-    'audit details redact sensitive keys' => str_contains($source['service'], 'assistant.action.grade.executed'),
+    'audit details redact sensitive keys' => str_contains($source['audit_service'], 'password|token|secret|authorization|note_value|raw_payload|email|phone|address'),
+    'audit IP is pseudonymized only with configured secret' => str_contains($source['audit_service'], 'APP_AUDIT_HASH_KEY') && str_contains($source['audit_service'], 'hash_hmac'),
+    'capability audit class does not collide with event audit class' => str_contains($source['capability_audit'], 'final class AssistantCapabilitySecurityAudit'),
+    'business scope is revalidated at confirmation' => str_contains($source['service'], 'validateGrade(') && str_contains($source['service'], 'FOR UPDATE'),
     'migration records action and audit schemas' => str_contains($source['migration'], 'assistant_action_requests')
         && str_contains($source['migration'], 'assistant_security_audit'),
 ];
