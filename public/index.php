@@ -79,6 +79,18 @@ $routes = [
         readfile(PUBLIC_PATH . 'service-worker.js');
         exit;
     },
+    '/api/assistant/security/audit' => function() {
+        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantSecurityActionController.php';
+        (new AssistantSecurityActionController())->audit();
+    },
+    '/api/assistant/actions/note/propose' => function() {
+        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantSecurityActionController.php';
+        (new AssistantSecurityActionController())->proposeNote();
+    },
+    '/api/assistant/actions/note/confirm' => function() {
+        require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantSecurityActionController.php';
+        (new AssistantSecurityActionController())->confirmNote();
+    },
     '/api/assistant/knowledge/index' => function() {
         require_once SRC_PATH . 'controllers' . DIRECTORY_SEPARATOR . 'AssistantKnowledgeController.php';
         (new AssistantKnowledgeController())->index();
