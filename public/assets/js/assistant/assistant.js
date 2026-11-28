@@ -120,6 +120,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 resultDetails = `<section class="assistant-response-card assistant-data-table-wrap"><div class="assistant-response-card-title">${escapeHtml(display.title || 'Données détaillées')}</div><div class="assistant-data-table-scroll"><table class="assistant-data-table"><thead><tr>${columns.map(column => `<th scope="col">${escapeHtml(column.label || column.key)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(column => `<td>${escapeHtml(String(row[column.key] ?? '—'))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${rows.length >= 100 ? '<p class="assistant-table-limit">Affichage limité aux 100 premières lignes.</p>' : ''}</section>`;
             }
         }
+        const chart = result?.chart;
+        if (chart && Array.isArray(chart.labels) && Array.isArray(chart.values) && chart.labels.length === chart.values.length) {
+            const points = chart.labels.slice(0, 12).map((label, index) => ({
+                label: String(label),
+                value: Number(chart.values[index])
+            })).filter(point => Number.isFinite(point.value) && point.value >= 0);
+            const maxValue = Math.max(1, ...points.map(point => point.value));
+            if (points.length) {
+                resultDetails += `<section class="assistant-response-card assistant-chart-card"><div class="assistant-response-card-title">${escapeHtml(chart.title || 'Graphique')}</div><div class="assistant-chart" role="img" aria-label="${escapeHtml(chart.title || 'Graphique de données')}">${points.map(point => `<div class="assistant-chart-row"><span class="assistant-chart-label">${escapeHtml(point.label)}</span><div class="assistant-chart-track"><span class="assistant-chart-bar" style="width:${Math.max(0, Math.min(100, point.value / maxValue * 100))}%"></span></div><strong>${escapeHtml(point.value.toLocaleString('fr-FR'))}${escapeHtml(chart.unit || '')}</strong></div>`).join('')}</div><p class="assistant-chart-note">Visualisation des valeurs fournies par le service métier.</p></section>`;
+            }
+        }
         const followups = getFollowupSuggestions(result);
         const followupHtml = followups.length ? `<div class="assistant-followups" aria-label="Questions de suivi">${followups.map(prompt => `<button type="button" class="assistant-followup" data-prompt="${escapeHtml(prompt)}">${escapeHtml(prompt)}</button>`).join('')}</div>` : '';
         return `<div class="assistant-response-text">${formatAssistantText(data.message || 'Réponse reçue.')}</div>${permission}${resultDetails}${followupHtml}${renderResultActions(result, display)}${classification.intent ? `<div class="assistant-response-card"><div class="assistant-response-card-title"><i class="fa-solid fa-chart-simple"></i> Filtres de la demande</div><div class="assistant-data-row"><span>Domaine</span><strong>${escapeHtml(classification.intent)}</strong></div>${parameterRows}</div>` : ''}`;
