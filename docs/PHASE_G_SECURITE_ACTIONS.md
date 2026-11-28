@@ -17,7 +17,7 @@ Les capacités déclarent une permission exacte et `AssistantDataAnalysisService
 
 ## G.4–G.6 — Actions, confirmation et validation
 La migration `20261128_002_assistant_secure_actions.sql` ajoute les demandes d'action et le journal de sécurité. L'action réelle autorisée dans cette tranche est limitée à `grades.store` :
-1. proposition explicite, sans écriture ;
+1. permission séparée `assistant.actions.proposer` + permission métier `notes.saisir`, puis proposition explicite sans écriture ;
 2. payload serveur normalisé, empreinte SHA-256 et token aléatoire 256 bits stocké sous forme hashée ;
 3. expiration après 10 minutes ;
 4. confirmation séparée par POST avec CSRF ;
