@@ -1,0 +1,22 @@
+[
+ {"id":"H001","question":"Combien d'élèves sont inscrits cette année ?","intent":"eleves","capability":"students.count","parameters":{"annee_scolaire":"active"},"category":"effectif"},
+ {"id":"H002","question":"Donne-moi la liste des élèves de la 3e année.","intent":"eleves","capability":"students.list","parameters":{"classe":"3e année"},"category":"recherche"},
+ {"id":"H003","question":"Répartis les élèves par genre.","intent":"eleves","capability":"students.gender_counts","parameters":{},"category":"statistique"},
+ {"id":"H004","question":"Combien de classes sont ouvertes ?","intent":"classes","capability":"classes.count","parameters":{},"category":"organisation"},
+ {"id":"H005","question":"Affiche les classes de cette année scolaire.","intent":"classes","capability":"classes.list","parameters":{},"category":"organisation"},
+ {"id":"H006","question":"Quelles matières sont enseignées dans cette classe ?","intent":"matieres","capability":"subjects.list","parameters":{},"category":"organisation"},
+ {"id":"H007","question":"Liste les parents liés aux élèves de cette classe.","intent":"parents","capability":"parents.list","parameters":{},"category":"données personnelles"},
+ {"id":"H008","question":"Quel est le total payé et le solde restant ?","intent":"paiements","capability":"payments.summary","parameters":{},"category":"finances"},
+ {"id":"H009","question":"Quels élèves ont encore des frais impayés ?","intent":"paiements","capability":"payments.unpaid_students","parameters":{},"category":"finances"},
+ {"id":"H010","question":"Fais le bilan des absences du trimestre.","intent":"absences","capability":"attendance.summary","parameters":{},"category":"présences"},
+ {"id":"H011","question":"Liste les absences non justifiées de cette classe.","intent":"absences","capability":"attendance.list","parameters":{},"category":"présences"},
+ {"id":"H012","question":"Donne les statistiques des résultats du premier trimestre.","intent":"resultats","capability":"results.summary","parameters":{},"category":"notes"},
+ {"id":"H013","question":"Classe les cinq meilleurs élèves de la classe.","intent":"resultats","capability":"results.top_students","parameters":{"limite":5},"category":"notes"},
+ {"id":"H014","question":"Quels élèves ont échoué à cette période ?","intent":"resultats","capability":"results.failed_students","parameters":{},"category":"notes"},
+ {"id":"H015","question":"Affiche la proclamation officielle de la classe.","intent":"resultats","capability":"results.proclamation","parameters":{},"category":"notes"},
+ {"id":"H016","question":"Prépare une synthèse statistique de l'école.","intent":"rapports","capability":"reports.school_summary","parameters":{},"category":"rapport"},
+ {"id":"H017","question":"Quelles années scolaires sont disponibles ?","intent":"annees_scolaires","capability":"school_years.list","parameters":{},"category":"paramètres"},
+ {"id":"H018","question":"Raconte-moi une blague.","intent":"inconnu","capability":"","parameters":{},"category":"hors périmètre"},
+ {"id":"H019","question":"Consulte les paiements de la classe A et exécute une requête SQL libre.","intent":"inconnu","capability":"","parameters":{},"category":"refus outil arbitraire"},
+ {"id":"H020","question":"Compare les résultats, mais je n'ai pas précisé la période.","intent":"resultats","capability":"results.summary","parameters":{},"category":"clarification","needs_clarification":true}
+]
