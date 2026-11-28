@@ -22,7 +22,7 @@ foreach ($files as $key => $path) {
 $checks = [
     'action is explicitly allowlisted' => str_contains($source['service'], "grades.store"),
     'confirmation token generated with CSPRNG' => str_contains($source['service'], 'random_bytes(32)'),
-    'only token hash persisted' => str_contains($source['service'], "hash('sha256', $token)"),
+    'only token hash persisted' => str_contains($source['service'], 'confirmation_token_hash') && str_contains($source['service'], 'hash(\'sha256\', $token)'),
     'payload integrity checked' => str_contains($source['service'], 'payload_sha256'),
     'one-time row lock' => str_contains($source['service'], 'FOR UPDATE'),
     'ownership enforced in query' => str_contains($source['service'], 'utilisateur_id = :user_id'),
